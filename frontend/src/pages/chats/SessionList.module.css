@@ -1,0 +1,30 @@
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  contain: strict;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  color: inherit;
+  text-decoration: none;
+
+  @mixin hover {
+    background-color: var(--mantine-color-default-hover);
+  }
+
+  &[data-active] {
+    background-color: var(--mantine-primary-color-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mantine-primary-color-filled);
+    outline-offset: -2px;
+  }
+}
