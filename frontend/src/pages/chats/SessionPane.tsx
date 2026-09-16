@@ -1,17 +1,28 @@
-import { Anchor, Box, Button, Center, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
+import { Alert, Anchor, Box, Button, Center, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconPinFilled } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
+import { answerChat, chatStreamUrl, sendChat, steerChat, stopChat, type ChatStreamEvent } from '../../api/chat';
 import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { getSession } from '../../api/sessions';
 import { SourceBadge } from '../../components/SourceBadge';
 import { formatCost, formatCount, formatTokens, sessionTitle } from '../../lib/format';
 import { Transcript } from './transcript/Transcript';
+import { ChatComposer } from './ChatComposer';
 
 export default function SessionPane() {
   const { sessionId = '' } = useParams();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const [running, setRunning] = useState(false);
+  const [streaming, setStreaming] = useState('');
+  const [reasoning, setReasoning] = useState('');
+  const [clarify, setClarify] = useState<{ id: number; question: string; choices: unknown[] | null } | null>(null);
+  const raf = useRef<number | null>(null);
+  const pendingText = useRef('');
+  const pendingReasoning = useRef('');
   const highlightParam = searchParams.get('m');
   const highlightMessageId = highlightParam && /^\d+$/.test(highlightParam) ? Number(highlightParam) : undefined;
 
@@ -20,6 +31,49 @@ export default function SessionPane() {
     queryFn: ({ signal }) => getSession(sessionId, signal),
     enabled: sessionId !== '',
   });
+
+  useEffect(() => {
+    if (!running) return;
+    const source = new EventSource(chatStreamUrl(sessionId));
+    const flush = () => {
+      raf.current = null;
+      if (pendingText.current) {
+        const next = pendingText.current;
+        pendingText.current = '';
+        setStreaming((value) => value + next);
+      }
+      if (pendingReasoning.current) {
+        const next = pendingReasoning.current;
+        pendingReasoning.current = '';
+        setReasoning((value) => value + next);
+      }
+    };
+    const schedule = () => {
+      if (raf.current === null) raf.current = requestAnimationFrame(flush);
+    };
+    const terminal = () => {
+      flush();
+      setRunning(false);
+      setClarify(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      source.close();
+    };
+    source.addEventListener('delta', (event) => { pendingText.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
+    source.addEventListener('reasoning', (event) => { pendingReasoning.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
+    source.addEventListener('clarify', (event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null }));
+    source.addEventListener('done', terminal);
+    source.addEventListener('cancel', terminal);
+    source.addEventListener('error', terminal);
+    return () => { source.close(); if (raf.current !== null) cancelAnimationFrame(raf.current); };
+  }, [running, sessionId, queryClient]);
+
+  const start = async (text: string) => {
+    await sendChat(sessionId, { message: text });
+    setStreaming('');
+    setReasoning('');
+    setRunning(true);
+  };
 
   const back = (
     <Button
@@ -103,6 +157,23 @@ export default function SessionPane() {
       <Box style={{ flex: 1, minHeight: 0 }}>
         <Transcript sessionId={sessionId} highlightMessageId={highlightMessageId} />
       </Box>
+      {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
+      {streaming && <Text p="sm" style={{ whiteSpace: 'pre-wrap' }}>{streaming}</Text>}
+      {clarify && (
+        <Alert m="sm" title={clarify.question}>
+          <Group mt="xs">
+            {(clarify.choices ?? []).map((choice) => (
+              <Button key={String(choice)} size="xs" onClick={() => void answerChat(sessionId, clarify.id, String(choice))}>{String(choice)}</Button>
+            ))}
+          </Group>
+        </Alert>
+      )}
+      <ChatComposer
+        running={running}
+        onSend={start}
+        onStop={() => stopChat(sessionId)}
+        onSteer={(text) => steerChat(sessionId, text)}
+      />
     </Box>
   );
 }

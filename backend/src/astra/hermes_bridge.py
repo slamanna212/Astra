@@ -96,5 +96,24 @@ def skill_utils_module() -> ModuleType:
     return _import("agent.skill_utils")
 
 
+def agent_class():
+    """Return Hermes' in-process ``AIAgent`` class lazily.
+
+    Importing ``run_agent`` is intentionally deferred until a chat is started: the read-only
+    screens must remain usable if an optional Hermes provider dependency is unavailable.
+    """
+    return getattr(_import("run_agent"), "AIAgent")
+
+
+def session_db_class():
+    """Return Hermes' canonical state writer, never a parallel persistence layer."""
+    return getattr(_import("hermes_state"), "SessionDB")
+
+
+def resolve_runtime_provider():
+    """Return Hermes' provider resolver, which keeps credentials server-side."""
+    return getattr(_import("hermes_cli.runtime_provider"), "resolve_runtime_provider")
+
+
 class HermesImportError(RuntimeError):
     """Raised when a required Hermes module cannot be imported."""

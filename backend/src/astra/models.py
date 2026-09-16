@@ -338,6 +338,28 @@ class ChildSessionsResponse(BaseModel):
     items: list[ChildSession]
 
 
+# -- Chat -----------------------------------------------------------------
+
+
+class ChatSendRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=200_000)
+    model: str | None = Field(default=None, max_length=512)
+    provider: str | None = Field(default=None, max_length=128)
+
+
+class ChatSteerRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=100_000)
+
+
+class ChatAnswerRequest(BaseModel):
+    question_id: int = Field(ge=1)
+    answer: str = Field(max_length=100_000)
+
+
+class ChatTurnStarted(BaseModel):
+    running: bool = True
+
+
 # -- Cron ----------------------------------------------------------------
 # See astra/cron_data.py + astra/hermes_bridge.py for the side-effect-avoidance rationale.
 # `extra="allow"` on CronJob: jobs.json can carry fields a Hermes upgrade adds/removes

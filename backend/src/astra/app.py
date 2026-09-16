@@ -17,6 +17,7 @@ from astra.db import StateDB, StateDBUnavailable
 from astra.deps import AppContext
 from astra.middleware import ApiGuardMiddleware
 from astra.routes import auth as auth_routes
+from astra.routes import chat as chat_routes
 from astra.routes import cron as cron_routes
 from astra.routes import files as files_routes
 from astra.routes import health as health_routes
@@ -49,6 +50,7 @@ def create_app(settings: Settings) -> FastAPI:
             yield
         finally:
             await ctx.cron_events.stop()
+            await ctx.chat.close()
             ctx.db.close()
 
     app = FastAPI(
@@ -67,6 +69,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     app.include_router(health_routes.router)
     app.include_router(auth_routes.router)
+    app.include_router(chat_routes.router)
     app.include_router(session_routes.router)
     app.include_router(message_routes.router)
     app.include_router(search_routes.router)
