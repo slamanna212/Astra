@@ -23,7 +23,7 @@ function SkillRow({ skill, active }: { skill: SkillSummary; active: boolean }) {
           {skill.name}
         </Text>
         {!skill.enabled && (
-          <Badge size="xs" color="gray" variant="light">
+          <Badge size="xs" color="gray" variant="outline">
             disabled
           </Badge>
         )}
@@ -88,16 +88,19 @@ export function SkillList({
 
   return (
     <Stack gap={0} h="100%">
-      <Stack gap="xs" px="md" py="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+      <Stack gap="xs" px="md" py="sm" style={{ borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}>
         <Group justify="space-between">
-          <Title order={4}>Skills</Title>
+          <Title order={3}>Skills</Title>
           <Group gap="xs">
-            {query.data && <Text size="xs" c="dimmed">{filtered.length} / {query.data.items.length}</Text>}
-            <Tooltip label="Create skill"><ActionIcon variant="light" size="sm" aria-label="Create skill" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon></Tooltip>
+            {query.data && (
+              <Text ff="monospace" fz={11} c="dimmed">
+                {filtered.length} / {query.data.items.length}
+              </Text>
+            )}
+            <Tooltip label="Create skill"><ActionIcon aria-label="Create skill" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon></Tooltip>
           </Group>
         </Group>
         <TextInput
-          size="xs"
           placeholder="Search skills…"
           leftSection={<IconSearch size={14} />}
           value={search}
@@ -117,11 +120,7 @@ export function SkillList({
         )}
         {grouped.map(([category, skills]) => (
           <div key={category}>
-            <div className={classes.categoryLabel}>
-              <Text size="xs" tt="uppercase" c="dimmed">
-                {category}
-              </Text>
-            </div>
+            <div className={`${classes.categoryLabel} astraLabel`}>{category}</div>
             {skills.map((skill) => (
               <SkillRow
                 key={`${skill.category ?? ''}/${skill.name}`}

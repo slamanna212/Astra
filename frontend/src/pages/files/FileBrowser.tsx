@@ -52,11 +52,11 @@ function FileRow({ entry, active, now, onOpenDirectory, onSelectFile }: FileRowP
         {entry.name}
       </Text>
       {!entry.is_dir && (
-        <Text size="xs" c="dimmed" style={{ flexShrink: 0, width: '4.5rem', textAlign: 'right' }}>
+        <Text component="span" className={classes.meta} style={{ flexShrink: 0, width: '4.5rem', textAlign: 'right' }}>
           {formatBytes(entry.size)}
         </Text>
       )}
-      <Text size="xs" c="dimmed" style={{ flexShrink: 0, width: '4rem', textAlign: 'right' }} title={formatDateTime(entry.mtime)}>
+      <Text component="span" className={classes.meta} style={{ flexShrink: 0, width: '4rem', textAlign: 'right' }} title={formatDateTime(entry.mtime)}>
         {formatRelativeTime(entry.mtime, now)}
       </Text>
     </button>
@@ -131,7 +131,7 @@ export function FileBrowser({
 
   return (
     <>
-      <Group gap={6} p="sm" wrap="nowrap" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+      <Group gap={6} p="sm" wrap="nowrap" style={{ borderBottom: '1px solid var(--astra-border)' }}>
         <Breadcrumbs separator="/" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           {crumbs.map((crumb, i) => (
             <Anchor

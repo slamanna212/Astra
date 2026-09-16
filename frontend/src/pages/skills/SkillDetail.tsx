@@ -64,7 +64,7 @@ export default function SkillDetail() {
         <div>
           <Group gap="xs">
             <Title order={3}>{skill.name}</Title>
-            <Badge color={skill.enabled ? 'blue' : 'gray'} variant="light">
+            <Badge color={skill.enabled ? 'teal' : 'gray'} variant="light">
               {skill.enabled ? 'Enabled' : 'Disabled'}
             </Badge>
           </Group>
@@ -90,7 +90,7 @@ export default function SkillDetail() {
             loading={remove.isPending}
             onClick={() => { if (window.confirm(`Delete skill “${skill.name}” and its directory?`)) remove.mutate(); }}
           >Delete</Button>
-          <IconFileText size={22} color="var(--mantine-color-dimmed)" />
+          <IconFileText size={22} color="var(--astra-text-dim)" />
         </Group>
       </Group>
 
@@ -107,7 +107,7 @@ export default function SkillDetail() {
       <Tabs defaultValue="preview">
         <Tabs.List><Tabs.Tab value="preview">Preview</Tabs.Tab><Tabs.Tab value="edit">Edit SKILL.md</Tabs.Tab></Tabs.List>
         <Tabs.Panel value="preview" pt="md">
-          <Paper withBorder radius="md" p="md" className={classes.content}><Markdown>{draft ?? skill.content}</Markdown></Paper>
+          <Paper p="md" className={classes.content}><Markdown>{draft ?? skill.content}</Markdown></Paper>
         </Tabs.Panel>
         <Tabs.Panel value="edit" pt="md">
           <Textarea minRows={20} autosize value={draft ?? skill.content} onChange={(event) => setDraftState({ key: skillKey, content: event.currentTarget.value })} styles={{ input: { fontFamily: 'monospace' } }} />

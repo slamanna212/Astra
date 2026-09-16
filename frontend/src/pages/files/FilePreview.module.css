@@ -9,8 +9,10 @@
   display: flex;
   align-items: center;
   gap: var(--mantine-spacing-sm);
-  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  height: var(--astra-panel-header-h);
+  padding: 0 var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--astra-border);
+  background: var(--astra-bg-chrome);
   flex-shrink: 0;
 }
 

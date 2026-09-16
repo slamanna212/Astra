@@ -1,8 +1,8 @@
 .root { display: grid; grid-template-columns: minmax(230px, 320px) minmax(0, 1fr); gap: var(--mantine-spacing-md); height: 100%; }
 .tabs { height: 100%; padding: var(--mantine-spacing-md); }
-.browser { min-width: 0; border-right: 1px solid var(--mantine-color-gray-3); padding: var(--mantine-spacing-md); }
+.browser { min-width: 0; border-right: 1px solid var(--astra-border); padding: var(--mantine-spacing-md); }
 .content { min-width: 0; padding: var(--mantine-spacing-md); overflow: auto; }
 .search { flex: 1; }
-.breakText { overflow-wrap: anywhere; }
+.breakText { overflow-wrap: anywhere; font-family: var(--astra-font-mono); font-size: 11px; }
 .statusCode { max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (max-width: 48em) { .root { grid-template-columns: 1fr; } .browser { border-right: 0; border-bottom: 1px solid var(--mantine-color-gray-3); } }
+@media (max-width: 48em) { .root { grid-template-columns: 1fr; } .browser { border-right: 0; border-bottom: 1px solid var(--astra-border); } }

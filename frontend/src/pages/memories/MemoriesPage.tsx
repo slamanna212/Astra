@@ -67,7 +67,7 @@ function NodeRow({ node, selected, onChoose }: { node: OpenVikingNode; selected:
       justify="space-between"
       fullWidth
       leftSection={directory ? <IconFolder size={16} /> : <IconFileText size={16} />}
-      rightSection={count !== null ? <Badge size="xs" variant="light" color={count === 0 ? 'gray' : 'blue'}>{count}</Badge> : undefined}
+      rightSection={count !== null ? <Badge size="xs" variant="light" color={count === 0 ? 'gray' : 'teal'}>{count}</Badge> : undefined}
       onClick={onChoose}
       aria-label={`${directory ? 'Open folder' : 'Open document'} ${nodeName(node)}${count !== null ? `, ${count} indexed` : ''}`}
     >
@@ -165,7 +165,7 @@ export default function MemoriesPage() {
       </section>
       <section className={classes.content}>
         <Card withBorder>
-          <Group justify="space-between"><Title order={3}>{file ? nodeName({ name: '', uri: file }) : 'Select a document'}</Title>{file && <Badge color="blue">L0 / L1 / full text</Badge>}</Group>
+          <Group justify="space-between"><Title order={3}>{file ? nodeName({ name: '', uri: file }) : 'Select a document'}</Title>{file && <Badge color="teal">L0 / L1 / full text</Badge>}</Group>
           {content.isLoading && <Loader mt="md" />}
           {content.isError && <Alert mt="md" color="red">{errorText(content.error)}</Alert>}
           {content.data && <Tabs defaultValue="abstract" mt="md">
@@ -194,7 +194,7 @@ export default function MemoriesPage() {
           {health.isError && <Alert mt="sm" color="red" icon={<IconAlertCircle />} title="Backend unreachable">{errorText(health.error)}</Alert>}
           {health.data && <Text size="xs" c="dimmed" mt={4}>Liveness confirmed by /health and observer/system. The unreliable /ready endpoint is not used.</Text>}
           {status.isLoading && <Loader size="sm" mt="sm" />}
-          {status.isError && <Alert mt="sm" color="yellow" title="Live, but status details failed">OpenViking responded to its liveness checks, but observer details could not be loaded.</Alert>}
+          {status.isError && <Alert mt="sm" color="sand" title="Live, but status details failed">OpenViking responded to its liveness checks, but observer details could not be loaded.</Alert>}
           {status.data && <SimpleGrid cols={{ base: 1, sm: 2 }} mt="sm">
             {([['Queue depth', status.data.queue], ['Lock conflicts', status.data.lock], ['Vector database', status.data.vikingdb], ['Model usage', status.data.models], ['Retrieval quality', status.data.retrieval], ['Memory census', status.data.memories], ['Recent tasks', status.data.tasks], ['System', status.data.system]] as const).map(([label, value]) => <Card key={label} withBorder padding="sm"><Text fw={700} size="sm" mb={4}>{label}</Text><StatusValue value={value} /></Card>)}
           </SimpleGrid>}

@@ -252,7 +252,7 @@ export default function SessionPane() {
         </Alert>
       )}
       {approval && (
-        <Alert m="sm" color="orange" title="Approval required">
+        <Alert m="sm" color="sand" title="Approval required">
           <Text size="sm">{approval.description ?? 'Hermes needs permission to continue.'}</Text>
           {approval.command && <Code block mt="xs">{approval.command}</Code>}
           <Group mt="xs">
