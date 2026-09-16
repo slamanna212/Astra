@@ -51,13 +51,19 @@ const green: MantineColorsTuple = [
   '#3FA987','#3A9D7D','#2F8267','#256A53','#174A39',
 ];
 
+/** Discord's brand blurple — used only for the `discord` source badge. */
+const discord: MantineColorsTuple = [
+  '#ECEEFD','#D4D9FB','#AAB3F7','#8B97F5','#7986F3',
+  '#6875F2','#5865F2','#4752C4','#3C45A5','#2C3277',
+];
+
 const red: MantineColorsTuple = [
   '#FDECEE','#F9D3D8','#F1A7B1','#EA7E8C','#E2707F',
   '#D85B6C','#C9495A','#AE3848','#8F2938','#6B1B27',
 ];
 
 export const theme = createTheme({
-  colors: { teal, sand, graphite, green, red, dark: graphite },
+  colors: { teal, sand, graphite, green, red, discord, dark: graphite },
   primaryColor: 'teal',
   primaryShade: { light: 8, dark: 6 },
 

@@ -44,7 +44,7 @@ def test_app_writes_nothing_into_hermes_home(base_settings: Settings) -> None:
         assert c.post("/api/auth/login", json={"password": PASSWORD}, headers=CSRF).status_code == 204
         cursor = None
         while True:
-            params = {"limit": 20, "include_archived": True, "include_hidden": True}
+            params = {"limit": 20, "status": "all"}
             if cursor:
                 params["cursor"] = cursor
             body = c.get("/api/sessions", params=params).json()

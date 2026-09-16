@@ -89,7 +89,7 @@ async def bench_http(home: Path, iterations: int) -> bool:
         seen: list[dict] = []
         cursor = None
         while True:
-            params: dict = {"limit": 50, "include_archived": "true", "include_hidden": "true"}
+            params: dict = {"limit": 50, "status": "all"}
             if cursor:
                 params["cursor"] = cursor
             body = (await client.get("/api/sessions", params=params)).json()

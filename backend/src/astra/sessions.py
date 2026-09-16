@@ -19,7 +19,7 @@ import json
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from astra.db import Schema
 from astra.models import SessionDetail, SessionSummary
@@ -28,6 +28,8 @@ MAX_LIMIT = 200
 DEFAULT_LIMIT = 50
 
 BOOL_FIELDS = ("pinned", "archived", "hidden")
+
+SessionStatus = Literal["active", "archived", "hidden", "all"]
 _INT_DEFAULT_ZERO = {
     "message_count",
     "tool_call_count",
@@ -56,14 +58,11 @@ class ListParams:
     limit: int = DEFAULT_LIMIT
     cursor: str | None = None
     sources: tuple[str, ...] = ()
-    include_archived: bool = False
-    include_hidden: bool = False
+    status: SessionStatus = "active"
     pinned_first: bool = True
 
     def fingerprint(self) -> str:
-        key = json.dumps(
-            [sorted(set(self.sources)), self.include_archived, self.include_hidden, self.pinned_first]
-        )
+        key = json.dumps([sorted(set(self.sources)), self.status, self.pinned_first])
         return hashlib.sha256(key.encode()).hexdigest()[:12]
 
 
@@ -139,10 +138,15 @@ def build_list_query(schema: Schema, params: ListParams) -> tuple[str, list[Any]
     if params.sources and schema.has("sessions", "source"):
         where.append(f"source IN ({', '.join('?' for _ in params.sources)})")
         args.extend(params.sources)
-    if not params.include_archived and schema.has("sessions", "archived"):
-        where.append("COALESCE(archived, 0) = 0")
-    if not params.include_hidden and schema.has("sessions", "hidden"):
-        where.append("COALESCE(hidden, 0) = 0")
+    if params.status == "active":
+        if schema.has("sessions", "archived"):
+            where.append("COALESCE(archived, 0) = 0")
+        if schema.has("sessions", "hidden"):
+            where.append("COALESCE(hidden, 0) = 0")
+    elif params.status == "archived" and schema.has("sessions", "archived"):
+        where.append("COALESCE(archived, 0) != 0")
+    elif params.status == "hidden" and schema.has("sessions", "hidden"):
+        where.append("COALESCE(hidden, 0) != 0")
 
     if params.cursor:
         key = decode_cursor(params.cursor, params)

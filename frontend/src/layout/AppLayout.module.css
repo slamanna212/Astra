@@ -81,12 +81,6 @@
   color: var(--astra-text-dim);
 }
 
-.statusRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .statusDot {
   width: 6px;
   height: 6px;

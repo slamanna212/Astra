@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Badge, Button, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Center, Group, Image, Loader, Stack, Text, Tooltip } from '@mantine/core';
 import { IconDownload, IconExternalLink, IconX } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
@@ -116,7 +116,7 @@ function PreviewBody({ path, data }: { path: string; data: FileContent }) {
   if (kind === 'image') {
     return (
       <Stack align="center" gap="xs">
-        <img className={classes.image} src={fileDownloadUrl(path)} alt={name} />
+        <Image maw="100%" src={fileDownloadUrl(path)} alt={name} />
         <Text size="xs" c="dimmed">
           {formatBytes(data.meta.size)}
         </Text>

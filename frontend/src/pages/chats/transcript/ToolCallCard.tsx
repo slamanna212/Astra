@@ -70,7 +70,7 @@ export function ToolCallCard({
       <Collapse expanded={opened}>
         <Box className={classes.toolCardBody}>
           {call.arguments_truncated && (
-            <Text size="xs" c="orange" mb={4}>
+            <Text size="xs" c="sand" mb={4}>
               Arguments truncated.
             </Text>
           )}
@@ -93,7 +93,7 @@ export function ToolCallCard({
             </Code>
           )}
           {result?.truncated && (
-            <Text size="xs" c="orange" mt={4}>
+            <Text size="xs" c="sand" mt={4}>
               Result truncated by the server; open the full message to see everything.
             </Text>
           )}

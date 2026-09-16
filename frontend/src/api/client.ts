@@ -36,7 +36,7 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): () 
   };
 }
 
-export type QueryValue = string | number | boolean | null | undefined;
+export type QueryValue = string | number | boolean | null | undefined | string[];
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -56,6 +56,10 @@ export function buildUrl(path: string, query?: Record<string, QueryValue>): stri
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) {
+      for (const item of value) if (item !== '') params.append(key, item);
+      continue;
+    }
     params.append(key, String(value));
   }
   const qs = params.toString();

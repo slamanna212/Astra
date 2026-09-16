@@ -1,4 +1,4 @@
-import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Tooltip } from '@mantine/core';
+import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Tooltip, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { spotlight } from '@mantine/spotlight';
@@ -71,8 +71,7 @@ export function AppLayout() {
                 )}
               </ActionIcon>
             </Tooltip>
-            <button
-              type="button"
+            <UnstyledButton
               className={classes.searchTrigger}
               onClick={() => spotlight.open()}
               aria-label="Search (Ctrl/Cmd+K)"
@@ -80,7 +79,7 @@ export function AppLayout() {
               <IconSearch size={15} stroke={1.5} />
               <span>Search</span>
               <span className={classes.searchShortcut}>⌘K</span>
-            </button>
+            </UnstyledButton>
             <ColorSchemeToggle />
             <Tooltip label="Log out">
               <ActionIcon aria-label="Log out" loading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()}>
@@ -116,12 +115,12 @@ export function AppLayout() {
             <div className={classes.statusLabel}>
               {health.data ? (health.data.state_db.ok ? 'agent online' : 'agent offline') : ' '}
             </div>
-            <div className={classes.statusRow}>
+            <Group gap={6} wrap="nowrap">
               <span
                 className={`${classes.statusDot} ${health.data?.state_db.ok ? classes.statusDotOk : classes.statusDotDown}`}
               />
               <span className={classes.statusMeta}>{health.data ? `v${health.data.version}` : ' '}</span>
-            </div>
+            </Group>
           </div>
         </AppShell.Section>
       </AppShell.Navbar>

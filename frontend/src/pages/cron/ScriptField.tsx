@@ -1,4 +1,4 @@
-import { Alert, Button, Code, Collapse, Group, Loader, Text } from '@mantine/core';
+import { Alert, Box, Button, Code, Collapse, Group, Loader, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconCode } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
@@ -35,7 +35,7 @@ export function ScriptField({ jobId, field, filename }: { jobId: string; field: 
         </Button>
       </Group>
       <Collapse expanded={opened}>
-        <div style={{ marginTop: 8 }}>
+        <Box mt={8}>
           {query.isLoading && <Loader size="sm" />}
           {query.isError && (
             <Alert color="red" title="Couldn't load script">
@@ -47,7 +47,7 @@ export function ScriptField({ jobId, field, filename }: { jobId: string; field: 
               <CodePreview code={query.data.content} language={languageFor(query.data.filename)} />
             </Suspense>
           )}
-        </div>
+        </Box>
       </Collapse>
     </div>
   );

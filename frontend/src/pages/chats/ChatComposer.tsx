@@ -1,6 +1,6 @@
-import { ActionIcon, Badge, Box, Button, Group, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, Button, FileButton, Group, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
 import { IconPaperclip, IconPlayerStop, IconX } from '@tabler/icons-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 export function ChatComposer({
   running,
@@ -34,7 +34,15 @@ export function ChatComposer({
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const handleAttach = (file: File | null) => {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    void onAttach(file)
+      .then((path) => setAttachments((items) => [...items, path]))
+      .catch((error: unknown) => setUploadError(error instanceof Error ? error.message : 'Upload failed'))
+      .finally(() => setUploading(false));
+  };
   const submit = async () => {
     const references = attachments.map((path) => `[Attached workspace file: ${path}]`).join('\n');
     const value = [references, draft.trim()].filter(Boolean).join('\n\n');
@@ -83,27 +91,15 @@ export function ChatComposer({
         {uploadError && <Box c="red" fz="xs" mt={4}>{uploadError}</Box>}
         <Group justify="space-between" mt="xs" wrap="nowrap">
           <Group gap="xs" wrap="wrap">
-            <input
-              ref={inputRef}
-              type="file"
-              hidden
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = '';
-                if (!file) return;
-                setUploadError(null);
-                setUploading(true);
-                void onAttach(file)
-                  .then((path) => setAttachments((items) => [...items, path]))
-                  .catch((error: unknown) => setUploadError(error instanceof Error ? error.message : 'Upload failed'))
-                  .finally(() => setUploading(false));
-              }}
-            />
-            <Tooltip label="Attach a workspace file">
-              <ActionIcon variant="subtle" aria-label="Attach file" loading={uploading} onClick={() => inputRef.current?.click()}>
-                <IconPaperclip size={18} />
-              </ActionIcon>
-            </Tooltip>
+            <FileButton onChange={handleAttach}>
+              {(props) => (
+                <Tooltip label="Attach a workspace file">
+                  <ActionIcon {...props} variant="subtle" aria-label="Attach file" loading={uploading}>
+                    <IconPaperclip size={18} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </FileButton>
             <Select size="xs" aria-label="Model" placeholder="Default model" value={model} onChange={onModelChange} data={models} searchable clearable w={190} disabled={running} />
             {providers.length > 1 && <Select size="xs" aria-label="Provider" placeholder="Default provider" value={provider} onChange={onProviderChange} data={providers} searchable clearable w={145} disabled={running} />}
             {running && <TextInput size="xs" value="Running" readOnly variant="unstyled" w={65} />}

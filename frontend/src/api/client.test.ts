@@ -73,10 +73,10 @@ describe('api client', () => {
   it('builds session list query strings, omitting empty params', async () => {
     fetchMock.mockImplementation(async () => json({ items: [], next_cursor: null }));
     await listSessions({ source: null, cursor: null });
-    expect(fetchMock.mock.calls[0]![0]).toBe('/api/sessions?limit=50&include_archived=false&include_hidden=false');
-    await listSessions({ source: 'cron', cursor: 'abc', include_archived: true, limit: 10 });
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/sessions?limit=50&status=active');
+    await listSessions({ source: ['cron', 'tui'], cursor: 'abc', status: 'archived', limit: 10 });
     expect(fetchMock.mock.calls[1]![0]).toBe(
-      '/api/sessions?limit=10&cursor=abc&source=cron&include_archived=true&include_hidden=false',
+      '/api/sessions?limit=10&cursor=abc&source=cron&source=tui&status=archived',
     );
   });
 

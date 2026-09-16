@@ -52,7 +52,7 @@ def _walk(client: TestClient, **params: Any) -> tuple[list[dict[str, Any]], int]
 
 def test_pagination_walks_everything_in_order(authed: TestClient, fixture_db_path: Path) -> None:
     rows = _all_rows(fixture_db_path)
-    items, pages = _walk(authed, limit=7, include_archived=True, include_hidden=True)
+    items, pages = _walk(authed, limit=7, status="all")
     ids = [i["id"] for i in items]
     assert len(ids) == len(set(ids)) == len(rows) == 86
     assert ids == _expected_order(rows)
@@ -61,7 +61,7 @@ def test_pagination_walks_everything_in_order(authed: TestClient, fixture_db_pat
 
 def test_pinned_first_false_order(authed: TestClient, fixture_db_path: Path) -> None:
     rows = _all_rows(fixture_db_path)
-    items, _ = _walk(authed, limit=10, include_archived=True, include_hidden=True, pinned_first=False)
+    items, _ = _walk(authed, limit=10, status="all", pinned_first=False)
     assert [i["id"] for i in items] == _expected_order(rows, pinned_first=False)
 
 
@@ -72,13 +72,18 @@ def test_default_excludes_archived_and_hidden(authed: TestClient, fixture_db_pat
     assert {i["id"] for i in items} == {r["id"] for r in visible}
     assert all(not i["archived"] and not i["hidden"] for i in items)
 
-    only_archived, _ = _walk(authed, limit=50, include_archived=True)
-    assert {i["id"] for i in only_archived} == {r["id"] for r in rows if not r["hidden"]}
+    only_archived, _ = _walk(authed, limit=50, status="archived")
+    assert {i["id"] for i in only_archived} == {r["id"] for r in rows if r["archived"]}
+    assert all(i["archived"] for i in only_archived)
+
+    only_hidden, _ = _walk(authed, limit=50, status="hidden")
+    assert {i["id"] for i in only_hidden} == {r["id"] for r in rows if r["hidden"]}
+    assert all(i["hidden"] for i in only_hidden)
 
 
 def test_source_filter_repeatable(authed: TestClient, fixture_db_path: Path) -> None:
     rows = _all_rows(fixture_db_path)
-    items, _ = _walk(authed, limit=5, source=["cli", "tui"], include_archived=True, include_hidden=True)
+    items, _ = _walk(authed, limit=5, source=["cli", "tui"], status="all")
     assert {i["id"] for i in items} == {r["id"] for r in rows if r["source"] in {"cli", "tui"}}
     assert {i["source"] for i in items} == {"cli", "tui"}
 
@@ -98,7 +103,7 @@ def test_summary_shape(authed: TestClient) -> None:
 
 
 def test_pinned_rows_come_first(authed: TestClient) -> None:
-    items = authed.get("/api/sessions", params={"limit": 200, "include_archived": True, "include_hidden": True}).json()["items"]
+    items = authed.get("/api/sessions", params={"limit": 200, "status": "all"}).json()["items"]
     flags = [i["pinned"] for i in items]
     assert any(flags)
     assert flags == sorted(flags, reverse=True)
@@ -107,7 +112,7 @@ def test_pinned_rows_come_first(authed: TestClient) -> None:
 def test_limit_bounds(authed: TestClient) -> None:
     assert authed.get("/api/sessions", params={"limit": 0}).status_code == 422
     assert authed.get("/api/sessions", params={"limit": 201}).status_code == 422
-    assert len(authed.get("/api/sessions", params={"limit": 200, "include_archived": True, "include_hidden": True}).json()["items"]) == 86
+    assert len(authed.get("/api/sessions", params={"limit": 200, "status": "all"}).json()["items"]) == 86
     assert len(authed.get("/api/sessions").json()["items"]) == 50
 
 
@@ -115,8 +120,12 @@ def test_bad_cursors(authed: TestClient) -> None:
     assert authed.get("/api/sessions", params={"cursor": "not-a-cursor!!"}).status_code == 400
     cursor = authed.get("/api/sessions", params={"limit": 5}).json()["next_cursor"]
     # Cursor issued for different filters is refused rather than silently skipping rows.
-    assert authed.get("/api/sessions", params={"limit": 5, "cursor": cursor, "include_archived": True}).status_code == 400
+    assert authed.get("/api/sessions", params={"limit": 5, "cursor": cursor, "status": "all"}).status_code == 400
     assert authed.get("/api/sessions", params={"limit": 5, "cursor": cursor}).status_code == 200
+
+
+def test_status_rejects_unknown_value(authed: TestClient) -> None:
+    assert authed.get("/api/sessions", params={"status": "bogus"}).status_code == 422
 
 
 def test_detail_and_404(authed: TestClient, fixture_db_path: Path) -> None:

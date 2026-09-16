@@ -14,9 +14,8 @@ export function listSessions(params: ListSessionsParams = {}, signal?: AbortSign
     query: {
       limit: params.limit ?? SESSION_PAGE_SIZE,
       cursor: params.cursor,
-      source: params.source,
-      include_archived: params.include_archived ?? false,
-      include_hidden: params.include_hidden ?? false,
+      source: params.source ?? undefined,
+      status: params.status ?? 'active',
     },
   });
 }

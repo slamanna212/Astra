@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Breadcrumbs, Button, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Breadcrumbs, Button, Center, Group, Loader, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { notifications } from '@mantine/notifications';
 import { IconLink, IconRefresh, IconUpload } from '@tabler/icons-react';
@@ -33,8 +33,7 @@ function FileRow({ entry, active, now, onOpenDirectory, onSelectFile }: FileRowP
     else onSelectFile(entry.path);
   };
   const row = (
-    <button
-      type="button"
+    <UnstyledButton
       className={classes.row}
       style={{ height: FILE_ROW_HEIGHT }}
       onClick={handleClick}
@@ -59,7 +58,7 @@ function FileRow({ entry, active, now, onOpenDirectory, onSelectFile }: FileRowP
       <Text component="span" className={classes.meta} style={{ flexShrink: 0, width: '4rem', textAlign: 'right' }} title={formatDateTime(entry.mtime)}>
         {formatRelativeTime(entry.mtime, now)}
       </Text>
-    </button>
+    </UnstyledButton>
   );
   if (!disabled) return row;
   return (

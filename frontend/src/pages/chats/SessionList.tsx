@@ -2,10 +2,10 @@ import {
   Badge,
   Button,
   Center,
-  Chip,
   Group,
   Loader,
-  Select,
+  MultiSelect,
+  SegmentedControl,
   Stack,
   Text,
   UnstyledButton,
@@ -17,7 +17,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { queryKeys } from '../../api/queryKeys';
 import { createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
-import type { SessionSummary } from '../../api/types';
+import type { SessionStatus, SessionSummary } from '../../api/types';
 import { SourceBadge } from '../../components/SourceBadge';
 import { KNOWN_SOURCES } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
@@ -28,7 +28,14 @@ export const SESSION_ROW_HEIGHT = 64;
 /** Start fetching the next page when the last rendered row is within this many rows of the end. */
 const LOAD_MORE_THRESHOLD = 10;
 
-const SOURCE_OPTIONS = [{ value: '', label: 'All sources' }, ...KNOWN_SOURCES.map((s) => ({ value: s, label: s }))];
+const SOURCE_OPTIONS = KNOWN_SOURCES.map((s) => ({ value: s, label: s }));
+
+const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'hidden', label: 'Hidden' },
+  { value: 'all', label: 'All' },
+];
 
 interface SessionRowProps {
   session: SessionSummary;
@@ -86,9 +93,8 @@ const SessionRow = memo(function SessionRow({ session, active, now }: SessionRow
 });
 
 export function SessionList({ selectedId }: { selectedId?: string }) {
-  const [source, setSource] = useState<string>('');
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [includeHidden, setIncludeHidden] = useState(false);
+  const [sources, setSources] = useState<string[]>([]);
+  const [status, setStatus] = useState<SessionStatus>('active');
   const now = useNow();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -100,10 +106,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     },
   });
 
-  const filters = useMemo(
-    () => ({ source: source || null, include_archived: includeArchived, include_hidden: includeHidden }),
-    [source, includeArchived, includeHidden],
-  );
+  const filters = useMemo(() => ({ source: sources.length ? sources : null, status }), [sources, status]);
 
   const query = useInfiniteQuery({
     queryKey: queryKeys.sessions.list(filters),
@@ -150,21 +153,21 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
         <Button fullWidth leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
           New chat
         </Button>
-        <Select
-          aria-label="Filter by source"
+        <MultiSelect
+          aria-label="Filter by conversation type"
+          placeholder="All types"
           data={SOURCE_OPTIONS}
-          value={source}
-          onChange={(value) => setSource(value ?? '')}
-          allowDeselect={false}
+          value={sources}
+          onChange={setSources}
+          clearable
         />
-        <Group gap={6}>
-          <Chip size="xs" checked={includeArchived} onChange={setIncludeArchived}>
-            Show archived
-          </Chip>
-          <Chip size="xs" checked={includeHidden} onChange={setIncludeHidden}>
-            Show hidden
-          </Chip>
-        </Group>
+        <SegmentedControl
+          size="xs"
+          fullWidth
+          data={STATUS_OPTIONS}
+          value={status}
+          onChange={(value) => setStatus(value as SessionStatus)}
+        />
       </Stack>
 
       {query.isPending ? (

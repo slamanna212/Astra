@@ -15,6 +15,7 @@ from astra.sessions import (
     MAX_LIMIT,
     InvalidCursor,
     ListParams,
+    SessionStatus,
     get_session,
     list_sessions,
 )
@@ -39,8 +40,7 @@ async def sessions_list(
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     cursor: Annotated[str | None, Query(max_length=1024)] = None,
     source: Annotated[list[str] | None, Query()] = None,
-    include_archived: bool = False,
-    include_hidden: bool = False,
+    status: SessionStatus = "active",
     pinned_first: bool = True,
 ) -> SessionPage:
     if source is not None and len(source) > 32:
@@ -49,8 +49,7 @@ async def sessions_list(
         limit=limit,
         cursor=cursor or None,
         sources=tuple(dict.fromkeys(s for s in (source or []) if s)),
-        include_archived=include_archived,
-        include_hidden=include_hidden,
+        status=status,
         pinned_first=pinned_first,
     )
     try:

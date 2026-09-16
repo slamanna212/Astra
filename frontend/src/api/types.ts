@@ -32,10 +32,11 @@ export interface Page<T> {
   next_cursor: string | null;
 }
 
+export type SessionStatus = 'active' | 'archived' | 'hidden' | 'all';
+
 export interface SessionListFilters {
-  source?: string | null;
-  include_archived?: boolean;
-  include_hidden?: boolean;
+  source?: string[] | null;
+  status?: SessionStatus;
 }
 
 export interface HealthResponse {

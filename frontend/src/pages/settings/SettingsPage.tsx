@@ -13,7 +13,7 @@ function StatusFact({ label, value, ok }: { label: string; value: string; ok?: b
         {label}
       </Text>
       <Group gap={6} wrap="nowrap">
-        {ok !== undefined && <span data-testid={`status-dot-${ok ? 'ok' : 'down'}`} style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-red-6)', flexShrink: 0 }} />}
+        {ok !== undefined && <span data-testid={`status-dot-${ok ? 'ok' : 'down'}`} style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? 'var(--astra-ok)' : 'var(--astra-danger)', flexShrink: 0 }} />}
         <Text size="sm" ff={ok !== undefined ? 'monospace' : undefined}>
           {value}
         </Text>
