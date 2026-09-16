@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from astra import skills_data
 from astra.deps import Ctx
-from astra.models import SkillDetailModel, SkillListResponse, SkillSummaryModel
+from astra.models import SkillDetailModel, SkillListResponse, SkillSummaryModel, SkillToggleRequest, SkillWriteRequest
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
@@ -31,6 +31,36 @@ async def list_skills(ctx: Ctx) -> SkillListResponse:
     ]
     categories = sorted({s.category for s in skills if s.category})
     return SkillListResponse(items=items, categories=categories)
+
+
+@router.put("/{category}/{name}", status_code=204)
+async def save_skill_by_category(category: str, name: str, body: SkillWriteRequest, ctx: Ctx) -> None:
+    await _save(ctx, category, name, body.content)
+
+
+@router.put("/{name}", status_code=204)
+async def save_skill_flat(name: str, body: SkillWriteRequest, ctx: Ctx) -> None:
+    await _save(ctx, None, name, body.content)
+
+
+@router.delete("/{category}/{name}", status_code=204)
+async def delete_skill_by_category(category: str, name: str, ctx: Ctx) -> None:
+    await _delete(ctx, category, name)
+
+
+@router.delete("/{name}", status_code=204)
+async def delete_skill_flat(name: str, ctx: Ctx) -> None:
+    await _delete(ctx, None, name)
+
+
+@router.post("/{category}/{name}/enabled", status_code=204)
+async def toggle_skill_by_category(category: str, name: str, body: SkillToggleRequest, ctx: Ctx) -> None:
+    await _toggle(ctx, category, name, body.enabled)
+
+
+@router.post("/{name}/enabled", status_code=204)
+async def toggle_skill_flat(name: str, body: SkillToggleRequest, ctx: Ctx) -> None:
+    await _toggle(ctx, None, name, body.enabled)
 
 
 @router.get("/{category}/{name}", response_model=SkillDetailModel)
@@ -69,3 +99,37 @@ async def _get_skill(ctx: Ctx, category: str | None, name: str) -> SkillDetailMo
         content=detail.content,
         files=detail.files,
     )
+
+
+async def _save(ctx: Ctx, category: str | None, name: str, content: str) -> None:
+    try:
+        await anyio.to_thread.run_sync(skills_data.save_skill, ctx.settings.paths.skills_dir, category, name, content)
+    except skills_data.InvalidSkillRef:
+        raise HTTPException(status_code=400, detail="Invalid skill reference") from None
+    except skills_data.SymlinkedSkillFile:
+        raise HTTPException(status_code=403, detail="Refusing a symlinked skill") from None
+
+
+async def _delete(ctx: Ctx, category: str | None, name: str) -> None:
+    try:
+        await anyio.to_thread.run_sync(skills_data.delete_skill, ctx.settings.paths.skills_dir, category, name)
+    except skills_data.SkillNotFound:
+        raise HTTPException(status_code=404, detail="Skill not found") from None
+    except skills_data.InvalidSkillRef:
+        raise HTTPException(status_code=400, detail="Invalid skill reference") from None
+    except skills_data.SymlinkedSkillFile:
+        raise HTTPException(status_code=403, detail="Refusing a symlinked skill") from None
+
+
+async def _toggle(ctx: Ctx, category: str | None, name: str, enabled: bool) -> None:
+    try:
+        exists = await anyio.to_thread.run_sync(
+            skills_data.get_skill, ctx.settings.paths.skills_dir, ctx.settings.paths.config_yaml, category, name
+        )
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Skill not found")
+        await anyio.to_thread.run_sync(skills_data.set_enabled, ctx.settings.paths.config_yaml, name, enabled)
+    except skills_data.InvalidSkillRef:
+        raise HTTPException(status_code=400, detail="Invalid skill reference") from None
+    except skills_data.SymlinkedSkillFile:
+        raise HTTPException(status_code=403, detail="Refusing a symlinked skill") from None

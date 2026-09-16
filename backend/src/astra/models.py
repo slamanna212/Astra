@@ -527,3 +527,11 @@ class SkillDetailModel(BaseModel):
     frontmatter: dict[str, Any]
     content: str
     files: list[str]
+
+
+class SkillWriteRequest(BaseModel):
+    content: str = Field(max_length=1_000_000)
+
+
+class SkillToggleRequest(BaseModel):
+    enabled: bool

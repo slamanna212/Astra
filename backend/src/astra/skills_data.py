@@ -28,6 +28,9 @@ to whatever transient runtime environment this process happens to look like. Onl
 from __future__ import annotations
 
 import re
+import os
+import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -48,6 +51,10 @@ class InvalidSkillRef(ValueError):
 
 
 class SymlinkedSkillFile(ValueError):
+    pass
+
+
+class SkillNotFound(ValueError):
     pass
 
 
@@ -251,3 +258,74 @@ def get_skill(skills_dir: Path, config_yaml: Path, category: str | None, name: s
         content=content,
         files=files,
     )
+
+
+def _skill_path(skills_dir: Path, category: str | None, name: str) -> tuple[Path, str, str | None]:
+    safe_name = validate_segment(name)
+    safe_category = validate_segment(category) if category else None
+    skill_dir = skills_dir / safe_category / safe_name if safe_category else skills_dir / safe_name
+    if not skill_dir.resolve().is_relative_to(skills_dir.resolve()):
+        raise InvalidSkillRef(f"{category}/{name}")
+    return skill_dir, safe_name, safe_category
+
+
+def save_skill(skills_dir: Path, category: str | None, name: str, content: str) -> None:
+    skill_dir, _, _ = _skill_path(skills_dir, category, name)
+    if skill_dir.exists() and skill_dir.is_symlink():
+        raise SymlinkedSkillFile(str(skill_dir))
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    target = skill_dir / "SKILL.md"
+    if target.is_symlink():
+        raise SymlinkedSkillFile(str(target))
+    # Atomic replace prevents a partly-written instruction file on a process restart.
+    fd, temp_name = tempfile.mkstemp(prefix=".astra-skill-", dir=skill_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, target)
+    finally:
+        Path(temp_name).unlink(missing_ok=True)
+
+
+def delete_skill(skills_dir: Path, category: str | None, name: str) -> None:
+    skill_dir, _, _ = _skill_path(skills_dir, category, name)
+    target = skill_dir / "SKILL.md"
+    if not target.is_file():
+        raise SkillNotFound(name)
+    if skill_dir.is_symlink() or target.is_symlink():
+        raise SymlinkedSkillFile(str(target))
+    # Refuse a tree containing symlinks: recursive deletion must never follow one.
+    if any(path.is_symlink() for path in skill_dir.rglob("*")):
+        raise SymlinkedSkillFile(str(skill_dir))
+    shutil.rmtree(skill_dir)
+
+
+def set_enabled(config_yaml: Path, name: str, enabled: bool) -> None:
+    safe_name = validate_segment(name)
+    try:
+        cfg = yaml.safe_load(config_yaml.read_text(encoding="utf-8")) if config_yaml.is_file() else {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise InvalidSkillRef("cannot read config") from exc
+    if not isinstance(cfg, dict):
+        cfg = {}
+    skills_cfg = cfg.setdefault("skills", {})
+    if not isinstance(skills_cfg, dict):
+        skills_cfg = cfg["skills"] = {}
+    def toggle(raw: object) -> list[str]:
+        values = [str(v).strip() for v in raw] if isinstance(raw, list) else []
+        return [v for v in values if v != safe_name] if enabled else list(dict.fromkeys([*values, safe_name]))
+    skills_cfg["disabled"] = toggle(skills_cfg.get("disabled"))
+    platform = skills_cfg.get("platform_disabled")
+    if isinstance(platform, dict) and "webui" in platform:
+        platform["webui"] = toggle(platform.get("webui"))
+    fd, temp_name = tempfile.mkstemp(prefix=".astra-config-", dir=config_yaml.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            yaml.safe_dump(cfg, stream, allow_unicode=True, sort_keys=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, config_yaml)
+    finally:
+        Path(temp_name).unlink(missing_ok=True)
