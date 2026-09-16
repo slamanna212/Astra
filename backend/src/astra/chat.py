@@ -15,7 +15,8 @@ import json
 import logging
 import queue
 import threading
-from collections import OrderedDict
+import time
+from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,10 @@ from astra.hermes_bridge import (
 )
 
 log = logging.getLogger(__name__)
+
+# Live tok/s is a sliding-window instantaneous rate, not a since-start average: it should
+# visibly speed up/slow down as generation does, not just settle toward one number.
+_LIVE_TPS_WINDOW_SECONDS = 2.0
 
 
 class ChatError(RuntimeError):
@@ -80,6 +85,9 @@ class Turn:
     next_question_id: int = 1
     pump: asyncio.Task[None] | None = None
     accepting_steers: bool = True
+    started_at: float = field(default_factory=time.monotonic)
+    start_output_tokens: int = 0
+    recent_delta_times: deque[float] = field(default_factory=lambda: deque(maxlen=64))
 
 
 @dataclass(slots=True)
@@ -414,6 +422,7 @@ class ChatManager:
             agent = self._build_agent(turn)
             with turn.lock:
                 turn.agent = agent
+            turn.start_output_tokens = getattr(agent, "session_completion_tokens", 0) or 0
             self._register_approvals(turn)
             history = turn.agent.session_db.get_messages_as_conversation(turn.session_id)
             run_kwargs = _supported(
@@ -425,10 +434,11 @@ class ChatManager:
             with turn.lock:
                 turn.accepting_steers = False
                 late_steer = self._drain_late_steer(agent)
+            usage = self._final_usage(turn)
             if turn.cancel.is_set():
-                self._emit(turn, "cancel", {"reason": "Cancelled by user", "late_steer": late_steer})
+                self._emit(turn, "cancel", {"reason": "Cancelled by user", "late_steer": late_steer, **usage})
             else:
-                self._emit(turn, "done", {"result": {"status": "completed", "has_result": bool(result)}, "late_steer": late_steer})
+                self._emit(turn, "done", {"result": {"status": "completed", "has_result": bool(result)}, "late_steer": late_steer, **usage})
         except Exception as exc:
             log.exception("chat turn failed for session %s", turn.session_id)
             self._emit(turn, "error", {"message": "The Hermes turn failed. Check server logs for details."})
@@ -468,8 +478,28 @@ class ChatManager:
                     log.debug("failed to close cached Hermes resource", exc_info=True)
 
     def _token_callback(self, turn: Turn, text: Any) -> None:
-        if text:
-            self._emit(turn, "delta", {"text": str(text)})
+        if not text:
+            return
+        now = time.monotonic()
+        window = turn.recent_delta_times
+        window.append(now)
+        while window and now - window[0] > _LIVE_TPS_WINDOW_SECONDS:
+            window.popleft()
+        payload: dict[str, Any] = {"text": str(text)}
+        if len(window) >= 2:
+            span = window[-1] - window[0]
+            if span > 0.1:
+                payload["tps"] = round((len(window) - 1) / span, 1)
+        self._emit(turn, "delta", payload)
+
+    @staticmethod
+    def _final_usage(turn: Turn) -> dict[str, Any]:
+        agent = turn.agent
+        output_tokens = max(0, (getattr(agent, "session_completion_tokens", 0) or 0) - turn.start_output_tokens)
+        duration = time.monotonic() - turn.started_at
+        if output_tokens <= 0 or duration <= 0:
+            return {}
+        return {"output_tokens": output_tokens, "tps": round(output_tokens / duration, 1)}
 
     def _reasoning_callback(self, turn: Turn, text: Any) -> None:
         if text:

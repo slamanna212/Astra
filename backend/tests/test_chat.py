@@ -197,6 +197,53 @@ async def test_commit_idle_is_a_non_request_thread_session_boundary(base_setting
     await manager.close()
 
 
+@pytest.mark.anyio
+async def test_live_tps_is_a_sliding_window_not_a_since_start_average(base_settings, monkeypatch):
+    manager = ChatManager(base_settings, max_workers=1)
+    turn = chatmod.Turn("session-x", "go", None, None)
+    clock = [0.0]
+    monkeypatch.setattr(chatmod.time, "monotonic", lambda: clock[0])
+
+    # Five deltas 0.25s apart: a steady 4 tok/s the window should report throughout.
+    for _ in range(5):
+        manager._token_callback(turn, "a")
+        clock[0] += 0.25
+    steady = [turn.events.get_nowait().data.get("tps") for _ in range(5)]
+    assert steady[0] is None  # not enough samples yet for a rate
+    assert steady[1:] == [pytest.approx(4.0)] * 4
+
+    # A long gap pushes every prior sample out of the window, so the next delta alone can't
+    # yield a rate; only once a second delta lands inside the window does it recompute fresh,
+    # reflecting the new (slower) pace rather than an average blended with the fast burst above.
+    clock[0] += 3.0
+    manager._token_callback(turn, "b")
+    assert "tps" not in turn.events.get_nowait().data
+    clock[0] += 2.0
+    manager._token_callback(turn, "c")
+    assert turn.events.get_nowait().data["tps"] == pytest.approx(0.5)
+
+    await manager.close()
+
+
+@pytest.mark.anyio
+async def test_final_usage_averages_output_tokens_over_the_whole_turn(base_settings, monkeypatch):
+    manager = ChatManager(base_settings, max_workers=1)
+    turn = chatmod.Turn("session-x", "go", None, None)
+    clock = [100.0]
+    monkeypatch.setattr(chatmod.time, "monotonic", lambda: clock[0])
+    turn.started_at = 100.0
+    turn.start_output_tokens = 10
+    turn.agent = type("Agent", (), {"session_completion_tokens": 10})()
+
+    assert manager._final_usage(turn) == {}  # nothing generated yet for this turn
+
+    clock[0] = 105.0
+    turn.agent.session_completion_tokens = 60
+    assert manager._final_usage(turn) == {"output_tokens": 50, "tps": 10.0}
+
+    await manager.close()
+
+
 def test_chat_state_and_options_are_canonical_and_do_not_expose_keys(authed):
     session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
     state = authed.get(f"/api/chat/{session_id}/state")

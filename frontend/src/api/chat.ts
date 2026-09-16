@@ -2,13 +2,13 @@ import { apiFetch, buildUrl } from './client';
 
 export type ChatStreamEvent =
   | { type: 'state' | 'started'; running: boolean }
-  | { type: 'delta'; text: string }
+  | { type: 'delta'; text: string; tps?: number }
   | { type: 'reasoning'; text: string }
   | { type: 'tool'; args: string[] }
   | { type: 'clarify'; id: number; question: string; choices: unknown[] | null }
   | { type: 'approval'; request_id: string; command?: string; description?: string; pattern_keys?: string[] }
   | { type: 'subagent' | 'status'; [key: string]: unknown }
-  | { type: 'done' | 'cancel' | 'error'; message?: string; late_steer?: string | null };
+  | { type: 'done' | 'cancel' | 'error'; message?: string; late_steer?: string | null; tps?: number; output_tokens?: number };
 
 export interface ChatOptions {
   default_model: string | null;

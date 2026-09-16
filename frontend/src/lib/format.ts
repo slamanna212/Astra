@@ -65,6 +65,12 @@ export function formatCost(usd: number | null | undefined): string {
   }).format(usd);
 }
 
+/** Token generation speed: 47.3 → "47.3 tok/s", null → "—". */
+export function formatTps(tps: number | null | undefined): string {
+  if (tps === null || tps === undefined || !Number.isFinite(tps) || tps <= 0) return '—';
+  return `${trimFixed(tps, 1)} tok/s`;
+}
+
 /** Integer with thousands separators: 4413 → "4,413". */
 export function formatCount(count: number | null | undefined): string {
   if (count === null || count === undefined || !Number.isFinite(count)) return '—';

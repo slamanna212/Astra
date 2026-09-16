@@ -9,7 +9,7 @@ import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { deleteSession, getSession, updateSession } from '../../api/sessions';
 import { SourceBadge } from '../../components/SourceBadge';
-import { formatCost, formatCount, formatTokens, sessionTitle } from '../../lib/format';
+import { formatCost, formatCount, formatTokens, formatTps, sessionTitle } from '../../lib/format';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 
@@ -25,6 +25,8 @@ export default function SessionPane() {
   const [clarifyText, setClarifyText] = useState('');
   const [approval, setApproval] = useState<{ request_id: string; command?: string; description?: string } | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
+  const [liveTps, setLiveTps] = useState<number | null>(null);
+  const [turnTps, setTurnTps] = useState<{ tps: number; outputTokens: number } | null>(null);
   const [draft, setDraft] = useState('');
   const [model, setModel] = useState<string | null | undefined>(undefined);
   const [provider, setProvider] = useState<string | null | undefined>(undefined);
@@ -100,8 +102,13 @@ export default function SessionPane() {
         void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
       }
     });
-    source.addEventListener('started', () => { setRunning(true); setStreaming(''); setReasoning(''); setActivity([]); });
-    source.addEventListener('delta', (event) => { pendingText.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
+    source.addEventListener('started', () => { setRunning(true); setStreaming(''); setReasoning(''); setActivity([]); setLiveTps(null); setTurnTps(null); });
+    source.addEventListener('delta', (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string; tps?: number };
+      pendingText.current += data.text;
+      if (data.tps !== undefined) setLiveTps(data.tps);
+      schedule();
+    });
     source.addEventListener('reasoning', (event) => { pendingReasoning.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
     source.addEventListener('clarify', (event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null }));
     source.addEventListener('approval', (event) => setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string }));
@@ -110,9 +117,13 @@ export default function SessionPane() {
     source.addEventListener('subagent', (event) => setActivity((items) => [...items.slice(-4), `Subagent: ${(event as MessageEvent).data}`]));
     const finish = (event: Event) => {
       if (event instanceof MessageEvent && event.data) {
-        const payload = JSON.parse(event.data) as { late_steer?: string | null };
+        const payload = JSON.parse(event.data) as { late_steer?: string | null; tps?: number; output_tokens?: number };
         if (payload.late_steer) setDraft((value) => value || payload.late_steer || '');
+        setTurnTps(payload.tps !== undefined && payload.output_tokens !== undefined
+          ? { tps: payload.tps, outputTokens: payload.output_tokens }
+          : null);
       }
+      setLiveTps(null);
       terminal();
     };
     source.addEventListener('done', finish);
@@ -240,7 +251,21 @@ export default function SessionPane() {
       </Box>
       <Box style={{ maxWidth: 'var(--astra-chat-content-w)', width: '100%', margin: '0 auto' }}>
         {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
-        {streaming && <Text p="sm" style={{ whiteSpace: 'pre-wrap' }}>{streaming}</Text>}
+        {streaming && (
+          <Box p="sm">
+            <Text style={{ whiteSpace: 'pre-wrap' }}>{streaming}</Text>
+            {liveTps !== null && (
+              <Text fz={11} c="dimmed" ff="monospace" mt={4}>
+                {formatTps(liveTps)}
+              </Text>
+            )}
+          </Box>
+        )}
+        {!running && turnTps && (
+          <Text fz={11} c="dimmed" ff="monospace" px="sm">
+            {formatTps(turnTps.tps)} · {formatCount(turnTps.outputTokens)} tokens
+          </Text>
+        )}
         {clarify && (
           <Alert m="sm" title={clarify.question}>
             <Group mt="xs">
