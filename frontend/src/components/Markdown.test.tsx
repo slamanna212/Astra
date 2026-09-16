@@ -34,6 +34,14 @@ describe('Markdown', () => {
     expect(screen.getByText(/console\.log\(1\)/)).toBeInTheDocument();
   });
 
+  it.each([
+    ['without a language', '```\nplain text\n```'],
+    ['with an unknown language', '```not-a-real-language\nplain text\n```'],
+  ])('highlights fenced code %s without crashing', async (_description, markdown) => {
+    render(<Markdown codeHighlight>{markdown}</Markdown>);
+    expect(await screen.findByText('plain text')).toBeInTheDocument();
+  });
+
   it('opens links in a new tab with a safe rel', () => {
     render(<Markdown>{'[link](https://example.com)'}</Markdown>);
     const anchor = screen.getByRole('link', { name: 'link' });

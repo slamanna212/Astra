@@ -22,6 +22,7 @@ import less from 'highlight.js/lib/languages/less';
 import lua from 'highlight.js/lib/languages/lua';
 import perl from 'highlight.js/lib/languages/perl';
 import php from 'highlight.js/lib/languages/php';
+import plaintext from 'highlight.js/lib/languages/plaintext';
 import protobuf from 'highlight.js/lib/languages/protobuf';
 import python from 'highlight.js/lib/languages/python';
 import ruby from 'highlight.js/lib/languages/ruby';
@@ -49,6 +50,7 @@ const LANGUAGES: Record<string, typeof javascript> = {
   lua,
   perl,
   php,
+  plaintext,
   protobuf,
   python,
   ruby,
