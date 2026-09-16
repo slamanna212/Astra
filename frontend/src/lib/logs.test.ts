@@ -16,8 +16,8 @@ function entry(overrides: Partial<LogEntry>): LogEntry {
 
 describe('levelColor', () => {
   it('maps known levels to a colour, case-insensitively', () => {
-    expect(levelColor('INFO')).toBe('blue');
-    expect(levelColor('warning')).toBe('yellow');
+    expect(levelColor('INFO')).toBe('teal');
+    expect(levelColor('warning')).toBe('sand');
     expect(levelColor('ERROR')).toBe('red');
     expect(levelColor('CRITICAL')).toBe('red');
     expect(levelColor('DEBUG')).toBe('gray');

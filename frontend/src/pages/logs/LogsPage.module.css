@@ -11,7 +11,8 @@
   align-items: center;
   gap: var(--mantine-spacing-xs);
   padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--astra-border);
+  background: var(--astra-bg-chrome);
   flex-shrink: 0;
 }
 
@@ -25,19 +26,20 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: var(--mantine-color-body);
+  background-color: var(--astra-bg);
 }
 
 .line {
-  font-family: var(--mantine-font-family-monospace);
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-family: var(--astra-font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
   padding: 1px var(--mantine-spacing-sm) 1px calc(var(--mantine-spacing-sm) - 3px);
   border-left: 3px solid transparent;
+  color: var(--astra-text-body);
 }
 
 .line:hover {
-  background-color: var(--mantine-color-default-hover);
+  background-color: var(--astra-hover);
 }

@@ -14,7 +14,7 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { IconAlertCircle, IconChartBar } from '@tabler/icons-react';
+import { IconAlertCircle } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -57,7 +57,7 @@ function paletteColor(i: number): string {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <Paper withBorder p="md" radius="md">
+    <Paper withBorder p="md">
       <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
         {label}
       </Text>
@@ -75,8 +75,8 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card withBorder radius="md" p="md">
-      <Title order={5} mb="sm">
+    <Card withBorder p="md">
+      <Title order={3} mb="sm">
         {title}
       </Title>
       {children}
@@ -97,7 +97,7 @@ export default function InsightsPage() {
   return (
     <Stack p="md" gap="md">
       <Group justify="space-between" wrap="wrap">
-        <Title order={2}>Insights</Title>
+        <Title order={1}>Insights</Title>
         <SegmentedControl
           value={range}
           onChange={(v) => setRange(v as InsightsRange)}
@@ -119,10 +119,9 @@ export default function InsightsPage() {
 
       {query.data && query.data.totals.sessions === 0 && (
         <Center p="xl">
-          <Stack align="center" gap={4} c="dimmed">
-            <IconChartBar size={40} stroke={1.2} />
-            <Text c="dimmed">No sessions in this range.</Text>
-          </Stack>
+          <Text c="dimmed" fz={14}>
+            No sessions in this range.
+          </Text>
         </Center>
       )}
 
@@ -177,7 +176,7 @@ function InsightsBody({ data }: { data: InsightsResponse }) {
           h={220}
           data={dailyChartData}
           dataKey="label"
-          series={[{ name: 'estimated_cost_usd', label: 'Est. cost', color: 'blue.6' }]}
+          series={[{ name: 'estimated_cost_usd', label: 'Est. cost', color: 'teal.6' }]}
           valueFormatter={(v) => formatCost(v)}
         />
       </SectionCard>
@@ -190,7 +189,7 @@ function InsightsBody({ data }: { data: InsightsResponse }) {
               data={modelChartData}
               dataKey="model"
               orientation="vertical"
-              series={[{ name: 'estimated_cost_usd', label: 'Est. cost', color: 'blue.6' }]}
+              series={[{ name: 'estimated_cost_usd', label: 'Est. cost', color: 'teal.6' }]}
               valueFormatter={(v) => formatCost(v)}
               withLegend={false}
               yAxisProps={{ width: 110, tickFormatter: (v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v) }}

@@ -27,15 +27,15 @@ function CronRow({ job, active, now }: { job: CronJob; active: boolean; now: num
           {state.label}
         </Badge>
       </Group>
-      <Text size="xs" c="dimmed" truncate="end">
+      <Text component="span" ff="monospace" fz={11} c="dimmed" truncate="end">
         {humanSchedule(job)} · {deliveryLabel(job.deliver)}
       </Text>
       <Group justify="space-between" wrap="nowrap" gap="xs">
-        <Text size="xs" c="dimmed">
+        <Text component="span" ff="monospace" fz={11} c="dimmed">
           {nextRun ? `Next ${formatRelativeTime(nextRun, now)}` : 'No next run'}
         </Text>
         {lastRun && (
-          <Badge color={lastRun.color} size="xs" variant="outline">
+          <Badge color={lastRun.color} size="xs" variant="light">
             {lastRun.label}
           </Badge>
         )}
@@ -66,14 +66,23 @@ export function CronList({ selectedId }: { selectedId: string | undefined }) {
 
   return (
     <Stack gap={0} h="100%">
-      <Group justify="space-between" px="md" py="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
-        <Title order={4}>Scheduled tasks</Title>
-          <Group gap="xs">
-            {query.data && <Text size="xs" c="dimmed">{query.data.items.length}</Text>}
-            <Tooltip label="Create scheduled task">
-              <ActionIcon variant="light" size="sm" aria-label="Create scheduled task" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon>
-            </Tooltip>
-          </Group>
+      <Group
+        justify="space-between"
+        px="md"
+        py="sm"
+        style={{ borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}
+      >
+        <Title order={3}>Scheduled tasks</Title>
+        <Group gap="xs">
+          {query.data && (
+            <Text ff="monospace" fz={11} c="dimmed">
+              {query.data.items.length}
+            </Text>
+          )}
+          <Tooltip label="Create scheduled task">
+            <ActionIcon aria-label="Create scheduled task" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon>
+          </Tooltip>
+        </Group>
       </Group>
       <div className={classes.scroller}>
         {query.isLoading && (

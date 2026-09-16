@@ -43,7 +43,7 @@ function FieldValue({ job, field }: { job: CronJob; field: string }) {
   if (field === 'next_run_at' || field === 'last_run_at' || field === 'created_at') return <Text size="sm">{isoOrDash(value)}</Text>;
   if (field === 'no_agent' || field === 'attach_to_session') {
     return (
-      <Badge size="sm" variant="light" color={value ? 'blue' : 'gray'}>
+      <Badge size="sm" variant="light" color={value ? 'teal' : 'gray'}>
         {value ? 'Yes' : 'No'}
       </Badge>
     );
@@ -74,7 +74,7 @@ function FieldValue({ job, field }: { job: CronJob; field: string }) {
   }
   if (typeof value === 'boolean') {
     return (
-      <Badge size="sm" variant="light" color={value ? 'blue' : 'gray'}>
+      <Badge size="sm" variant="light" color={value ? 'teal' : 'gray'}>
         {value ? 'Yes' : 'No'}
       </Badge>
     );
@@ -95,7 +95,7 @@ function FieldRow({ label, children }: { label: string; children: ReactNode }) {
 
 function GroupCard({ title, job, fields }: { title: string; job: CronJob; fields: { key: string; label: string }[] }) {
   return (
-    <Paper withBorder p="md" radius="md">
+    <Paper withBorder p="md">
       <Title order={5} mb="sm">
         {title}
       </Title>
@@ -176,7 +176,7 @@ export default function CronDetail() {
             {state.label}
           </Badge>
           {lastRun && (
-            <Badge color={lastRun.color} variant="outline">
+            <Badge color={lastRun.color} variant="light">
               Last run: {lastRun.label}
             </Badge>
           )}

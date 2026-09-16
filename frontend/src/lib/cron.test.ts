@@ -40,14 +40,14 @@ describe('jobStateBadge', () => {
   it('shows Paused when disabled, even without a state marker', () => {
     expect(jobStateBadge({ enabled: false, state: null, paused_at: null })).toEqual({
       label: 'Paused',
-      color: 'yellow',
+      color: 'sand',
     });
   });
 
   it('shows Paused when paused_at is set even if enabled', () => {
     expect(jobStateBadge({ enabled: true, state: null, paused_at: '2026-01-01T00:00:00Z' })).toEqual({
       label: 'Paused',
-      color: 'yellow',
+      color: 'sand',
     });
   });
 
@@ -55,7 +55,7 @@ describe('jobStateBadge', () => {
     // Mirrors cron.jobs.effective_job_state: enabled=true is authoritative.
     expect(jobStateBadge({ enabled: true, state: 'paused', paused_at: null })).toEqual({
       label: 'Paused',
-      color: 'yellow',
+      color: 'sand',
     });
   });
 

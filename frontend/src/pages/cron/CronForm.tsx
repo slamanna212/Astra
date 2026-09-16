@@ -124,7 +124,7 @@ export function CronForm({
         ) : (
           <TextInput required label="Schedule" placeholder="0 9 * * *" value={schedule} onChange={(e) => setSchedule(e.currentTarget.value)} />
         )}
-        <Alert icon={<IconInfoCircle size={16} />} color="yellow" title="One-time vs recurring">
+        <Alert icon={<IconInfoCircle size={16} />} color="sand" title="One-time vs recurring">
           A duration such as <code>30m</code> runs once. Use <code>every 30m</code> for a recurring task.
         </Alert>
         <NumberInput label="Repeat limit" description="Leave empty for unlimited runs" min={1} value={repeat} onChange={setRepeat} />

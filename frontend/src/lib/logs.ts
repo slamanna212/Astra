@@ -11,9 +11,9 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 
 const LEVEL_COLORS: Record<string, string> = {
   DEBUG: 'gray',
-  INFO: 'blue',
-  WARNING: 'yellow',
-  WARN: 'yellow',
+  INFO: 'teal',
+  WARNING: 'sand',
+  WARN: 'sand',
   ERROR: 'red',
   CRITICAL: 'red',
 };

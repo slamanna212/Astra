@@ -19,7 +19,7 @@ export function humanSchedule(job: Pick<CronJob, 'schedule_display' | 'schedule'
   return '—';
 }
 
-export type BadgeTone = 'gray' | 'blue' | 'green' | 'red' | 'yellow' | 'orange';
+export type BadgeTone = 'gray' | 'teal' | 'green' | 'red' | 'sand';
 
 export interface StatusBadge {
   label: string;
@@ -32,7 +32,7 @@ export function jobStateBadge(job: Pick<CronJob, 'enabled' | 'state' | 'paused_a
   const state = (job.state ?? '').trim();
   if (state === 'completed') return { label: 'Completed', color: 'gray' };
   if (state === 'error') return { label: 'Error', color: 'red' };
-  if (!job.enabled || state === 'paused' || job.paused_at) return { label: 'Paused', color: 'yellow' };
+  if (!job.enabled || state === 'paused' || job.paused_at) return { label: 'Paused', color: 'sand' };
   return { label: 'Scheduled', color: 'green' };
 }
 

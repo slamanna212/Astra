@@ -55,7 +55,7 @@ export function CronOutputs({ jobId }: { jobId: string }) {
 
   return (
     <Group align="flex-start" wrap="wrap" gap="md">
-      <Paper withBorder radius="md" style={{ width: '20rem', flexShrink: 0 }}>
+      <Paper withBorder style={{ width: '20rem', flexShrink: 0 }}>
         <ScrollArea.Autosize mah={480}>
           <Table highlightOnHover>
             <Table.Tbody>
@@ -67,7 +67,7 @@ export function CronOutputs({ jobId }: { jobId: string }) {
                     onClick={() => setSelected(run.filename)}
                     style={{ cursor: 'pointer' }}
                     data-selected={run.filename === selected || undefined}
-                    bg={run.filename === selected ? 'var(--mantine-color-blue-light)' : undefined}
+                    bg={run.filename === selected ? 'var(--astra-selected)' : undefined}
                   >
                     <Table.Td>
                       <Stack gap={2}>
@@ -94,7 +94,7 @@ export function CronOutputs({ jobId }: { jobId: string }) {
           </Table>
         </ScrollArea.Autosize>
       </Paper>
-      <Paper withBorder radius="md" p="md" style={{ flex: 1, minWidth: '20rem' }}>
+      <Paper withBorder p="md" style={{ flex: 1, minWidth: '20rem' }}>
         {!selected && (
           <Text c="dimmed" size="sm">
             Select a run to view its output.
@@ -105,7 +105,7 @@ export function CronOutputs({ jobId }: { jobId: string }) {
         {selected && contentQuery.data && (
           <Stack gap="sm">
             {contentQuery.data.truncated && (
-              <Button size="compact-xs" variant="light" color="yellow" disabled>
+              <Button size="compact-xs" variant="light" color="sand" disabled>
                 Output truncated
               </Button>
             )}

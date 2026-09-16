@@ -8,21 +8,23 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.125rem;
+  gap: 2px;
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 8px 12px;
   border: 0;
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--astra-divider);
   background: none;
   cursor: pointer;
   text-align: left;
   color: inherit;
+  transition: background-color var(--astra-transition);
 }
 
 .row:hover {
-  background: var(--mantine-color-default-hover);
+  background: var(--astra-hover);
 }
 
 .row[data-active] {
-  background: var(--mantine-color-blue-light);
+  background: var(--astra-selected);
+  box-shadow: inset 2px 0 0 var(--astra-primary);
 }
