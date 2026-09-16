@@ -7,6 +7,7 @@ import { login } from '../api/auth';
 import { isApiError } from '../api/client';
 import { queryKeys } from '../api/queryKeys';
 import { useAuthStatus } from '../auth/useAuth';
+import { BrandMark } from '../components/BrandMark';
 import { safeRedirectPath } from '../lib/safeRedirect';
 
 function loginErrorMessage(error: unknown): string {
@@ -48,16 +49,19 @@ export default function LoginPage() {
   };
 
   return (
-    <Center mih="100dvh" p="md">
-      <Paper withBorder shadow="sm" radius="md" p="xl" w="100%" maw={380}>
+    <Center mih="100dvh" p="md" style={{ background: 'var(--astra-bg)' }}>
+      <Paper withBorder p="xl" w="100%" maw={360}>
         <form onSubmit={onSubmit}>
           <Stack gap="md">
-            <div>
-              <Title order={2}>Astra</Title>
-              <Text c="dimmed" size="sm">
-                Sign in to continue
-              </Text>
-            </div>
+            <Stack gap="xs" align="center" ta="center">
+              <BrandMark size={32} />
+              <div>
+                <Title order={2}>Astra</Title>
+                <Text c="dimmed" size="sm">
+                  Sign in to continue
+                </Text>
+              </div>
+            </Stack>
             {mutation.isError && (
               <Alert color="red" variant="light" icon={<IconAlertCircle size={18} />} role="alert">
                 {loginErrorMessage(mutation.error)}
