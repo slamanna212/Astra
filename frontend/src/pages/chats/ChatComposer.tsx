@@ -48,7 +48,13 @@ export function ChatComposer({
     <Box p="md" pt="sm" style={{ borderTop: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}>
       <Box
         p="sm"
-        style={{ border: '1px solid var(--astra-border)', borderRadius: 8, background: 'var(--astra-surface)' }}
+        style={{
+          maxWidth: 'var(--astra-chat-content-w)',
+          margin: '0 auto',
+          border: '1px solid var(--astra-border)',
+          borderRadius: 8,
+          background: 'var(--astra-surface)',
+        }}
       >
         <Textarea
           variant="unstyled"

@@ -200,20 +200,22 @@ export function Transcript({
               }}
               className={classes.rowWrapper}
             >
-              {(row.kind === 'loader-top' || row.kind === 'loader-bottom') && (
-                <div className={classes.centerLoader}>
-                  <Loader size="xs" />
-                </div>
-              )}
-              {row.kind === 'message' && (
-                <MessageRow
-                  message={row.message}
-                  toolResults={toolResults}
-                  consumedToolCallIds={consumedToolCallIds}
-                  childSessions={childSessions}
-                  highlighted={row.message.id === highlightMessageId}
-                />
-              )}
+              <div className={classes.rowInner}>
+                {(row.kind === 'loader-top' || row.kind === 'loader-bottom') && (
+                  <div className={classes.centerLoader}>
+                    <Loader size="xs" />
+                  </div>
+                )}
+                {row.kind === 'message' && (
+                  <MessageRow
+                    message={row.message}
+                    toolResults={toolResults}
+                    consumedToolCallIds={consumedToolCallIds}
+                    childSessions={childSessions}
+                    highlighted={row.message.id === highlightMessageId}
+                  />
+                )}
+              </div>
             </div>
           );
         })}

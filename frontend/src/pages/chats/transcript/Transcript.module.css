@@ -9,6 +9,12 @@
   padding: 8px 20px;
 }
 
+.rowInner {
+  max-width: var(--astra-chat-content-w);
+  min-width: 0;
+  margin: 0 auto;
+}
+
 .userBubble {
   max-width: 70%;
   min-width: 0;

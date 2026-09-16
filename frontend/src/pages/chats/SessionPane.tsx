@@ -238,33 +238,35 @@ export default function SessionPane() {
       <Box style={{ flex: 1, minHeight: 0 }}>
         <Transcript sessionId={sessionId} highlightMessageId={highlightMessageId} />
       </Box>
-      {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
-      {streaming && <Text p="sm" style={{ whiteSpace: 'pre-wrap' }}>{streaming}</Text>}
-      {clarify && (
-        <Alert m="sm" title={clarify.question}>
-          <Group mt="xs">
-            {(clarify.choices ?? []).map((choice) => (
-              <Button key={String(choice)} size="xs" onClick={() => void answerChat(sessionId, clarify.id, String(choice))}>{String(choice)}</Button>
-            ))}
-            <TextInput value={clarifyText} onChange={(event) => setClarifyText(event.currentTarget.value)} placeholder="Type another answer" style={{ flex: 1 }} />
-            <Button size="xs" disabled={!clarifyText.trim()} onClick={() => { void answerChat(sessionId, clarify.id, clarifyText.trim()); setClarifyText(''); }}>Answer</Button>
-          </Group>
-        </Alert>
-      )}
-      {approval && (
-        <Alert m="sm" color="sand" title="Approval required">
-          <Text size="sm">{approval.description ?? 'Hermes needs permission to continue.'}</Text>
-          {approval.command && <Code block mt="xs">{approval.command}</Code>}
-          <Group mt="xs">
-            {(['once', 'session', 'always', 'deny'] as const).map((choice) => (
-              <Button key={choice} size="xs" color={choice === 'deny' ? 'red' : undefined} variant={choice === 'deny' ? 'light' : 'filled'} onClick={() => void approveChat(sessionId, approval.request_id, choice)}>
-                {choice === 'once' ? 'Approve once' : choice === 'session' ? 'Approve session' : choice === 'always' ? 'Always approve' : 'Deny'}
-              </Button>
-            ))}
-          </Group>
-        </Alert>
-      )}
-      {activity.length > 0 && <Paper mx="sm" p="xs" withBorder>{activity.map((item, index) => <Text size="xs" c="dimmed" key={`${index}-${item}`}>{item}</Text>)}</Paper>}
+      <Box style={{ maxWidth: 'var(--astra-chat-content-w)', width: '100%', margin: '0 auto' }}>
+        {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
+        {streaming && <Text p="sm" style={{ whiteSpace: 'pre-wrap' }}>{streaming}</Text>}
+        {clarify && (
+          <Alert m="sm" title={clarify.question}>
+            <Group mt="xs">
+              {(clarify.choices ?? []).map((choice) => (
+                <Button key={String(choice)} size="xs" onClick={() => void answerChat(sessionId, clarify.id, String(choice))}>{String(choice)}</Button>
+              ))}
+              <TextInput value={clarifyText} onChange={(event) => setClarifyText(event.currentTarget.value)} placeholder="Type another answer" style={{ flex: 1 }} />
+              <Button size="xs" disabled={!clarifyText.trim()} onClick={() => { void answerChat(sessionId, clarify.id, clarifyText.trim()); setClarifyText(''); }}>Answer</Button>
+            </Group>
+          </Alert>
+        )}
+        {approval && (
+          <Alert m="sm" color="sand" title="Approval required">
+            <Text size="sm">{approval.description ?? 'Hermes needs permission to continue.'}</Text>
+            {approval.command && <Code block mt="xs">{approval.command}</Code>}
+            <Group mt="xs">
+              {(['once', 'session', 'always', 'deny'] as const).map((choice) => (
+                <Button key={choice} size="xs" color={choice === 'deny' ? 'red' : undefined} variant={choice === 'deny' ? 'light' : 'filled'} onClick={() => void approveChat(sessionId, approval.request_id, choice)}>
+                  {choice === 'once' ? 'Approve once' : choice === 'session' ? 'Approve session' : choice === 'always' ? 'Always approve' : 'Deny'}
+                </Button>
+              ))}
+            </Group>
+          </Alert>
+        )}
+        {activity.length > 0 && <Paper mx="sm" p="xs" withBorder>{activity.map((item, index) => <Text size="xs" c="dimmed" key={`${index}-${item}`}>{item}</Text>)}</Paper>}
+      </Box>
       <ChatComposer
         running={running}
         onSend={start}
