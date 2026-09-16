@@ -7,10 +7,10 @@
 .list {
   display: flex;
   flex-direction: column;
-  width: 22rem;
+  width: var(--astra-sessionlist-w);
   flex-shrink: 0;
   min-height: 0;
-  border-right: 1px solid var(--mantine-color-default-border);
+  border-right: 1px solid var(--astra-border);
 }
 
 .detail {

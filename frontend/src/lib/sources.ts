@@ -1,11 +1,14 @@
-/** Mantine color per session source. Unknown sources fall back to gray. */
+/**
+ * Mantine color per session source, per the Graphite design language (§2, §5 Badge):
+ * teal marks scheduled sources, sand marks chat integrations, everything else is neutral.
+ */
 export const SOURCE_COLORS: Record<string, string> = {
-  cli: 'blue',
-  cron: 'orange',
-  discord: 'indigo',
-  subagent: 'grape',
-  tui: 'teal',
-  webui: 'green',
+  cli: 'gray',
+  cron: 'teal',
+  discord: 'sand',
+  subagent: 'gray',
+  tui: 'gray',
+  webui: 'gray',
 };
 
 export const KNOWN_SOURCES = Object.keys(SOURCE_COLORS);

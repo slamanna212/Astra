@@ -1,5 +1,5 @@
-import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Paper, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
-import { IconArrowLeft, IconPinFilled } from '@tabler/icons-react';
+import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Paper, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { IconArrowLeft } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -172,13 +172,22 @@ export default function SessionPane() {
   const s = query.data;
   return (
     <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <Stack gap={6} p="md" pb="sm" style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+      <Stack
+        gap={6}
+        p="md"
+        pb="sm"
+        style={{ flexShrink: 0, borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}
+      >
         {back}
         <Group gap="xs" wrap="nowrap" align="flex-start">
-          {s.pinned && <IconPinFilled size={16} aria-label="Pinned" color="var(--mantine-color-yellow-6)" style={{ marginTop: 4 }} />}
-          <Title order={4} style={{ minWidth: 0, overflowWrap: 'anywhere', flex: 1 }}>
+          {s.pinned && (
+            <Text component="span" c="sand" fz={14} style={{ marginTop: 2 }} aria-label="Pinned">
+              ★
+            </Text>
+          )}
+          <Text fz={14} fw={600} style={{ minWidth: 0, overflowWrap: 'anywhere', flex: 1 }}>
             {sessionTitle(s)}
-          </Title>
+          </Text>
           <Group gap={4} wrap="wrap" justify="flex-end">
             <Button size="compact-xs" variant="subtle" onClick={() => {
               const title = window.prompt('Conversation title', s.title ?? '');
@@ -194,31 +203,31 @@ export default function SessionPane() {
         </Group>
         <Group gap="sm" wrap="wrap">
           <SourceBadge source={s.source} size="sm" />
-          <Badge size="sm" color={connection === 'live' ? 'green' : 'yellow'} variant="light">{connection}</Badge>
+          <Badge size="sm" color={connection === 'live' ? 'green' : 'sand'} variant="light">{connection}</Badge>
           {s.model && (
-            <Text size="sm" c="dimmed">
+            <Text ff="monospace" fz={11} c="dimmed">
               {s.model}
             </Text>
           )}
           <Tooltip label={`${formatTokens(s.input_tokens)} in · ${formatTokens(s.output_tokens)} out`}>
-            <Text size="sm" c="dimmed">
+            <Text ff="monospace" fz={11} c="dimmed">
               {formatCount(s.message_count)} msgs · {formatCost(s.estimated_cost_usd)}
             </Text>
           </Tooltip>
           {s.archived && (
-            <Text size="sm" c="dimmed">
+            <Badge size="sm" variant="outline" color="gray">
               archived
-            </Text>
+            </Badge>
           )}
           {s.hidden && (
-            <Text size="sm" c="dimmed">
+            <Badge size="sm" variant="outline" color="gray">
               hidden
-            </Text>
+            </Badge>
           )}
           {s.parent_session_id && (
-            <Text size="xs" c="dimmed">
+            <Text fz={11} c="dimmed">
               Parent:{' '}
-              <Anchor component={Link} to={`/chats/${encodeURIComponent(s.parent_session_id)}`} size="xs">
+              <Anchor component={Link} to={`/chats/${encodeURIComponent(s.parent_session_id)}`} ff="monospace" fz={11}>
                 {s.parent_session_id}
               </Anchor>
             </Text>

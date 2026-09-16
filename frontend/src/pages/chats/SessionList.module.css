@@ -9,22 +9,30 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   padding: 0 var(--mantine-spacing-md);
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--astra-divider);
   color: inherit;
   text-decoration: none;
+  transition: background-color var(--astra-transition);
 
   @mixin hover {
-    background-color: var(--mantine-color-default-hover);
+    background-color: var(--astra-hover);
   }
 
   &[data-active] {
-    background-color: var(--mantine-primary-color-light);
+    background: var(--astra-selected);
+    box-shadow: inset 2px 0 0 var(--astra-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--mantine-primary-color-filled);
+    outline: 2px solid var(--astra-primary);
     outline-offset: -2px;
   }
+}
+
+.meta {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-text-dim);
 }

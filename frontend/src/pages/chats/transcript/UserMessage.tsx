@@ -1,5 +1,4 @@
-import { Avatar, Group, Paper, Stack, Text } from '@mantine/core';
-import { IconUser } from '@tabler/icons-react';
+import { Group, Stack, Text } from '@mantine/core';
 import type { Message } from '../../../api/types';
 import { formatDateTime } from '../../../lib/format';
 import classes from './Transcript.module.css';
@@ -11,20 +10,15 @@ export function UserMessage({ message, highlighted }: { message: Message; highli
   const text = typeof message.content === 'string' ? message.content : null;
   const parts = Array.isArray(message.content) ? message.content : null;
   return (
-    <Group align="flex-start" gap="xs" wrap="nowrap" className={highlighted ? classes.highlighted : undefined}>
-      <Avatar color="blue" radius="xl" size="sm">
-        <IconUser size={16} />
-      </Avatar>
-      <Paper withBorder p="sm" radius="md" className={classes.bubble}>
-        <Stack gap={4}>
-          {text && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</Text>}
-          {parts && <ContentParts parts={parts} />}
-          <Text size="xs" c="dimmed">
-            {formatDateTime(message.timestamp)}
-            {message.truncated && ' · truncated'}
-          </Text>
-        </Stack>
-      </Paper>
+    <Group justify="flex-end" className={highlighted ? classes.highlighted : undefined}>
+      <Stack gap={4} className={classes.userBubble}>
+        {text && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.55 }}>{text}</Text>}
+        {parts && <ContentParts parts={parts} />}
+        <Text component="span" className={classes.timestamp} style={{ color: 'inherit', opacity: 0.75 }}>
+          {formatDateTime(message.timestamp)}
+          {message.truncated && ' · truncated'}
+        </Text>
+      </Stack>
     </Group>
   );
 }

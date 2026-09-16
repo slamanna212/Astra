@@ -1,6 +1,6 @@
 import { Anchor, Badge, Box, Code, Collapse, Group, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconChevronRight, IconTool } from '@tabler/icons-react';
+import { IconChevronRight } from '@tabler/icons-react';
 import { Link } from 'react-router';
 import type { ChildSession, Message, ToolCall } from '../../../api/types';
 import { findDelegatedChildren } from '../../../lib/transcript';
@@ -50,20 +50,20 @@ export function ToolCallCard({
   return (
     <Box className={classes.toolCard} mb={6}>
       <UnstyledButton onClick={toggle} className={classes.toolCardHeader}>
-        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
           <IconChevronRight
-            size={14}
+            size={12}
+            color="var(--astra-text-dim)"
             style={{ transform: opened ? 'rotate(90deg)' : undefined, transition: 'transform 120ms ease', flexShrink: 0 }}
           />
-          <IconTool size={14} style={{ flexShrink: 0 }} />
-          <Text size="xs" fw={600} style={{ flexShrink: 0 }}>
+          <Text component="span" className={classes.toolName} style={{ flexShrink: 0 }}>
             {call.name ?? 'tool'}
           </Text>
-          <Text size="xs" c="dimmed" truncate="end" style={{ minWidth: 0 }}>
+          <Text component="span" className={classes.toolArgs} truncate="end" style={{ minWidth: 0 }}>
             {summary}
           </Text>
         </Group>
-        <Badge size="xs" variant="light" color={status === 'done' ? 'teal' : 'yellow'} ml="auto" style={{ flexShrink: 0 }}>
+        <Badge size="xs" variant="light" color={status === 'done' ? 'green' : 'sand'} ml="auto" style={{ flexShrink: 0 }}>
           {status}
         </Badge>
       </UnstyledButton>

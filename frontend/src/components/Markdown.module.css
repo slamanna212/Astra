@@ -1,25 +1,36 @@
 .root {
-  font-size: var(--mantine-font-size-sm);
+  font-size: 14px;
   line-height: 1.6;
+  color: var(--astra-text-body);
 }
 
 .root :global(pre) {
   overflow-x: auto;
   padding: var(--mantine-spacing-sm);
-  background-color: var(--mantine-color-default-hover);
-  border-radius: var(--mantine-radius-sm);
+  background-color: var(--astra-surface-sunk);
+  border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
 }
 
 .root :global(code) {
-  font-family: var(--mantine-font-family-monospace);
-  font-size: 0.9em;
+  font-family: var(--astra-font-mono);
+  font-size: 12.5px;
+  background-color: var(--astra-surface-sunk);
+  border-radius: var(--astra-radius-tight);
+  padding: 1px 5px;
+}
+
+.root :global(pre code) {
+  background: none;
+  padding: 0;
+  border-radius: 0;
 }
 
 .root :global(blockquote) {
-  border-left: 3px solid var(--mantine-color-default-border);
+  border-left: 3px solid var(--astra-border);
   margin: 0;
   padding-left: var(--mantine-spacing-md);
-  color: var(--mantine-color-dimmed);
+  color: var(--astra-text-dim);
 }
 
 .root :global(img) {

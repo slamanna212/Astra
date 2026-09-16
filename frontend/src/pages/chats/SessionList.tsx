@@ -10,7 +10,7 @@ import {
   Text,
   UnstyledButton,
 } from '@mantine/core';
-import { IconMessage, IconPinFilled, IconPlus } from '@tabler/icons-react';
+import { IconMessage, IconPlus } from '@tabler/icons-react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -51,30 +51,32 @@ const SessionRow = memo(function SessionRow({ session, active, now }: SessionRow
     >
       <Group gap={6} wrap="nowrap">
         {session.pinned && (
-          <IconPinFilled size={14} aria-label="Pinned" style={{ flexShrink: 0 }} color="var(--mantine-color-yellow-6)" />
+          <Text component="span" c="sand" fz={11} style={{ flexShrink: 0 }} aria-label="Pinned">
+            ★
+          </Text>
         )}
         <Text size="sm" fw={500} truncate="end" style={{ flex: 1, minWidth: 0 }}>
           {sessionTitle(session)}
         </Text>
-        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }} title={formatDateTime(lastActivity)}>
+        <Text component="span" className={classes.meta} style={{ flexShrink: 0 }} title={formatDateTime(lastActivity)}>
           {formatRelativeTime(lastActivity, now)}
         </Text>
       </Group>
       <Group gap={6} wrap="nowrap">
         <SourceBadge source={session.source} />
         {session.archived && (
-          <Badge size="xs" variant="outline" color="gray" radius="sm">
+          <Badge size="xs" variant="outline" color="gray" radius="xl">
             archived
           </Badge>
         )}
         {session.hidden && (
-          <Badge size="xs" variant="outline" color="gray" radius="sm">
+          <Badge size="xs" variant="outline" color="gray" radius="xl">
             hidden
           </Badge>
         )}
-        <Group gap={3} wrap="nowrap" ml="auto" c="dimmed">
-          <IconMessage size={12} aria-hidden />
-          <Text size="xs" c="dimmed" aria-label={`${session.message_count} messages`}>
+        <Group gap={3} wrap="nowrap" ml="auto">
+          <IconMessage size={12} aria-hidden color="var(--astra-text-dim)" />
+          <Text component="span" className={classes.meta} aria-label={`${session.message_count} messages`}>
             {formatCount(session.message_count)}
           </Text>
         </Group>
@@ -144,23 +146,16 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
 
   return (
     <>
-      <Stack gap={8} p="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
-        <Button
-          size="xs"
-          leftSection={<IconPlus size={14} />}
-          loading={create.isPending}
-          onClick={() => create.mutate()}
-        >
+      <Stack gap={8} p="sm" style={{ borderBottom: '1px solid var(--astra-divider)' }}>
+        <Button fullWidth leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
           New chat
         </Button>
         <Select
-          size="xs"
           aria-label="Filter by source"
           data={SOURCE_OPTIONS}
           value={source}
           onChange={(value) => setSource(value ?? '')}
           allowDeselect={false}
-          checkIconPosition="right"
         />
         <Group gap={6}>
           <Chip size="xs" checked={includeArchived} onChange={setIncludeArchived}>
