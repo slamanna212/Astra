@@ -1,0 +1,28 @@
+.scroller {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.row:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.row[data-active] {
+  background: var(--mantine-color-blue-light);
+}

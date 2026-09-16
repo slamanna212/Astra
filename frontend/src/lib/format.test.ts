@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatBytes,
   formatCost,
   formatCount,
   formatDateTime,
+  formatPercent,
   formatRelativeTime,
+  formatShortDate,
   formatTokens,
   sessionTitle,
 } from './format';
@@ -85,10 +88,57 @@ describe('formatCount', () => {
   });
 });
 
+describe('formatPercent', () => {
+  it.each([
+    [0.36093885, 1, '36.1%'],
+    [0, 1, '0.0%'],
+    [1, 0, '100%'],
+  ])('%s → %s', (input, digits, expected) => {
+    expect(formatPercent(input, digits)).toBe(expected);
+  });
+
+  it('handles missing values', () => {
+    expect(formatPercent(null)).toBe('—');
+    expect(formatPercent(undefined)).toBe('—');
+  });
+});
+
+describe('formatShortDate', () => {
+  it('formats an ISO date without a timezone shift', () => {
+    expect(formatShortDate('2026-09-15')).toBe('Sep 15');
+    expect(formatShortDate('2026-01-01')).toBe('Jan 1');
+  });
+
+  it('falls back to the raw string for malformed input', () => {
+    expect(formatShortDate('not-a-date')).toBe('not-a-date');
+  });
+});
+
 describe('sessionTitle', () => {
   it('falls back title → display_name → Untitled', () => {
     expect(sessionTitle({ title: 'Hello', display_name: 'D' })).toBe('Hello');
     expect(sessionTitle({ title: '  ', display_name: 'D' })).toBe('D');
     expect(sessionTitle({ title: null, display_name: null })).toBe('Untitled');
+  });
+});
+
+describe('formatBytes', () => {
+  it.each([
+    [0, '0 B'],
+    [1, '1 B'],
+    [1023, '1023 B'],
+    [1024, '1 KB'],
+    [1536, '1.5 KB'],
+    [1024 * 1024, '1 MB'],
+    [11 * 1024 * 1024, '11 MB'],
+    [1024 * 1024 * 1024, '1 GB'],
+  ])('%s → %s', (input, expected) => {
+    expect(formatBytes(input)).toBe(expected);
+  });
+
+  it('handles missing/invalid values', () => {
+    expect(formatBytes(null)).toBe('—');
+    expect(formatBytes(undefined)).toBe('—');
+    expect(formatBytes(-5)).toBe('—');
   });
 });

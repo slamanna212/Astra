@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-INTROSPECTED_TABLES = ("sessions", "messages")
+INTROSPECTED_TABLES = ("sessions", "messages", "session_model_usage")
 
 
 class StateDBUnavailable(RuntimeError):

@@ -1,0 +1,27 @@
+.root {
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.6;
+}
+
+.root :global(pre) {
+  overflow-x: auto;
+  padding: var(--mantine-spacing-sm);
+  background-color: var(--mantine-color-default-hover);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.root :global(code) {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.9em;
+}
+
+.root :global(blockquote) {
+  border-left: 3px solid var(--mantine-color-default-border);
+  margin: 0;
+  padding-left: var(--mantine-spacing-md);
+  color: var(--mantine-color-dimmed);
+}
+
+.root :global(img) {
+  max-width: 100%;
+}

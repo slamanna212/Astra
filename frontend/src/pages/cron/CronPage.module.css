@@ -1,0 +1,36 @@
+.root {
+  display: flex;
+  height: calc(100dvh - var(--app-shell-header-offset, 0rem));
+  min-height: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  width: 26rem;
+  flex-shrink: 0;
+  min-height: 0;
+  border-right: 1px solid var(--mantine-color-default-border);
+}
+
+.detail {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@mixin smaller-than $mantine-breakpoint-sm {
+  .list {
+    width: 100%;
+    border-right: 0;
+  }
+
+  .root[data-has-selection] .list {
+    display: none;
+  }
+
+  .root:not([data-has-selection]) .detail {
+    display: none;
+  }
+}

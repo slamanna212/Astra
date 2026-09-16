@@ -71,6 +71,21 @@ export function formatCount(count: number | null | undefined): string {
   return new Intl.NumberFormat('en-US').format(Math.round(count));
 }
 
+/** Fraction in [0, 1] as a percentage: 0.3609 → "36.1%", null → "—". */
+export function formatPercent(fraction: number | null | undefined, digits = 1): string {
+  if (fraction === null || fraction === undefined || !Number.isFinite(fraction)) return '—';
+  return `${(fraction * 100).toFixed(digits)}%`;
+}
+
+/** A "YYYY-MM-DD" date string (as returned by /api/insights) as a short chart-axis label: "Sep 15". */
+export function formatShortDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  if (!year || !month || !day) return isoDate;
+  // Noon UTC avoids any DST/timezone edge shifting the calendar day when rendered locally.
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 /** Session title with fallbacks: title → display_name → "Untitled". */
 export function sessionTitle(session: { title: string | null; display_name: string | null }): string {
   const title = session.title?.trim();
@@ -78,4 +93,18 @@ export function sessionTitle(session: { title: string | null; display_name: stri
   const display = session.display_name?.trim();
   if (display) return display;
   return 'Untitled';
+}
+
+/** Byte counts for the Files browser: 0 → "0 B", 1536 → "1.5 KB", 1_048_576 → "1 MB". */
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${trimFixed(value, value < 10 ? 1 : 0)} ${units[unitIndex]}`;
 }

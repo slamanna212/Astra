@@ -1,0 +1,45 @@
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  contain: strict;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--mantine-spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  @mixin hover {
+    background-color: var(--mantine-color-default-hover);
+  }
+
+  &[data-active] {
+    background-color: var(--mantine-primary-color-light);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mantine-primary-color-filled);
+    outline-offset: -2px;
+  }
+}
+
+.dropzone {
+  margin: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-sm);
+  min-height: 0;
+}

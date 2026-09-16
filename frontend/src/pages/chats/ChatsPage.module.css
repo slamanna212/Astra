@@ -17,7 +17,11 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* The transcript (and other detail views) own their own internal scrolling; a second
+     scrollbar here would fight the virtualizer's scroll-position math. */
+  overflow-y: hidden;
 }
 
 @mixin smaller-than $mantine-breakpoint-sm {

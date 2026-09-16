@@ -1,13 +1,15 @@
 import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Text, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconLogout } from '@tabler/icons-react';
+import { spotlight } from '@mantine/spotlight';
+import { IconLogout, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { getHealth, logout } from '../api/auth';
 import { queryKeys } from '../api/queryKeys';
 import { markSignedOut } from '../auth/session';
+import { SearchSpotlight } from '../components/SearchSpotlight';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
 import { NAV_ITEMS } from './navItems';
 
@@ -43,6 +45,7 @@ export function AppLayout() {
       navbar={{ width: 240, breakpoint: 'sm', collapsed: { mobile: !opened } }}
       padding={0}
     >
+      <SearchSpotlight />
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
@@ -52,6 +55,11 @@ export function AppLayout() {
             </Title>
           </Group>
           <Group gap="xs" wrap="nowrap">
+            <Tooltip label="Search (Ctrl/Cmd+K)">
+              <ActionIcon variant="default" size="lg" aria-label="Search" onClick={() => spotlight.open()}>
+                <IconSearch size={18} stroke={1.5} />
+              </ActionIcon>
+            </Tooltip>
             <ColorSchemeToggle />
             <Tooltip label="Log out">
               <ActionIcon

@@ -8,17 +8,17 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ChatsPage = lazy(() => import('./pages/chats/ChatsPage'));
 const ChatsIndex = lazy(() => import('./pages/chats/ChatsIndex'));
 const SessionPane = lazy(() => import('./pages/chats/SessionPane'));
+const CronPage = lazy(() => import('./pages/cron/CronPage'));
+const CronIndex = lazy(() => import('./pages/cron/CronIndex'));
+const CronDetail = lazy(() => import('./pages/cron/CronDetail'));
+const SkillsPage = lazy(() => import('./pages/skills/SkillsPage'));
+const SkillIndex = lazy(() => import('./pages/skills/SkillIndex'));
+const SkillDetail = lazy(() => import('./pages/skills/SkillDetail'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
+const InsightsPage = lazy(() => import('./pages/insights/InsightsPage'));
+const FilesPage = lazy(() => import('./pages/files/FilesPage'));
+const LogsPage = lazy(() => import('./pages/logs/LogsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
-
-const placeholders: Array<{ path: string; title: string }> = [
-  { path: 'cron', title: 'Scheduled tasks' },
-  { path: 'skills', title: 'Skills' },
-  { path: 'memories', title: 'Memories' },
-  { path: 'files', title: 'Files' },
-  { path: 'insights', title: 'Insights' },
-  { path: 'logs', title: 'Logs' },
-];
 
 export function createAppRouter() {
   return createBrowserRouter([
@@ -40,7 +40,27 @@ export function createAppRouter() {
             { path: ':sessionId', element: <SessionPane /> },
           ],
         },
-        ...placeholders.map(({ path, title }) => ({ path, element: <PlaceholderPage title={title} /> })),
+        { path: 'insights', element: <InsightsPage /> },
+        { path: 'files', element: <FilesPage /> },
+        { path: 'logs', element: <LogsPage /> },
+        {
+          path: 'cron',
+          element: <CronPage />,
+          children: [
+            { index: true, element: <CronIndex /> },
+            { path: ':jobId', element: <CronDetail /> },
+          ],
+        },
+        {
+          path: 'skills',
+          element: <SkillsPage />,
+          children: [
+            { index: true, element: <SkillIndex /> },
+            { path: ':category/:name', element: <SkillDetail /> },
+            { path: ':name', element: <SkillDetail /> },
+          ],
+        },
+        { path: 'memories', element: <PlaceholderPage title="Memories" /> },
         { path: '*', element: <NotFoundPage /> },
       ],
     },

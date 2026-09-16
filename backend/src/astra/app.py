@@ -17,8 +17,15 @@ from astra.db import StateDB, StateDBUnavailable
 from astra.deps import AppContext
 from astra.middleware import ApiGuardMiddleware
 from astra.routes import auth as auth_routes
+from astra.routes import cron as cron_routes
+from astra.routes import files as files_routes
 from astra.routes import health as health_routes
+from astra.routes import insights as insights_routes
+from astra.routes import logs as logs_routes
+from astra.routes import messages as message_routes
+from astra.routes import search as search_routes
 from astra.routes import sessions as session_routes
+from astra.routes import skills as skills_routes
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +48,7 @@ def create_app(settings: Settings) -> FastAPI:
         try:
             yield
         finally:
+            await ctx.cron_events.stop()
             ctx.db.close()
 
     app = FastAPI(
@@ -60,6 +68,13 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(health_routes.router)
     app.include_router(auth_routes.router)
     app.include_router(session_routes.router)
+    app.include_router(message_routes.router)
+    app.include_router(search_routes.router)
+    app.include_router(insights_routes.router)
+    app.include_router(files_routes.router)
+    app.include_router(logs_routes.router)
+    app.include_router(cron_routes.router)
+    app.include_router(skills_routes.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:

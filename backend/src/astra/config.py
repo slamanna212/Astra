@@ -21,9 +21,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_DIR = BACKEND_DIR.parent
 
 MIN_SECRET_LENGTH = 32
-_PATH_VARS = {"HERMES_HOME", "ASTRA_HERMES_SRC", "ASTRA_DATA_DIR", "ASTRA_STATIC_DIR"}
+_PATH_VARS = {"HERMES_HOME", "ASTRA_HERMES_SRC", "ASTRA_DATA_DIR", "ASTRA_STATIC_DIR", "ASTRA_WORKSPACE_DIR"}
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
+DEFAULT_WORKSPACE_DIR = "/workspace"
+DEFAULT_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 
 
 class ConfigError(RuntimeError):
@@ -68,6 +70,10 @@ class HermesPaths:
         return self.cron_dir / "output"
 
     @property
+    def cron_executions_db(self) -> Path:
+        return self.cron_dir / "executions.db"
+
+    @property
     def skills_dir(self) -> Path:
         return self.home / "skills"
 
@@ -83,6 +89,13 @@ class HermesPaths:
     def logs_dir(self) -> Path:
         return self.home / "logs"
 
+    @property
+    def scripts_dir(self) -> Path:
+        return self.home / "scripts"
+
+
+DEFAULT_CRON_POLL_INTERVAL_S = 1.0
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -93,6 +106,9 @@ class Settings:
     password_hash: str
     session_secret: bytes
     cookie_secure: bool
+    workspace_dir: Path
+    upload_max_bytes: int
+    cron_poll_interval_s: float = DEFAULT_CRON_POLL_INTERVAL_S
 
     @property
     def paths(self) -> HermesPaths:
@@ -102,6 +118,7 @@ class Settings:
         return (
             f"Settings(hermes_home={str(self.hermes_home)!r}, hermes_src={self.hermes_src!r}, "
             f"data_dir={str(self.data_dir)!r}, static_dir={str(self.static_dir)!r}, "
+            f"workspace_dir={str(self.workspace_dir)!r}, upload_max_bytes={self.upload_max_bytes}, "
             f"cookie_secure={self.cookie_secure}, password_hash=<redacted>, session_secret=<redacted>)"
         )
 
@@ -158,6 +175,39 @@ class Settings:
 
         cookie_secure = _parse_bool("ASTRA_COOKIE_SECURE", env.get("ASTRA_COOKIE_SECURE"), True)
 
+        # Files browses ONLY this root (never HERMES_HOME) — see BUILD-SPEC §5.6 and the Phase 1
+        # Files/Logs decision doc. Not validated for existence at startup (unlike HERMES_HOME):
+        # in production it is a mount that may not be present yet at process start, and most
+        # tests/dev flows never touch Files at all. Existence is checked lazily per-request.
+        raw_workspace = (env.get("ASTRA_WORKSPACE_DIR") or "").strip()
+        workspace_dir = (
+            Path(raw_workspace).expanduser().resolve() if raw_workspace else Path(DEFAULT_WORKSPACE_DIR)
+        )
+
+        raw_upload_max = (env.get("ASTRA_UPLOAD_MAX_BYTES") or "").strip()
+        if raw_upload_max:
+            try:
+                upload_max_bytes = int(raw_upload_max)
+            except ValueError:
+                raise ConfigError(f"ASTRA_UPLOAD_MAX_BYTES must be an integer, got {raw_upload_max!r}") from None
+            if upload_max_bytes <= 0:
+                raise ConfigError("ASTRA_UPLOAD_MAX_BYTES must be positive")
+        else:
+            upload_max_bytes = DEFAULT_UPLOAD_MAX_BYTES
+
+        raw_poll = (env.get("ASTRA_CRON_POLL_INTERVAL_S") or "").strip()
+        if raw_poll:
+            try:
+                cron_poll_interval_s = float(raw_poll)
+            except ValueError:
+                raise ConfigError(
+                    f"ASTRA_CRON_POLL_INTERVAL_S must be a number, got {raw_poll!r}"
+                ) from None
+            if cron_poll_interval_s <= 0:
+                raise ConfigError("ASTRA_CRON_POLL_INTERVAL_S must be positive")
+        else:
+            cron_poll_interval_s = DEFAULT_CRON_POLL_INTERVAL_S
+
         return cls(
             hermes_home=hermes_home,
             hermes_src=hermes_src,
@@ -166,6 +216,9 @@ class Settings:
             password_hash=password_hash,
             session_secret=session_secret.encode("utf-8"),
             cookie_secure=cookie_secure,
+            workspace_dir=workspace_dir,
+            upload_max_bytes=upload_max_bytes,
+            cron_poll_interval_s=cron_poll_interval_s,
         )
 
 
@@ -188,9 +241,19 @@ def load_settings(dotenv_path: Path | None = BACKEND_DIR / ".env") -> Settings:
 
 
 def apply_hermes_src(settings: Settings) -> None:
-    """Prepend ASTRA_HERMES_SRC to sys.path so Hermes modules are importable in dev."""
-    if settings.hermes_src is None:
-        return
-    src = str(settings.hermes_src)
-    if src not in sys.path:
-        sys.path.insert(0, src)
+    """Prepend ASTRA_HERMES_SRC to sys.path so Hermes modules are importable in dev.
+
+    Also mirrors our resolved ``hermes_home`` into the real process environment.
+    Hermes' own ``hermes_constants.get_hermes_home()`` reads ``os.environ["HERMES_HOME"]``
+    directly, and several Hermes modules (``cron.jobs``, ``tools.skills_tool``) memoize
+    paths derived from it at *import time*. ``HERMES_HOME`` may have reached us only via
+    ``backend/.env`` (see ``load_settings``), never landing in the real ``os.environ`` —
+    so without this, a lazy `import cron.jobs` after this call would still resolve the
+    wrong (platform-default) home. Call this before any lazy import of a Hermes module
+    that reads ``HERMES_HOME`` (see ``astra.hermes_bridge``).
+    """
+    if settings.hermes_src is not None:
+        src = str(settings.hermes_src)
+        if src not in sys.path:
+            sys.path.insert(0, src)
+    os.environ["HERMES_HOME"] = str(settings.hermes_home)
