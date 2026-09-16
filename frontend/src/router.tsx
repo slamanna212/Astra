@@ -14,7 +14,7 @@ const CronDetail = lazy(() => import('./pages/cron/CronDetail'));
 const SkillsPage = lazy(() => import('./pages/skills/SkillsPage'));
 const SkillIndex = lazy(() => import('./pages/skills/SkillIndex'));
 const SkillDetail = lazy(() => import('./pages/skills/SkillDetail'));
-const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
+const MemoriesPage = lazy(() => import('./pages/memories/MemoriesPage'));
 const InsightsPage = lazy(() => import('./pages/insights/InsightsPage'));
 const FilesPage = lazy(() => import('./pages/files/FilesPage'));
 const LogsPage = lazy(() => import('./pages/logs/LogsPage'));
@@ -60,7 +60,7 @@ export function createAppRouter() {
             { path: ':name', element: <SkillDetail /> },
           ],
         },
-        { path: 'memories', element: <PlaceholderPage title="Memories" /> },
+        { path: 'memories', element: <MemoriesPage /> },
         { path: '*', element: <NotFoundPage /> },
       ],
     },

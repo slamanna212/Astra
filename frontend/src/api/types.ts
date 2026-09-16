@@ -279,6 +279,13 @@ export interface FileUploadResponse {
   size: number;
 }
 
+// -- OpenViking memory inspector ------------------------------------------
+export interface OpenVikingNode { name: string; uri: string; isDir: boolean; size?: number; modTime?: string; [key: string]: unknown }
+export interface OpenVikingTree { uri: string; items: OpenVikingNode[] }
+export interface OpenVikingContent { uri: string; abstract: string; overview: string; content: string; offset: number; limit: number }
+export interface OpenVikingSearch { mode: 'fast' | 'deep'; result: Record<string, unknown> }
+export interface OpenVikingStatus { reachable: true; system: unknown; queue: unknown; lock: unknown; vikingdb: unknown; models: unknown; retrieval: unknown; memories: unknown; tasks: unknown }
+
 // -- Logs ------------------------------------------------------------------
 // Exactly 3 allowlisted files, tail-only — see astra/logs.py.
 

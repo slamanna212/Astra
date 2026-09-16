@@ -12,6 +12,7 @@ from astra.chat import ChatManager
 from astra.config import Settings
 from astra.cron_events import CronEventBroadcaster
 from astra.db import StateDB
+from astra.openviking import OpenVikingClient
 
 
 @dataclass
@@ -22,6 +23,7 @@ class AppContext:
     revoked: RevokedNonces = field(default_factory=RevokedNonces)
     cron_events: CronEventBroadcaster | None = None
     chat: ChatManager | None = None
+    openviking: OpenVikingClient | None = None
 
     def __post_init__(self) -> None:
         if self.cron_events is None:
@@ -30,6 +32,8 @@ class AppContext:
             )
         if self.chat is None:
             self.chat = ChatManager(self.settings)
+        if self.openviking is None:
+            self.openviking = OpenVikingClient(self.settings)
 
 
 def get_ctx(request: Request) -> AppContext:

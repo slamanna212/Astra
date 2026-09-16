@@ -109,6 +109,10 @@ class Settings:
     workspace_dir: Path
     upload_max_bytes: int
     cron_poll_interval_s: float = DEFAULT_CRON_POLL_INTERVAL_S
+    openviking_endpoint: str | None = None
+    openviking_api_key: str | None = None
+    openviking_account: str = "default"
+    openviking_user: str = "default"
 
     @property
     def paths(self) -> HermesPaths:
@@ -208,6 +212,12 @@ class Settings:
         else:
             cron_poll_interval_s = DEFAULT_CRON_POLL_INTERVAL_S
 
+        # Hermes normally keeps these in its own .env on the shared volume.  They
+        # are deliberately read here, rather than ever being accepted from HTTP.
+        hermes_env = dotenv_values(hermes_home / ".env") if (hermes_home / ".env").is_file() else {}
+        def ov(name: str, default: str | None = None) -> str | None:
+            return (env.get(f"ASTRA_{name}") or env.get(name) or hermes_env.get(name) or default)
+
         return cls(
             hermes_home=hermes_home,
             hermes_src=hermes_src,
@@ -219,6 +229,10 @@ class Settings:
             workspace_dir=workspace_dir,
             upload_max_bytes=upload_max_bytes,
             cron_poll_interval_s=cron_poll_interval_s,
+            openviking_endpoint=(ov("OPENVIKING_ENDPOINT") or "").rstrip("/") or None,
+            openviking_api_key=ov("OPENVIKING_API_KEY"),
+            openviking_account=ov("OPENVIKING_ACCOUNT", "default") or "default",
+            openviking_user=ov("OPENVIKING_USER", "default") or "default",
         )
 
 
