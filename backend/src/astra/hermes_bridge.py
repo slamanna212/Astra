@@ -91,6 +91,11 @@ def cron_jobs_module() -> ModuleType:
     return _import("cron.jobs")
 
 
+def cron_scheduler_module() -> ModuleType:
+    """Hermes scheduler module, imported only for explicit manual runs."""
+    return _import("cron.scheduler")
+
+
 def skill_utils_module() -> ModuleType:
     """The ``agent.skill_utils`` module (frontmatter parsing, dir walking, disabled-set)."""
     return _import("agent.skill_utils")

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from functools import partial
 from pathlib import Path
 from typing import Annotated
 
@@ -17,18 +18,30 @@ from fastapi.responses import StreamingResponse
 
 from astra import cron_data
 from astra.deps import Ctx
+from astra.hermes_bridge import cron_jobs_module, cron_scheduler_module
 from astra.models import (
+    CronCreateRequest,
     CronJob,
     CronJobPage,
     CronOutputContent,
     CronOutputPage,
     CronOutputRun,
+    CronPauseRequest,
+    CronUpdateRequest,
 )
 
 router = APIRouter(prefix="/api/cron", tags=["cron"])
 log = logging.getLogger(__name__)
 
 _SCRIPT_FIELDS = ("script", "post_script", "monitor_script")
+
+
+def _write_job(fn, *args):
+    """Hermes owns jobs.json locking/normalization. Never hand-write that file here."""
+    try:
+        return fn(*args)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 def _merge_latest_execution(job: dict, executions_db: Path) -> dict:
@@ -51,6 +64,63 @@ async def list_cron_jobs(ctx: Ctx) -> CronJobPage:
 
     jobs = await anyio.to_thread.run_sync(_load)
     return CronJobPage(items=[CronJob.model_validate(j) for j in jobs])
+
+
+@router.post("", response_model=CronJob, status_code=201)
+async def create_cron_job(body: CronCreateRequest, ctx: Ctx) -> CronJob:
+    payload = body.model_dump(exclude_none=True)
+    job = await anyio.to_thread.run_sync(partial(_write_job, cron_jobs_module().create_job, **payload))
+    return CronJob.model_validate(_merge_latest_execution(job, ctx.settings.paths.cron_executions_db))
+
+
+@router.patch("/{job_id}", response_model=CronJob)
+async def update_cron_job(job_id: str, body: CronUpdateRequest, ctx: Ctx) -> CronJob:
+    if not cron_data.is_safe_job_id(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+    updates = body.model_dump(exclude_none=False, exclude_unset=True)
+    job = await anyio.to_thread.run_sync(_write_job, cron_jobs_module().update_job, job_id, updates)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return CronJob.model_validate(_merge_latest_execution(job, ctx.settings.paths.cron_executions_db))
+
+
+@router.delete("/{job_id}", status_code=204)
+async def delete_cron_job(job_id: str) -> None:
+    if not cron_data.is_safe_job_id(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+    removed = await anyio.to_thread.run_sync(cron_jobs_module().remove_job, job_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+
+@router.post("/{job_id}/pause", response_model=CronJob)
+async def pause_cron_job(job_id: str, body: CronPauseRequest, ctx: Ctx) -> CronJob:
+    job = await anyio.to_thread.run_sync(_write_job, cron_jobs_module().pause_job, job_id, body.reason)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return CronJob.model_validate(_merge_latest_execution(job, ctx.settings.paths.cron_executions_db))
+
+
+@router.post("/{job_id}/resume", response_model=CronJob)
+async def resume_cron_job(job_id: str, ctx: Ctx) -> CronJob:
+    job = await anyio.to_thread.run_sync(_write_job, cron_jobs_module().resume_job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return CronJob.model_validate(_merge_latest_execution(job, ctx.settings.paths.cron_executions_db))
+
+
+@router.post("/{job_id}/run", status_code=202)
+async def run_cron_job(job_id: str, ctx: Ctx) -> dict[str, bool]:
+    """Schedule the blocking Hermes run off the event loop; output remains in canonical cron/output."""
+    if not cron_data.is_safe_job_id(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = await anyio.to_thread.run_sync(cron_data.get_job, ctx.settings.paths.cron_jobs, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # The scheduler owns execution state and output persistence. It may make provider calls only
+    # after an authenticated user explicitly presses Run now.
+    asyncio.create_task(anyio.to_thread.run_sync(cron_scheduler_module().run_job, job))
+    return {"accepted": True}
 
 
 @router.get("/events")

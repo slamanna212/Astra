@@ -443,6 +443,41 @@ class CronJobPage(BaseModel):
     items: list[CronJob]
 
 
+class CronCreateRequest(BaseModel):
+    """The supported Hermes create_job fields. Advanced values pass through unchanged."""
+    model_config = {"extra": "forbid"}
+
+    schedule: str = Field(min_length=1, max_length=1024)
+    prompt: str | None = Field(default=None, max_length=200_000)
+    name: str | None = Field(default=None, max_length=512)
+    repeat: int | None = Field(default=None, ge=1)
+    deliver: str | None = Field(default=None, max_length=128)
+    skill: str | None = Field(default=None, max_length=128)
+    skills: list[str] | None = None
+    model: str | None = Field(default=None, max_length=512)
+    provider: str | None = Field(default=None, max_length=128)
+    base_url: str | None = Field(default=None, max_length=2048)
+    script: str | None = Field(default=None, max_length=1024)
+    post_script: str | None = Field(default=None, max_length=1024)
+    context_from: str | list[str] | None = None
+    enabled_toolsets: list[str] | None = None
+    workdir: str | None = Field(default=None, max_length=4096)
+    no_agent: bool = False
+    attach_to_session: bool | None = None
+    monitor_script: str | None = Field(default=None, max_length=1024)
+    monitor_url: str | None = Field(default=None, max_length=2048)
+    reasoning_effort: str | None = Field(default=None, max_length=64)
+
+
+class CronUpdateRequest(BaseModel):
+    """Hermes validates and normalizes mutable fields; immutable keys are rejected there."""
+    model_config = {"extra": "allow"}
+
+
+class CronPauseRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1024)
+
+
 class CronOutputRun(BaseModel):
     filename: str
     timestamp: str | None = None
