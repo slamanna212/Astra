@@ -5,6 +5,7 @@ import {
   IconFileText,
   IconFolder,
   IconMessages,
+  IconSettings,
   IconSparkles,
   type Icon,
 } from '@tabler/icons-react';
@@ -23,4 +24,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Files', to: '/files', icon: IconFolder },
   { label: 'Insights', to: '/insights', icon: IconChartBar },
   { label: 'Logs', to: '/logs', icon: IconFileText },
+  { label: 'Settings', to: '/settings', icon: IconSettings },
 ];

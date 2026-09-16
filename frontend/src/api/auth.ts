@@ -1,5 +1,5 @@
 import { apiFetch, isApiError } from './client';
-import type { HealthResponse, MeResponse } from './types';
+import type { HealthResponse, MeResponse, StatusResponse } from './types';
 
 export function login(password: string): Promise<void> {
   return apiFetch<void>('/auth/login', {
@@ -26,4 +26,8 @@ export async function checkAuthenticated(signal?: AbortSignal): Promise<boolean>
 
 export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return apiFetch<HealthResponse>('/health', { signal, redirectOnUnauthorized: false });
+}
+
+export function getStatus(signal?: AbortSignal): Promise<StatusResponse> {
+  return apiFetch<StatusResponse>('/status', { signal });
 }

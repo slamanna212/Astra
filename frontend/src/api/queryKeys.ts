@@ -6,6 +6,7 @@ export const queryKeys = {
     me: ['auth', 'me'] as const,
   },
   health: ['health'] as const,
+  status: ['status'] as const,
   sessions: {
     all: ['sessions'] as const,
     lists: () => [...queryKeys.sessions.all, 'list'] as const,

@@ -48,6 +48,16 @@ export interface MeResponse {
   authenticated: true;
 }
 
+export interface StatusResponse {
+  version: string;
+  hermes_home_exists: boolean;
+  state_db_ok: boolean;
+  session_count: number | null;
+  journal_mode: string | null;
+  hermes_src_configured: boolean;
+  hermes_importable: boolean;
+}
+
 // -- Messages ------------------------------------------------------------
 // See backend/src/astra/messages.py for the visibility/truncation decisions.
 

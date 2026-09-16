@@ -18,6 +18,7 @@ const MemoriesPage = lazy(() => import('./pages/memories/MemoriesPage'));
 const InsightsPage = lazy(() => import('./pages/insights/InsightsPage'));
 const FilesPage = lazy(() => import('./pages/files/FilesPage'));
 const LogsPage = lazy(() => import('./pages/logs/LogsPage'));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 export function createAppRouter() {
@@ -61,6 +62,7 @@ export function createAppRouter() {
           ],
         },
         { path: 'memories', element: <MemoriesPage /> },
+        { path: 'settings', element: <SettingsPage /> },
         { path: '*', element: <NotFoundPage /> },
       ],
     },
