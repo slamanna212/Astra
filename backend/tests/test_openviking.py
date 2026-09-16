@@ -33,6 +33,47 @@ def test_openviking_tree_uses_hidden_files_and_nonrecursive(authed, monkeypatch)
     assert calls == [("GET", "/api/v1/fs/ls", {"params": {"uri": "viking://user/default", "show_all_hidden": True, "recursive": False, "output": "agent", "abs_limit": 256}})]
 
 
+def test_openviking_tree_normalizes_directory_shape(authed, monkeypatch):
+    async def fake(self, method, path, **kwargs):
+        return {"children": [{"name": "memories", "uri": "viking://user/default/memories", "type": "directory"}]}
+
+    monkeypatch.setattr(OpenVikingClient, "request", fake)
+    response = authed.get("/api/openviking/tree", params={"uri": "viking://user/default"})
+    assert response.status_code == 200
+    assert response.json()["items"][0]["isDir"] is True
+
+
+def test_openviking_content_forwards_page_and_exposes_next_page(authed, monkeypatch):
+    calls = []
+
+    async def fake(self, method, path, **kwargs):
+        calls.append((path, kwargs))
+        if path == "/api/v1/content/read":
+            return {"content": "page two", "next_offset": 1000}
+        return "summary"
+
+    monkeypatch.setattr(OpenVikingClient, "request", fake)
+    response = authed.get("/api/openviking/content", params={"uri": "viking://user/default/note", "offset": 500, "limit": 500})
+    assert response.status_code == 200
+    assert response.json()["content"] == "page two"
+    assert response.json()["hasMore"] is True
+    assert calls[-1] == ("/api/v1/content/read", {"params": {"uri": "viking://user/default/note", "offset": 500, "limit": 500}})
+
+
+def test_openviking_health_uses_health_and_observer_not_ready(authed, monkeypatch):
+    calls = []
+
+    async def fake(self, method, path, **kwargs):
+        calls.append(path)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(OpenVikingClient, "request", fake)
+    response = authed.get("/api/openviking/health")
+    assert response.status_code == 200
+    assert calls == ["/health", "/api/v1/observer/system"]
+    assert response.json()["reachable"] is True
+
+
 def test_openviking_search_forces_actor_scope(authed, monkeypatch):
     calls = []
 

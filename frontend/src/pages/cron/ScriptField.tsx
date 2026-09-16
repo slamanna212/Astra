@@ -34,7 +34,7 @@ export function ScriptField({ jobId, field, filename }: { jobId: string; field: 
           {opened ? 'Hide' : 'View'} script
         </Button>
       </Group>
-      <Collapse in={opened}>
+      <Collapse expanded={opened}>
         <div style={{ marginTop: 8 }}>
           {query.isLoading && <Loader size="sm" />}
           {query.isError && (

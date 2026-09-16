@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
+from uuid import uuid4
 
+import anyio.to_thread
 from fastapi import APIRouter, HTTPException, Query
 
 from astra.deps import Ctx
-from astra.models import SessionDetail, SessionPage
+from astra.hermes_bridge import session_db_class
+from astra.models import SessionCreateRequest, SessionDetail, SessionPage, SessionUpdateRequest
 from astra.sessions import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -16,6 +20,17 @@ from astra.sessions import (
 )
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+def _with_session_db(ctx: Ctx, operation):
+    """Run one canonical Hermes SessionDB write and always release its connection."""
+    db = session_db_class()(ctx.settings.paths.state_db)
+    try:
+        return operation(db)
+    finally:
+        close = getattr(db, "close", None)
+        if callable(close):
+            close()
 
 
 @router.get("", response_model=SessionPage)
@@ -47,6 +62,34 @@ async def sessions_list(
     return SessionPage(items=items, next_cursor=next_cursor)
 
 
+@router.post("", response_model=SessionDetail, status_code=201)
+async def session_create(body: SessionCreateRequest, ctx: Ctx) -> SessionDetail:
+    session_id = str(uuid4())
+
+    def _create(db):
+        kwargs = {"model": body.model} if body.model else {}
+        db.create_session(session_id, "webui", **kwargs)
+        try:
+            if body.title is not None and not db.set_session_title(session_id, body.title):
+                raise RuntimeError("new session disappeared during creation")
+        except Exception:
+            # Do not strand an untitled empty row when title validation/uniqueness fails.
+            db.delete_session(session_id)
+            raise
+
+    try:
+        await anyio.to_thread.run_sync(_with_session_db, ctx, _create)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    detail = await ctx.db.run_with_schema(lambda conn, schema: get_session(conn, schema, session_id))
+    if detail is None:
+        raise HTTPException(status_code=500, detail="Session creation was not persisted")
+    # Starting a new conversation is a memory boundary for cached, inactive agents. The
+    # potentially multi-second OpenViking commit must never delay this request.
+    asyncio.create_task(ctx.chat.commit_idle(), name="chat-memory-boundary")
+    return detail
+
+
 @router.get("/{session_id}", response_model=SessionDetail)
 async def session_detail(session_id: str, ctx: Ctx) -> SessionDetail:
     if len(session_id) > 256:
@@ -55,3 +98,51 @@ async def session_detail(session_id: str, ctx: Ctx) -> SessionDetail:
     if detail is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return detail
+
+
+@router.patch("/{session_id}", response_model=SessionDetail)
+async def session_update(session_id: str, body: SessionUpdateRequest, ctx: Ctx) -> SessionDetail:
+    if len(session_id) > 256:
+        raise HTTPException(status_code=404, detail="Session not found")
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        detail = await ctx.db.run_with_schema(lambda conn, schema: get_session(conn, schema, session_id))
+        if detail is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return detail
+
+    def _update(db):
+        setters = {
+            "title": db.set_session_title,
+            "pinned": db.set_session_pinned,
+            "archived": db.set_session_archived,
+            "hidden": db.set_session_hidden,
+        }
+        for key, value in updates.items():
+            if not setters[key](session_id, value):
+                return False
+        return True
+
+    try:
+        found = await anyio.to_thread.run_sync(_with_session_db, ctx, _update)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    if not found:
+        raise HTTPException(status_code=404, detail="Session not found")
+    detail = await ctx.db.run_with_schema(lambda conn, schema: get_session(conn, schema, session_id))
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return detail
+
+
+@router.delete("/{session_id}", status_code=204)
+async def session_delete(session_id: str, ctx: Ctx) -> None:
+    if len(session_id) > 256:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if await ctx.chat.is_running(session_id):
+        raise HTTPException(status_code=409, detail="Stop the active turn before deleting this session")
+    deleted = await anyio.to_thread.run_sync(
+        _with_session_db, ctx, lambda db: db.delete_session(session_id)
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")

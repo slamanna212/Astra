@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+import shutil
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -129,6 +131,16 @@ def test_detail_and_404(authed: TestClient, fixture_db_path: Path) -> None:
     assert authed.get("/api/sessions/does-not-exist").status_code == 404
 
 
+def test_delete_refuses_an_active_turn(authed: TestClient, fixture_db_path: Path) -> None:
+    sid = _all_rows(fixture_db_path)[0]["id"]
+    authed.app.state.ctx.chat.is_running = AsyncMock(return_value=True)
+    from .conftest import CSRF
+
+    response = authed.delete(f"/api/sessions/{sid}", headers=CSRF)
+    assert response.status_code == 409
+    assert "active turn" in response.json()["detail"]
+
+
 def test_query_adapts_to_missing_columns(fixture_db_path: Path) -> None:
     db = StateDB(fixture_db_path)
     full = db.introspect()
@@ -174,3 +186,67 @@ def test_missing_state_db(make_client: Any, tmp_path: Path) -> None:
     login(c)
     assert c.get("/api/sessions").status_code == 503
     assert not (tmp_path / "state.db").exists()
+
+
+def test_session_crud_uses_canonical_state_db(
+    make_client: Any, fixture_db_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Writes are isolated to a copied canonical DB and remain visible to read-only endpoints."""
+    home = tmp_path / "home"
+    home.mkdir()
+    shutil.copy2(fixture_db_path, home / "state.db")
+    class FakeSessionDB:
+        def __init__(self, path):
+            self.conn = sqlite3.connect(path)
+
+        def close(self):
+            self.conn.close()
+
+        def create_session(self, session_id, source, **kwargs):
+            self.conn.execute(
+                "INSERT INTO sessions (id, source, model, started_at, last_activity_at) VALUES (?, ?, ?, 1, 1)",
+                (session_id, source, kwargs.get("model")),
+            )
+            self.conn.commit()
+            return session_id
+
+        def _set(self, session_id, column, value):
+            cur = self.conn.execute(f"UPDATE sessions SET {column} = ? WHERE id = ?", (value, session_id))
+            self.conn.commit()
+            return cur.rowcount > 0
+
+        def set_session_title(self, session_id, value): return self._set(session_id, "title", value)
+        def set_session_pinned(self, session_id, value): return self._set(session_id, "pinned", value)
+        def set_session_archived(self, session_id, value): return self._set(session_id, "archived", value)
+        def set_session_hidden(self, session_id, value): return self._set(session_id, "hidden", value)
+
+        def delete_session(self, session_id):
+            cur = self.conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            self.conn.commit()
+            return cur.rowcount > 0
+
+    monkeypatch.setattr("astra.routes.sessions.session_db_class", lambda: FakeSessionDB)
+    client = make_client(hermes_home=home)
+    from .conftest import CSRF, login
+
+    login(client)
+    created = client.post(
+        "/api/sessions", json={"title": "Astra CRUD test"}, headers=CSRF
+    )
+    assert created.status_code == 201, created.text
+    session_id = created.json()["id"]
+    assert created.json()["source"] == "webui"
+
+    updated = client.patch(
+        f"/api/sessions/{session_id}",
+        json={"title": "Renamed", "pinned": True, "archived": True},
+        headers=CSRF,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["title"] == "Renamed"
+    assert updated.json()["pinned"] is True
+    assert updated.json()["archived"] is True
+
+    deleted = client.delete(f"/api/sessions/{session_id}", headers=CSRF)
+    assert deleted.status_code == 204, deleted.text
+    assert client.get(f"/api/sessions/{session_id}").status_code == 404

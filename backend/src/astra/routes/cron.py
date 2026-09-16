@@ -36,10 +36,10 @@ log = logging.getLogger(__name__)
 _SCRIPT_FIELDS = ("script", "post_script", "monitor_script")
 
 
-def _write_job(fn, *args):
+def _write_job(fn, *args, **kwargs):
     """Hermes owns jobs.json locking/normalization. Never hand-write that file here."""
     try:
-        return fn(*args)
+        return fn(*args, **kwargs)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 

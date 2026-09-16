@@ -1,17 +1,21 @@
-import { Badge, Center, Group, Loader, Stack, Text, TextInput, Title } from '@mantine/core';
-import { IconSearch } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { ActionIcon, Badge, Button, Center, Group, Loader, Modal, Stack, Text, Textarea, TextInput, Title, Tooltip } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconPlus, IconSearch } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { listSkills } from '../../api/skills';
+import { Link, useNavigate } from 'react-router';
+import { listSkills, saveSkill } from '../../api/skills';
 import { queryKeys } from '../../api/queryKeys';
 import type { SkillSummary } from '../../api/types';
 import classes from './SkillList.module.css';
 
 function SkillRow({ skill, active }: { skill: SkillSummary; active: boolean }) {
+  // API routes address the on-disk directory, while frontmatter `name` is only a
+  // display label and is allowed to differ from that directory.
+  const pathName = skill.path.split('/').filter(Boolean).at(-1) ?? skill.name;
   const to = skill.category
-    ? `/skills/${encodeURIComponent(skill.category)}/${encodeURIComponent(skill.name)}`
-    : `/skills/${encodeURIComponent(skill.name)}`;
+    ? `/skills/${encodeURIComponent(skill.category)}/${encodeURIComponent(pathName)}`
+    : `/skills/${encodeURIComponent(pathName)}`;
   return (
     <Link to={to} className={classes.row} data-active={active || undefined}>
       <Group justify="space-between" wrap="nowrap" gap="xs">
@@ -39,9 +43,27 @@ export function SkillList({
   selectedName: string | null;
 }) {
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [newContent, setNewContent] = useState('---\ndescription: Describe when this skill should be used.\n---\n\n# Instructions\n\n');
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: queryKeys.skills.list(),
     queryFn: ({ signal }) => listSkills(signal),
+  });
+  const create = useMutation({
+    mutationFn: () => saveSkill(newCategory.trim() || null, newName, newContent),
+    onSuccess: () => {
+      const name = newName.trim().toLowerCase().replaceAll(' ', '-');
+      const category = newCategory.trim().toLowerCase().replaceAll(' ', '-');
+      setCreating(false);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.skills.all });
+      notifications.show({ color: 'green', message: `Created ${name}` });
+      void navigate(category ? `/skills/${encodeURIComponent(category)}/${encodeURIComponent(name)}` : `/skills/${encodeURIComponent(name)}`);
+    },
+    onError: (error) => notifications.show({ color: 'red', title: 'Could not create skill', message: error.message }),
   });
 
   const filtered = useMemo(() => {
@@ -69,11 +91,10 @@ export function SkillList({
       <Stack gap="xs" px="md" py="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
         <Group justify="space-between">
           <Title order={4}>Skills</Title>
-          {query.data && (
-            <Text size="xs" c="dimmed">
-              {filtered.length} / {query.data.items.length}
-            </Text>
-          )}
+          <Group gap="xs">
+            {query.data && <Text size="xs" c="dimmed">{filtered.length} / {query.data.items.length}</Text>}
+            <Tooltip label="Create skill"><ActionIcon variant="light" size="sm" aria-label="Create skill" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon></Tooltip>
+          </Group>
         </Group>
         <TextInput
           size="xs"
@@ -105,7 +126,7 @@ export function SkillList({
               <SkillRow
                 key={`${skill.category ?? ''}/${skill.name}`}
                 skill={skill}
-                active={skill.name === selectedName && (skill.category ?? null) === selectedCategory}
+                active={(skill.path.split('/').filter(Boolean).at(-1) ?? skill.name) === selectedName && (skill.category ?? null) === selectedCategory}
               />
             ))}
           </div>
@@ -116,6 +137,14 @@ export function SkillList({
           </Text>
         )}
       </div>
+      <Modal opened={creating} onClose={() => setCreating(false)} title="Create skill" size="lg">
+        <Stack>
+          <TextInput required label="Name" description="Spaces are normalized to hyphens" value={newName} onChange={(e) => setNewName(e.currentTarget.value)} />
+          <TextInput label="Category" description="Optional; spaces are normalized to hyphens" value={newCategory} onChange={(e) => setNewCategory(e.currentTarget.value)} />
+          <Textarea required label="SKILL.md" minRows={16} autosize value={newContent} onChange={(e) => setNewContent(e.currentTarget.value)} styles={{ input: { fontFamily: 'monospace' } }} />
+          <Group justify="flex-end"><Button variant="default" onClick={() => setCreating(false)}>Cancel</Button><Button disabled={!newName.trim() || !newContent.trim()} loading={create.isPending} onClick={() => create.mutate()}>Create skill</Button></Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

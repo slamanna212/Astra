@@ -15,6 +15,7 @@ import json
 import logging
 import queue
 import threading
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,7 +25,13 @@ import anyio.to_thread
 import yaml
 
 from astra.config import Settings
-from astra.hermes_bridge import agent_class, resolve_runtime_provider, session_db_class
+from astra.hermes_bridge import (
+    agent_class,
+    approval_module,
+    redact_approval_command,
+    resolve_runtime_provider,
+    session_db_class,
+)
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +52,7 @@ class NoActiveTurn(ChatError):
 class ChatEvent:
     name: str
     data: dict[str, Any]
+    seq: int = 0
 
 
 @dataclass(slots=True)
@@ -64,7 +72,6 @@ class Turn:
     provider: str | None
     events: queue.SimpleQueue[ChatEvent] = field(default_factory=queue.SimpleQueue)
     recent: list[ChatEvent] = field(default_factory=list)
-    subscribers: set[asyncio.Queue[ChatEvent]] = field(default_factory=set)
     cancel: threading.Event = field(default_factory=threading.Event)
     done: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -72,10 +79,12 @@ class Turn:
     question: PendingQuestion | None = None
     next_question_id: int = 1
     pump: asyncio.Task[None] | None = None
+    accepting_steers: bool = True
 
 
 @dataclass(slots=True)
 class CachedAgent:
+    session_id: str
     signature: str
     agent: Any
     session_db: Any
@@ -111,11 +120,16 @@ def _webui_toolsets(config: dict[str, Any]) -> list[str] | None:
 
 
 class ChatManager:
-    def __init__(self, settings: Settings, *, max_workers: int = 4) -> None:
+    def __init__(self, settings: Settings, *, max_workers: int = 4, max_cached_agents: int = 16) -> None:
         self._settings = settings
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="astra-agent")
         self._turns: dict[str, Turn] = {}
-        self._agents: dict[str, CachedAgent] = {}
+        self._subscribers: dict[str, set[asyncio.Queue[ChatEvent]]] = {}
+        self._event_seq: dict[str, int] = {}
+        self._seq_lock = threading.Lock()
+        self._agents: OrderedDict[str, CachedAgent] = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self._max_cached_agents = max_cached_agents
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -125,16 +139,46 @@ class ChatManager:
             turns = list(self._turns.values())
         for turn in turns:
             self.stop_now(turn)
+        if turns:
+            await asyncio.gather(
+                *(anyio.to_thread.run_sync(turn.done.wait, 10.0) for turn in turns),
+                return_exceptions=True,
+            )
+        # Memory extraction is a blocking Hermes operation. Keep it off the event loop, but
+        # wait during orderly shutdown so the durable session boundary is not silently lost.
+        with self._cache_lock:
+            cached_agents = list(self._agents.values())
+            self._agents.clear()
+        loop = asyncio.get_running_loop()
+        await asyncio.gather(
+            *(loop.run_in_executor(self._executor, self._commit_and_close, cached) for cached in cached_agents),
+            return_exceptions=True,
+        )
         self._executor.shutdown(wait=False, cancel_futures=False)
-        for cached in self._agents.values():
-            for closeable in (cached.agent, cached.session_db):
-                try:
-                    close = getattr(closeable, "close", None)
-                    if callable(close):
-                        close()
-                except Exception:
-                    log.debug("failed to close cached Hermes resource", exc_info=True)
-        self._agents.clear()
+
+    async def is_running(self, session_id: str) -> bool:
+        async with self._lock:
+            return session_id in self._turns
+
+    async def commit_idle(self) -> None:
+        """Commit and evict cached agents that are not executing a turn.
+
+        Session creation schedules this coroutine as background work. Removing entries before
+        dispatch makes concurrent starts build a fresh agent instead of racing the boundary.
+        """
+        async with self._lock:
+            active = set(self._turns)
+        with self._cache_lock:
+            idle = [cached for key, cached in self._agents.items() if key not in active]
+            for cached in idle:
+                self._agents.pop(cached.session_id, None)
+        if not idle:
+            return
+        loop = asyncio.get_running_loop()
+        await asyncio.gather(
+            *(loop.run_in_executor(self._executor, self._commit_and_close, cached) for cached in idle),
+            return_exceptions=True,
+        )
 
     async def start(self, session_id: str, message: str, *, model: str | None, provider: str | None) -> None:
         if not message.strip():
@@ -147,27 +191,34 @@ class ChatManager:
             turn = Turn(session_id=session_id, message=message.strip(), model=model, provider=provider)
             self._turns[session_id] = turn
             turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
+            self._emit(turn, "started", {"running": True})
         loop = asyncio.get_running_loop()
         loop.run_in_executor(self._executor, self._run_turn, turn)
 
-    async def subscribe(self, session_id: str) -> asyncio.Queue[ChatEvent] | None:
+    async def subscribe(self, session_id: str, *, after_seq: int = 0) -> tuple[asyncio.Queue[ChatEvent], bool]:
         async with self._lock:
             turn = self._turns.get(session_id)
-            if turn is None:
-                return None
-            subscriber: asyncio.Queue[ChatEvent] = asyncio.Queue(maxsize=128)
-            # POST /send necessarily precedes the EventSource connection. Replay the small live
-            # tail so a fast provider cannot lose its opening tokens in that hand-off window.
-            for event in turn.recent:
-                subscriber.put_nowait(event)
-            turn.subscribers.add(subscriber)
-            return subscriber
+            # The active turn's replay is intentionally complete: canonical assistant history
+            # is not guaranteed to be persisted until completion, so truncating this buffer
+            # would create a gap when a browser is reopened mid-turn. It is released with the
+            # Turn and therefore remains bounded by the provider's per-turn output limit.
+            subscriber: asyncio.Queue[ChatEvent] = asyncio.Queue(maxsize=max(1024, len(turn.recent) + 512) if turn else 1024)
+            # POST /send necessarily precedes the EventSource connection. Replay the complete
+            # active turn so opening on another device cannot leave a token gap.
+            if turn is not None:
+                for event in turn.recent:
+                    if event.seq > after_seq:
+                        subscriber.put_nowait(event)
+            self._subscribers.setdefault(session_id, set()).add(subscriber)
+            return subscriber, turn is not None
 
     async def unsubscribe(self, session_id: str, subscriber: asyncio.Queue[ChatEvent]) -> None:
         async with self._lock:
-            turn = self._turns.get(session_id)
-            if turn is not None:
-                turn.subscribers.discard(subscriber)
+            subscribers = self._subscribers.get(session_id)
+            if subscribers is not None:
+                subscribers.discard(subscriber)
+                if not subscribers:
+                    self._subscribers.pop(session_id, None)
 
     async def stop(self, session_id: str) -> bool:
         async with self._lock:
@@ -201,12 +252,30 @@ class ChatManager:
             raise NoActiveTurn("no turn is running for this session")
         with turn.lock:
             agent = turn.agent
-        if agent is None:
-            raise ChatError("turn is starting; try again shortly")
-        accepted = await anyio.to_thread.run_sync(agent.steer, text)
+            if agent is None:
+                raise ChatError("turn is starting; try again shortly")
+            if not turn.accepting_steers:
+                raise NoActiveTurn("the turn completed before the steer could be applied")
+            # steer() only stores a short string under Hermes' own lock. Keeping the turn lock
+            # across it makes completion+drain atomic with respect to this acceptance decision.
+            accepted = agent.steer(text)
         if accepted:
             self._emit(turn, "steer", {"text": text, "accepted": True})
         return bool(accepted)
+
+    async def approve(self, session_id: str, request_id: str, choice: str, reason: str | None) -> bool:
+        async with self._lock:
+            turn = self._turns.get(session_id)
+        if turn is None:
+            raise NoActiveTurn("no turn is running for this session")
+        resolved = await anyio.to_thread.run_sync(
+            lambda: approval_module().resolve_gateway_approval(
+                session_id, choice, reason=reason, request_id=request_id
+            )
+        )
+        if resolved:
+            self._emit(turn, "approval_resolved", {"request_id": request_id, "choice": choice})
+        return bool(resolved)
 
     async def answer(self, session_id: str, question_id: int, answer: str) -> bool:
         async with self._lock:
@@ -229,19 +298,58 @@ class ChatManager:
             except queue.Empty:
                 continue
             turn.recent.append(event)
-            if len(turn.recent) > 512:
-                del turn.recent[: len(turn.recent) - 512]
-            for subscriber in tuple(turn.subscribers):
+            async with self._lock:
+                subscribers = tuple(self._subscribers.get(turn.session_id, ()))
+            for subscriber in subscribers:
                 try:
                     subscriber.put_nowait(event)
                 except asyncio.QueueFull:
                     # A reconnect fetches canonical history; never let one paused browser block a turn.
-                    turn.subscribers.discard(subscriber)
+                    async with self._lock:
+                        self._subscribers.get(turn.session_id, set()).discard(subscriber)
         async with self._lock:
             self._turns.pop(turn.session_id, None)
 
     def _emit(self, turn: Turn, name: str, data: dict[str, Any]) -> None:
-        turn.events.put(ChatEvent(name, data))
+        with self._seq_lock:
+            seq = self._event_seq.get(turn.session_id, 0) + 1
+            self._event_seq[turn.session_id] = seq
+        turn.events.put(ChatEvent(name, data, seq))
+
+    def _wire_agent_callbacks(self, agent: Any, turn: Turn) -> None:
+        callbacks = {
+            "stream_delta_callback": lambda text: self._token_callback(turn, text),
+            "reasoning_callback": lambda text: self._reasoning_callback(turn, text),
+            "tool_progress_callback": lambda *args, **kwargs: self._tool_callback(turn, *args, **kwargs),
+            "clarify_callback": lambda question, choices=None, *args: self._clarify_callback(turn, question, choices),
+            "event_callback": lambda name, data=None: self._agent_event_callback(turn, name, data),
+            "status_callback": lambda status, *args, **kwargs: self._emit(turn, "status", {"status": str(status)}),
+        }
+        for name, callback in callbacks.items():
+            if hasattr(agent, name):
+                setattr(agent, name, callback)
+
+    def _register_approvals(self, turn: Turn) -> None:
+        def notify(data: Any) -> None:
+            raw = data if isinstance(data, dict) else {"description": str(data)}
+            # Explicit allowlist: approval payloads can grow internal fields across Hermes
+            # releases and must never accidentally expose credentials or environment details.
+            safe = {
+                key: raw[key]
+                for key in ("request_id", "description", "pattern_keys")
+                if key in raw
+            }
+            if "command" in raw:
+                command = redact_approval_command(raw["command"])
+                if command is not None:
+                    safe["command"] = command
+            self._emit(turn, "approval", safe)
+
+        approvals = approval_module()
+        approvals.register_gateway_notify(turn.session_id, notify)
+        pending = approvals.get_pending_gateway_approval(turn.session_id)
+        if pending:
+            notify(pending)
 
     def _build_agent(self, turn: Turn) -> Any:
         config = _load_chat_config(self._settings.paths.config_yaml)
@@ -256,22 +364,19 @@ class ChatManager:
         toolsets = _webui_toolsets(config)
         key_sig = hashlib.sha256(str(runtime.get("api_key") or "").encode()).hexdigest()
         signature = json.dumps([model, runtime.get("provider"), runtime.get("base_url"), key_sig, toolsets], sort_keys=True)
-        cached = self._agents.get(turn.session_id)
+        with self._cache_lock:
+            cached = self._agents.get(turn.session_id)
         if cached is not None and cached.signature == signature:
             agent = cached.agent
             clear_interrupt = getattr(agent, "clear_interrupt", None)
             if callable(clear_interrupt):
                 clear_interrupt()
-            agent.stream_delta_callback = lambda text: self._token_callback(turn, text)
-            agent.reasoning_callback = lambda text: self._reasoning_callback(turn, text)
-            agent.tool_progress_callback = lambda *args, **kwargs: self._tool_callback(turn, *args, **kwargs)
-            agent.clarify_callback = lambda question, choices=None, *args: self._clarify_callback(turn, question, choices)
+            self._wire_agent_callbacks(agent, turn)
+            with self._cache_lock:
+                self._agents.move_to_end(turn.session_id)
             return agent
         if cached is not None:
-            try:
-                cached.session_db.close()
-            except Exception:
-                pass
+            self._commit_and_close(cached)
         session_db = session_db_class()(self._settings.paths.state_db)
         agent_kwargs = {
             "model": model,
@@ -291,7 +396,17 @@ class ChatManager:
             "gateway_session_key": turn.session_id,
         }
         agent = agent_class()(**_supported(agent_class().__init__, agent_kwargs))
-        self._agents[turn.session_id] = CachedAgent(signature=signature, agent=agent, session_db=session_db)
+        self._wire_agent_callbacks(agent, turn)
+        evicted: CachedAgent | None = None
+        with self._cache_lock:
+            self._agents[turn.session_id] = CachedAgent(
+                session_id=turn.session_id, signature=signature, agent=agent, session_db=session_db
+            )
+            self._agents.move_to_end(turn.session_id)
+            if len(self._agents) > self._max_cached_agents:
+                _, evicted = self._agents.popitem(last=False)
+        if evicted is not None:
+            self._commit_and_close(evicted)
         return agent
 
     def _run_turn(self, turn: Turn) -> None:
@@ -299,6 +414,7 @@ class ChatManager:
             agent = self._build_agent(turn)
             with turn.lock:
                 turn.agent = agent
+            self._register_approvals(turn)
             history = turn.agent.session_db.get_messages_as_conversation(turn.session_id)
             run_kwargs = _supported(
                 agent.run_conversation,
@@ -306,15 +422,50 @@ class ChatManager:
                  "persist_user_message": turn.message},
             )
             result = agent.run_conversation(**run_kwargs)
+            with turn.lock:
+                turn.accepting_steers = False
+                late_steer = self._drain_late_steer(agent)
             if turn.cancel.is_set():
-                self._emit(turn, "cancel", {"reason": "Cancelled by user"})
+                self._emit(turn, "cancel", {"reason": "Cancelled by user", "late_steer": late_steer})
             else:
-                self._emit(turn, "done", {"result": {"status": "completed", "has_result": bool(result)}})
+                self._emit(turn, "done", {"result": {"status": "completed", "has_result": bool(result)}, "late_steer": late_steer})
         except Exception as exc:
             log.exception("chat turn failed for session %s", turn.session_id)
             self._emit(turn, "error", {"message": "The Hermes turn failed. Check server logs for details."})
         finally:
+            with turn.lock:
+                turn.accepting_steers = False
+            try:
+                approval_module().unregister_gateway_notify(turn.session_id)
+            except Exception:
+                log.debug("failed to unregister approval bridge", exc_info=True)
             turn.done.set()
+
+    @staticmethod
+    def _drain_late_steer(agent: Any) -> str | None:
+        drain = getattr(agent, "_drain_pending_steer", None)
+        if not callable(drain):
+            return None
+        value = drain()
+        return str(value) if value else None
+
+    @staticmethod
+    def _commit_and_close(cached: CachedAgent) -> None:
+        try:
+            commit = getattr(cached.agent, "commit_memory_session", None)
+            if callable(commit):
+                history = cached.session_db.get_messages_as_conversation(cached.session_id)
+                commit(history)
+        except Exception:
+            log.warning("Hermes memory commit failed at session boundary", exc_info=True)
+        finally:
+            for closeable in (cached.agent, cached.session_db):
+                try:
+                    close = getattr(closeable, "close", None)
+                    if callable(close):
+                        close()
+                except Exception:
+                    log.debug("failed to close cached Hermes resource", exc_info=True)
 
     def _token_callback(self, turn: Turn, text: Any) -> None:
         if text:
@@ -329,6 +480,12 @@ class ChatManager:
         payload: dict[str, Any] = {"args": [str(item)[:4096] for item in args]}
         payload.update({key: str(value)[:4096] for key, value in kwargs.items()})
         self._emit(turn, "tool", payload)
+
+    def _agent_event_callback(self, turn: Turn, name: Any, data: Any) -> None:
+        event_name = str(name)
+        if event_name.startswith(("subagent", "delegate")):
+            payload = data if isinstance(data, dict) else {"message": str(data)}
+            self._emit(turn, "subagent", {key: str(value)[:4096] for key, value in payload.items()})
 
     def _clarify_callback(self, turn: Turn, question: Any, choices: Any) -> str:
         with turn.lock:

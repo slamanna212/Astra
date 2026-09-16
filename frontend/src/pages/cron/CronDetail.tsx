@@ -1,8 +1,10 @@
-import { Badge, Center, Code, Group, Loader, Paper, Stack, Tabs, Text, Title } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { useParams } from 'react-router';
-import { getCronJob, type CronScriptFieldName } from '../../api/cron';
+import { Badge, Button, Center, Code, Group, Loader, Modal, Paper, Stack, Tabs, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconEdit, IconPlayerPlay, IconTrash } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { deleteCronJob, getCronJob, pauseCronJob, resumeCronJob, runCronJob, updateCronJob, type CronScriptFieldName } from '../../api/cron';
 import { queryKeys } from '../../api/queryKeys';
 import type { CronJob } from '../../api/types';
 import { deliveryLabel, humanSchedule, jobStateBadge, lastRunBadge, repeatLabel } from '../../lib/cron';
@@ -11,6 +13,7 @@ import { CRON_DETAIL_GROUPS } from './cronDetailFields';
 import { CronOutputs } from './CronOutputs';
 import classes from './CronDetail.module.css';
 import { ScriptField } from './ScriptField';
+import { CronForm } from './CronForm';
 
 const SCRIPT_FIELDS = new Set<string>(['script', 'post_script', 'monitor_script']);
 
@@ -109,10 +112,34 @@ function GroupCard({ title, job, fields }: { title: string; job: CronJob; fields
 
 export default function CronDetail() {
   const { jobId } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
   const query = useQuery({
     queryKey: queryKeys.cron.detail(jobId ?? ''),
     queryFn: ({ signal }) => getCronJob(jobId ?? '', signal),
     enabled: !!jobId,
+  });
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: queryKeys.cron.all });
+  const update = useMutation({
+    mutationFn: (input: Parameters<typeof updateCronJob>[1]) => updateCronJob(jobId ?? '', input),
+    onSuccess: () => { setEditing(false); refresh(); notifications.show({ color: 'green', message: 'Scheduled task saved' }); },
+    onError: (error) => notifications.show({ color: 'red', title: 'Could not save task', message: error.message }),
+  });
+  const run = useMutation({
+    mutationFn: () => runCronJob(jobId ?? ''),
+    onSuccess: () => notifications.show({ color: 'green', message: 'Run accepted' }),
+    onError: (error) => notifications.show({ color: 'red', title: 'Could not run task', message: error.message }),
+  });
+  const toggle = useMutation({
+    mutationFn: () => query.data?.enabled ? pauseCronJob(jobId ?? '', 'Paused from Astra') : resumeCronJob(jobId ?? ''),
+    onSuccess: refresh,
+    onError: (error) => notifications.show({ color: 'red', title: 'Could not change task state', message: error.message }),
+  });
+  const remove = useMutation({
+    mutationFn: () => deleteCronJob(jobId ?? ''),
+    onSuccess: () => { refresh(); notifications.show({ color: 'green', message: 'Scheduled task deleted' }); void navigate('/cron'); },
+    onError: (error) => notifications.show({ color: 'red', title: 'Could not delete task', message: error.message }),
   });
 
   if (query.isLoading) {
@@ -158,6 +185,17 @@ export default function CronDetail() {
               {job.failure_streak} failure{job.failure_streak === 1 ? '' : 's'} in a row
             </Badge>
           )}
+          <Button size="xs" variant="default" leftSection={<IconEdit size={15} />} onClick={() => setEditing(true)}>Edit</Button>
+          <Button size="xs" variant="default" onClick={() => toggle.mutate()} loading={toggle.isPending}>{job.enabled ? 'Pause' : 'Resume'}</Button>
+          <Button size="xs" leftSection={<IconPlayerPlay size={15} />} onClick={() => run.mutate()} loading={run.isPending}>Run now</Button>
+          <Button
+            size="xs"
+            color="red"
+            variant="subtle"
+            leftSection={<IconTrash size={15} />}
+            loading={remove.isPending}
+            onClick={() => { if (window.confirm(`Delete “${job.name}”? This cannot be undone.`)) remove.mutate(); }}
+          >Delete</Button>
         </Group>
       </Group>
 
@@ -179,6 +217,9 @@ export default function CronDetail() {
           <CronOutputs jobId={job.id} />
         </Tabs.Panel>
       </Tabs>
+      <Modal opened={editing} onClose={() => setEditing(false)} title={`Edit ${job.name}`} size="xl">
+        <CronForm key={job.id} job={job} submitLabel="Save changes" pending={update.isPending} onSubmit={(input) => update.mutate(input)} onCancel={() => setEditing(false)} />
+      </Modal>
     </div>
   );
 }

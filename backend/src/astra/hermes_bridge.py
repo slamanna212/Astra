@@ -120,5 +120,19 @@ def resolve_runtime_provider():
     return getattr(_import("hermes_cli.runtime_provider"), "resolve_runtime_provider")
 
 
+def approval_module() -> ModuleType:
+    """Hermes' canonical approval queue/notification bridge."""
+    return _import("tools.approval")
+
+
+def redact_approval_command(command: object) -> str | None:
+    """Use Hermes' own transport-safe approval redactor; fail closed."""
+    try:
+        redactor = getattr(_import("gateway.run"), "_redact_approval_command")
+        return str(redactor(command))
+    except Exception:
+        return None
+
+
 class HermesImportError(RuntimeError):
     """Raised when a required Hermes module cannot be imported."""

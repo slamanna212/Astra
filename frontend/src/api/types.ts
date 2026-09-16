@@ -280,10 +280,16 @@ export interface FileUploadResponse {
 }
 
 // -- OpenViking memory inspector ------------------------------------------
-export interface OpenVikingNode { name: string; uri: string; isDir: boolean; size?: number; modTime?: string; [key: string]: unknown }
+export interface OpenVikingNode { name: string; uri: string; isDir?: boolean; is_dir?: boolean; type?: string; size?: number; modTime?: string; [key: string]: unknown }
 export interface OpenVikingTree { uri: string; items: OpenVikingNode[] }
-export interface OpenVikingContent { uri: string; abstract: string; overview: string; content: string; offset: number; limit: number }
-export interface OpenVikingSearch { mode: 'fast' | 'deep'; result: Record<string, unknown> }
+export interface OpenVikingStat { count?: number; [key: string]: unknown }
+export interface OpenVikingContent { uri: string; abstract: unknown; overview: unknown; content: unknown; offset: number; limit: number; hasMore?: boolean | null }
+export interface OpenVikingSearchHit { uri?: string; title?: string; name?: string; content?: string; text?: string; score?: number; origin?: string; [key: string]: unknown }
+export interface OpenVikingFastResult { memories: OpenVikingSearchHit[]; resources: OpenVikingSearchHit[]; skills: OpenVikingSearchHit[]; total: number }
+export interface OpenVikingDeepResult { entries: OpenVikingSearchHit[]; rendered?: string; digest?: string; stats?: Record<string, unknown> }
+export interface OpenVikingSearch { mode: 'fast'; result: OpenVikingFastResult }
+export interface OpenVikingDeepSearch { mode: 'deep'; result: OpenVikingDeepResult }
+export interface OpenVikingHealth { reachable: true; health: unknown; system: unknown }
 export interface OpenVikingStatus { reachable: true; system: unknown; queue: unknown; lock: unknown; vikingdb: unknown; models: unknown; retrieval: unknown; memories: unknown; tasks: unknown }
 
 // -- Logs ------------------------------------------------------------------

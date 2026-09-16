@@ -24,3 +24,18 @@ export function listSessions(params: ListSessionsParams = {}, signal?: AbortSign
 export function getSession(id: string, signal?: AbortSignal): Promise<SessionDetail> {
   return apiFetch<SessionDetail>(`/sessions/${encodeURIComponent(id)}`, { signal });
 }
+
+export function createSession(body: { title?: string; model?: string }): Promise<SessionDetail> {
+  return apiFetch<SessionDetail>('/sessions', { method: 'POST', body });
+}
+
+export function updateSession(
+  id: string,
+  body: { title?: string | null; pinned?: boolean; archived?: boolean; hidden?: boolean },
+): Promise<SessionDetail> {
+  return apiFetch<SessionDetail>(`/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', body });
+}
+
+export function deleteSession(id: string): Promise<void> {
+  return apiFetch<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}

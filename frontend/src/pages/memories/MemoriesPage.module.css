@@ -3,4 +3,6 @@
 .browser { min-width: 0; border-right: 1px solid var(--mantine-color-gray-3); padding: var(--mantine-spacing-md); }
 .content { min-width: 0; padding: var(--mantine-spacing-md); overflow: auto; }
 .search { flex: 1; }
+.breakText { overflow-wrap: anywhere; }
+.statusCode { max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 48em) { .root { grid-template-columns: 1fr; } .browser { border-right: 0; border-bottom: 1px solid var(--mantine-color-gray-3); } }

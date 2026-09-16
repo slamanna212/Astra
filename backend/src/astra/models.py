@@ -86,6 +86,20 @@ class SessionPage(BaseModel):
     next_cursor: str | None
 
 
+class SessionCreateRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=512)
+    model: str | None = Field(default=None, max_length=512)
+
+
+class SessionUpdateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    title: str | None = Field(default=None, max_length=512)
+    pinned: bool | None = None
+    archived: bool | None = None
+    hidden: bool | None = None
+
+
 # -- Insights ----------------------------------------------------------------
 #
 # Semantics (see backend/src/astra/insights.py module docstring for the full
@@ -356,8 +370,25 @@ class ChatAnswerRequest(BaseModel):
     answer: str = Field(max_length=100_000)
 
 
+class ChatApprovalRequest(BaseModel):
+    request_id: str = Field(min_length=1, max_length=256)
+    choice: str = Field(pattern="^(once|session|always|deny)$")
+    reason: str | None = Field(default=None, max_length=10_000)
+
+
 class ChatTurnStarted(BaseModel):
     running: bool = True
+
+
+class ChatState(BaseModel):
+    running: bool
+
+
+class ChatOptions(BaseModel):
+    default_model: str | None = None
+    default_provider: str | None = None
+    models: list[str]
+    providers: list[str]
 
 
 # -- Cron ----------------------------------------------------------------

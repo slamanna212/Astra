@@ -6,6 +6,7 @@ import { formatDateTime } from '../../../lib/format';
 import { ReasoningBlock } from './ReasoningBlock';
 import { ToolCallCard } from './ToolCallCard';
 import classes from './Transcript.module.css';
+import { ContentParts } from './ContentParts';
 
 export function AssistantMessage({
   message,
@@ -30,11 +31,7 @@ export function AssistantMessage({
         <Stack gap={4}>
           {message.reasoning && <ReasoningBlock reasoning={message.reasoning} />}
           {text && <Markdown codeHighlight>{text}</Markdown>}
-          {parts && (
-            <Text size="xs" c="dimmed">
-              {parts.length} content part{parts.length === 1 ? '' : 's'} (unsupported preview)
-            </Text>
-          )}
+          {parts && <ContentParts parts={parts} />}
           {message.tool_calls?.map((call) => (
             <ToolCallCard
               key={call.id || `${message.id}`}

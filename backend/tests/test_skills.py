@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from tests.test_cron import cron_client, cron_home, cron_password_hash, cron_settings  # noqa: F401
+from tests.conftest import CSRF
 
 
 def test_list_skills_matches_config_yaml_disabled_set(cron_client: TestClient) -> None:
@@ -40,6 +41,30 @@ def test_flat_skill_lookup_without_category(cron_client: TestClient) -> None:
     resp = cron_client.get(f"/api/skills/{flat['name']}")
     assert resp.status_code == 200
     assert resp.json()["name"] == flat["name"]
+
+
+def test_skill_create_edit_toggle_delete_lifecycle(cron_client: TestClient, cron_home: Path) -> None:
+    path = "/api/skills/testing/Astra Writer"
+    initial = "---\nname: astra-writer\ndescription: first\n---\n\n# First\n"
+    response = cron_client.put(path, headers=CSRF, json={"content": initial})
+    assert response.status_code == 204, response.text
+    target = cron_home / "skills" / "testing" / "astra-writer" / "SKILL.md"
+    assert target.read_text(encoding="utf-8") == initial
+
+    updated = initial.replace("first", "updated").replace("First", "Updated")
+    assert cron_client.put("/api/skills/testing/astra-writer", headers=CSRF, json={"content": updated}).status_code == 204
+    assert cron_client.get("/api/skills/testing/astra-writer").json()["content"] == updated
+
+    assert cron_client.post(
+        "/api/skills/testing/astra-writer/enabled", headers=CSRF, json={"enabled": False}
+    ).status_code == 204
+    assert cron_client.get("/api/skills/testing/astra-writer").json()["enabled"] is False
+    assert cron_client.post(
+        "/api/skills/testing/astra-writer/enabled", headers=CSRF, json={"enabled": True}
+    ).status_code == 204
+
+    assert cron_client.delete("/api/skills/testing/astra-writer", headers=CSRF).status_code == 204
+    assert not target.exists()
 
 
 def test_skills_reads_never_mutate_hermes_home_including_kanban_tagged(

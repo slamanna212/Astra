@@ -1,12 +1,13 @@
-import { Alert, Anchor, Box, Button, Center, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
+import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Paper, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconPinFilled } from '@tabler/icons-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
-import { answerChat, chatStreamUrl, sendChat, steerChat, stopChat, type ChatStreamEvent } from '../../api/chat';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { answerChat, approveChat, chatStreamUrl, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent } from '../../api/chat';
+import { uploadFile } from '../../api/files';
 import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
-import { getSession } from '../../api/sessions';
+import { deleteSession, getSession, updateSession } from '../../api/sessions';
 import { SourceBadge } from '../../components/SourceBadge';
 import { formatCost, formatCount, formatTokens, sessionTitle } from '../../lib/format';
 import { Transcript } from './transcript/Transcript';
@@ -16,10 +17,18 @@ export default function SessionPane() {
   const { sessionId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [running, setRunning] = useState(false);
   const [streaming, setStreaming] = useState('');
   const [reasoning, setReasoning] = useState('');
   const [clarify, setClarify] = useState<{ id: number; question: string; choices: unknown[] | null } | null>(null);
+  const [clarifyText, setClarifyText] = useState('');
+  const [approval, setApproval] = useState<{ request_id: string; command?: string; description?: string } | null>(null);
+  const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
+  const [draft, setDraft] = useState('');
+  const [model, setModel] = useState<string | null | undefined>(undefined);
+  const [provider, setProvider] = useState<string | null | undefined>(undefined);
+  const [activity, setActivity] = useState<string[]>([]);
   const raf = useRef<number | null>(null);
   const pendingText = useRef('');
   const pendingReasoning = useRef('');
@@ -31,10 +40,32 @@ export default function SessionPane() {
     queryFn: ({ signal }) => getSession(sessionId, signal),
     enabled: sessionId !== '',
   });
+  const options = useQuery({
+    queryKey: ['chat-options', sessionId],
+    queryFn: ({ signal }) => getChatOptions(sessionId, signal),
+    enabled: sessionId !== '',
+  });
+  const patchSession = useMutation({
+    mutationFn: (body: Parameters<typeof updateSession>[1]) => updateSession(sessionId, body),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.sessions.detail(sessionId), updated);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.lists() });
+    },
+  });
+  const removeSession = useMutation({
+    mutationFn: () => deleteSession(sessionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      navigate('/chats', { replace: true });
+    },
+  });
+
+  const selectedModel = model === undefined ? (options.data?.default_model ?? null) : model;
+  const selectedProvider = provider === undefined ? (options.data?.default_provider ?? null) : provider;
 
   useEffect(() => {
-    if (!running) return;
     const source = new EventSource(chatStreamUrl(sessionId));
+    source.onopen = () => setConnection('live');
     const flush = () => {
       raf.current = null;
       if (pendingText.current) {
@@ -55,21 +86,49 @@ export default function SessionPane() {
       flush();
       setRunning(false);
       setClarify(null);
+      setApproval(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      source.close();
     };
+    source.addEventListener('state', (event) => {
+      const state = JSON.parse((event as MessageEvent).data) as { running: boolean };
+      setRunning(state.running);
+      // If completion happened while this browser was disconnected, the terminal SSE frame is
+      // no longer replayable after the turn is evicted. Canonical history closes that gap.
+      if (!state.running) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      }
+    });
+    source.addEventListener('started', () => { setRunning(true); setStreaming(''); setReasoning(''); setActivity([]); });
     source.addEventListener('delta', (event) => { pendingText.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
     source.addEventListener('reasoning', (event) => { pendingReasoning.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
     source.addEventListener('clarify', (event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null }));
-    source.addEventListener('done', terminal);
-    source.addEventListener('cancel', terminal);
-    source.addEventListener('error', terminal);
+    source.addEventListener('approval', (event) => setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string }));
+    source.addEventListener('approval_resolved', () => setApproval(null));
+    source.addEventListener('tool', (event) => setActivity((items) => [...items.slice(-4), `Tool: ${(event as MessageEvent).data}`]));
+    source.addEventListener('subagent', (event) => setActivity((items) => [...items.slice(-4), `Subagent: ${(event as MessageEvent).data}`]));
+    const finish = (event: Event) => {
+      if (event instanceof MessageEvent && event.data) {
+        const payload = JSON.parse(event.data) as { late_steer?: string | null };
+        if (payload.late_steer) setDraft((value) => value || payload.late_steer || '');
+      }
+      terminal();
+    };
+    source.addEventListener('done', finish);
+    source.addEventListener('cancel', finish);
+    source.addEventListener('error', (event) => {
+      if (event instanceof MessageEvent && event.data) finish(event);
+      else {
+        setConnection('reconnecting');
+        void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
+      }
+    });
     return () => { source.close(); if (raf.current !== null) cancelAnimationFrame(raf.current); };
-  }, [running, sessionId, queryClient]);
+  }, [sessionId, queryClient]);
 
   const start = async (text: string) => {
-    await sendChat(sessionId, { message: text });
+    await sendChat(sessionId, { message: text, model: selectedModel, provider: selectedProvider });
     setStreaming('');
     setReasoning('');
     setRunning(true);
@@ -120,9 +179,22 @@ export default function SessionPane() {
           <Title order={4} style={{ minWidth: 0, overflowWrap: 'anywhere', flex: 1 }}>
             {sessionTitle(s)}
           </Title>
+          <Group gap={4} wrap="wrap" justify="flex-end">
+            <Button size="compact-xs" variant="subtle" onClick={() => {
+              const title = window.prompt('Conversation title', s.title ?? '');
+              if (title !== null) patchSession.mutate({ title });
+            }}>Rename</Button>
+            <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ pinned: !s.pinned })}>{s.pinned ? 'Unpin' : 'Pin'}</Button>
+            <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ archived: !s.archived })}>{s.archived ? 'Unarchive' : 'Archive'}</Button>
+            <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ hidden: !s.hidden })}>{s.hidden ? 'Unhide' : 'Hide'}</Button>
+            <Button size="compact-xs" color="red" variant="subtle" disabled={running} loading={removeSession.isPending} onClick={() => {
+              if (window.confirm('Delete this conversation and its messages? This cannot be undone.')) removeSession.mutate();
+            }}>Delete</Button>
+          </Group>
         </Group>
         <Group gap="sm" wrap="wrap">
           <SourceBadge source={s.source} size="sm" />
+          <Badge size="sm" color={connection === 'live' ? 'green' : 'yellow'} variant="light">{connection}</Badge>
           {s.model && (
             <Text size="sm" c="dimmed">
               {s.model}
@@ -165,14 +237,39 @@ export default function SessionPane() {
             {(clarify.choices ?? []).map((choice) => (
               <Button key={String(choice)} size="xs" onClick={() => void answerChat(sessionId, clarify.id, String(choice))}>{String(choice)}</Button>
             ))}
+            <TextInput value={clarifyText} onChange={(event) => setClarifyText(event.currentTarget.value)} placeholder="Type another answer" style={{ flex: 1 }} />
+            <Button size="xs" disabled={!clarifyText.trim()} onClick={() => { void answerChat(sessionId, clarify.id, clarifyText.trim()); setClarifyText(''); }}>Answer</Button>
           </Group>
         </Alert>
       )}
+      {approval && (
+        <Alert m="sm" color="orange" title="Approval required">
+          <Text size="sm">{approval.description ?? 'Hermes needs permission to continue.'}</Text>
+          {approval.command && <Code block mt="xs">{approval.command}</Code>}
+          <Group mt="xs">
+            {(['once', 'session', 'always', 'deny'] as const).map((choice) => (
+              <Button key={choice} size="xs" color={choice === 'deny' ? 'red' : undefined} variant={choice === 'deny' ? 'light' : 'filled'} onClick={() => void approveChat(sessionId, approval.request_id, choice)}>
+                {choice === 'once' ? 'Approve once' : choice === 'session' ? 'Approve session' : choice === 'always' ? 'Always approve' : 'Deny'}
+              </Button>
+            ))}
+          </Group>
+        </Alert>
+      )}
+      {activity.length > 0 && <Paper mx="sm" p="xs" withBorder>{activity.map((item, index) => <Text size="xs" c="dimmed" key={`${index}-${item}`}>{item}</Text>)}</Paper>}
       <ChatComposer
         running={running}
         onSend={start}
         onStop={() => stopChat(sessionId)}
         onSteer={(text) => steerChat(sessionId, text)}
+        model={selectedModel}
+        provider={selectedProvider}
+        models={options.data?.models ?? (s.model ? [s.model] : [])}
+        providers={options.data?.providers ?? []}
+        onModelChange={setModel}
+        onProviderChange={setProvider}
+        draft={draft}
+        onDraftChange={setDraft}
+        onAttach={async (file) => (await uploadFile({ directory: '', file })).path}
       />
     </Box>
   );

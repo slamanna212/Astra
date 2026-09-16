@@ -154,6 +154,59 @@ def test_unknown_job_404s(cron_client: TestClient) -> None:
     assert cron_client.get("/api/cron/does-not-exist/script/script").status_code == 404
 
 
+def test_cron_full_write_lifecycle_and_advanced_fields(cron_client: TestClient, cron_home: Path) -> None:
+    created_response = cron_client.post(
+        "/api/cron",
+        headers=CSRF,
+        json={
+            "name": "Astra phase three test",
+            "prompt": "Exercise cron mutation fields",
+            "schedule": "every 30m",
+            "deliver": "local",
+            "skills": ["summarize"],
+            "repeat": 3,
+            "post_script": "after.py",
+            "context_from": ["self"],
+            "attach_to_session": True,
+            "monitor_script": "watch.py",
+            "workdir": str(cron_home),
+            "model": "test-model",
+            "provider": "test-provider",
+            "reasoning_effort": "low",
+            "enabled_toolsets": ["web"],
+        },
+    )
+    assert created_response.status_code == 201, created_response.text
+    job = created_response.json()
+    job_id = job["id"]
+    assert job["post_script"] == "after.py"
+    assert job["context_from"] == ["self"]
+    assert job["monitor_script"] == "watch.py"
+
+    updated_response = cron_client.patch(
+        f"/api/cron/{job_id}",
+        headers=CSRF,
+        json={"schedule": "every 45m", "post_script": "after-v2.py", "context_from": ["other-job"]},
+    )
+    assert updated_response.status_code == 200, updated_response.text
+    updated = updated_response.json()
+    assert updated["schedule"]["kind"] == "interval"
+    assert updated["post_script"] == "after-v2.py"
+    assert updated["context_from"] == ["other-job"]
+
+    assert cron_client.post(f"/api/cron/{job_id}/pause", headers=CSRF, json={"reason": "test"}).json()["enabled"] is False
+    assert cron_client.post(f"/api/cron/{job_id}/resume", headers=CSRF).json()["enabled"] is True
+
+    persisted = json.loads((cron_home / "cron" / "jobs.json").read_text(encoding="utf-8"))
+    persisted_job = next(item for item in persisted["jobs"] if item["id"] == job_id)
+    assert persisted_job["post_script"] == "after-v2.py"
+    assert persisted_job["context_from"] == ["other-job"]
+
+    response = cron_client.delete(f"/api/cron/{job_id}", headers=CSRF)
+    assert response.status_code == 204
+    assert cron_client.get(f"/api/cron/{job_id}").status_code == 404
+
+
 def test_script_endpoint_rejects_unknown_field(cron_client: TestClient) -> None:
     jobs = cron_client.get("/api/cron").json()["items"]
     job = jobs[0]

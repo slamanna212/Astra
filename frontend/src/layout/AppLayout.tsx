@@ -2,7 +2,7 @@ import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Text, Tit
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { spotlight } from '@mantine/spotlight';
-import { IconLogout, IconSearch } from '@tabler/icons-react';
+import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
@@ -10,6 +10,7 @@ import { getHealth, logout } from '../api/auth';
 import { queryKeys } from '../api/queryKeys';
 import { markSignedOut } from '../auth/session';
 import { SearchSpotlight } from '../components/SearchSpotlight';
+import { updateUiPreferences, useUiPreferences } from '../lib/uiPreferences';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
 import { NAV_ITEMS } from './navItems';
 
@@ -20,6 +21,7 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const prefs = useUiPreferences();
 
   const health = useQuery({
     queryKey: queryKeys.health,
@@ -42,7 +44,7 @@ export function AppLayout() {
   return (
     <AppShell
       header={{ height: HEADER_HEIGHT }}
-      navbar={{ width: 240, breakpoint: 'sm', collapsed: { mobile: !opened } }}
+      navbar={{ width: 240, breakpoint: 'sm', collapsed: { mobile: !opened, desktop: prefs.sidebarDesktopCollapsed } }}
       padding={0}
     >
       <SearchSpotlight />
@@ -55,6 +57,17 @@ export function AppLayout() {
             </Title>
           </Group>
           <Group gap="xs" wrap="nowrap">
+            <Tooltip label={prefs.sidebarDesktopCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+              <ActionIcon
+                visibleFrom="sm"
+                variant="default"
+                size="lg"
+                aria-label={prefs.sidebarDesktopCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                onClick={() => updateUiPreferences({ sidebarDesktopCollapsed: !prefs.sidebarDesktopCollapsed })}
+              >
+                {prefs.sidebarDesktopCollapsed ? <IconLayoutSidebarLeftExpand size={18} /> : <IconLayoutSidebarLeftCollapse size={18} />}
+              </ActionIcon>
+            </Tooltip>
             <Tooltip label="Search (Ctrl/Cmd+K)">
               <ActionIcon variant="default" size="lg" aria-label="Search" onClick={() => spotlight.open()}>
                 <IconSearch size={18} stroke={1.5} />

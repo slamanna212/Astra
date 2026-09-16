@@ -3,11 +3,13 @@ import { IconUser } from '@tabler/icons-react';
 import type { Message } from '../../../api/types';
 import { formatDateTime } from '../../../lib/format';
 import classes from './Transcript.module.css';
+import { ContentParts } from './ContentParts';
 
 /** User content is always plain text in real data (verified against exampledata/hermes-home) —
  * rendered as-is (whitespace preserved), not through the markdown pipeline. */
 export function UserMessage({ message, highlighted }: { message: Message; highlighted: boolean }) {
-  const text = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+  const text = typeof message.content === 'string' ? message.content : null;
+  const parts = Array.isArray(message.content) ? message.content : null;
   return (
     <Group align="flex-start" gap="xs" wrap="nowrap" className={highlighted ? classes.highlighted : undefined}>
       <Avatar color="blue" radius="xl" size="sm">
@@ -15,9 +17,8 @@ export function UserMessage({ message, highlighted }: { message: Message; highli
       </Avatar>
       <Paper withBorder p="sm" radius="md" className={classes.bubble}>
         <Stack gap={4}>
-          <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-            {text}
-          </Text>
+          {text && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</Text>}
+          {parts && <ContentParts parts={parts} />}
           <Text size="xs" c="dimmed">
             {formatDateTime(message.timestamp)}
             {message.truncated && ' · truncated'}

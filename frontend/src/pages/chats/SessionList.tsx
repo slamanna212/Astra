@@ -10,13 +10,13 @@ import {
   Text,
   UnstyledButton,
 } from '@mantine/core';
-import { IconMessage, IconPinFilled } from '@tabler/icons-react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { IconMessage, IconPinFilled, IconPlus } from '@tabler/icons-react';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { queryKeys } from '../../api/queryKeys';
-import { listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
+import { createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
 import type { SessionSummary } from '../../api/types';
 import { SourceBadge } from '../../components/SourceBadge';
 import { KNOWN_SOURCES } from '../../lib/sources';
@@ -88,6 +88,15 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [includeHidden, setIncludeHidden] = useState(false);
   const now = useNow();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const create = useMutation({
+    mutationFn: () => createSession({}),
+    onSuccess: (session) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      navigate(`/chats/${encodeURIComponent(session.id)}`);
+    },
+  });
 
   const filters = useMemo(
     () => ({ source: source || null, include_archived: includeArchived, include_hidden: includeHidden }),
@@ -136,6 +145,14 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   return (
     <>
       <Stack gap={8} p="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+        <Button
+          size="xs"
+          leftSection={<IconPlus size={14} />}
+          loading={create.isPending}
+          onClick={() => create.mutate()}
+        >
+          New chat
+        </Button>
         <Select
           size="xs"
           aria-label="Filter by source"

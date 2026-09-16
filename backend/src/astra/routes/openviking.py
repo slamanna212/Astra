@@ -36,7 +36,23 @@ async def health(ctx: Ctx):
 @router.get("/tree")
 async def tree(ctx: Ctx, uri: str = Query("viking://")):
     result = await _call(ctx, "GET", "/api/v1/fs/ls", params={"uri": _uri(uri), "show_all_hidden": True, "recursive": False, "output": "agent", "abs_limit": 256})
-    return {"uri": uri, "items": result if isinstance(result, list) else result.get("items", result)}
+    if isinstance(result, list):
+        items = result
+    elif isinstance(result, dict):
+        items = next((result[key] for key in ("items", "entries", "children") if isinstance(result.get(key), list)), [])
+    else:
+        items = []
+    # Releases have used both snake_case and camelCase in the agent-oriented listing.
+    # Keep the original fields but give the browser one stable directory discriminator.
+    normalized = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        node = dict(item)
+        if "isDir" not in node:
+            node["isDir"] = bool(node.get("is_dir") or node.get("type") in {"dir", "directory"})
+        normalized.append(node)
+    return {"uri": uri, "items": normalized}
 
 @router.get("/stat")
 async def stat(ctx: Ctx, uri: str):
@@ -47,8 +63,18 @@ async def content(ctx: Ctx, uri: str, offset: int = Query(0, ge=0), limit: int =
     uri = _uri(uri)
     abstract = await _call(ctx, "GET", "/api/v1/content/abstract", params={"uri": uri})
     overview = await _call(ctx, "GET", "/api/v1/content/overview", params={"uri": uri})
-    text = await _call(ctx, "GET", "/api/v1/content/read", params={"uri": uri, "offset": offset, "limit": limit})
-    return {"uri": uri, "abstract": abstract, "overview": overview, "content": text, "offset": offset, "limit": limit}
+    page = await _call(ctx, "GET", "/api/v1/content/read", params={"uri": uri, "offset": offset, "limit": limit})
+    has_more: bool | None = None
+    text = page
+    if isinstance(page, dict):
+        text = next((page[key] for key in ("content", "text", "data") if key in page), page)
+        for key in ("has_more", "hasMore"):
+            if isinstance(page.get(key), bool):
+                has_more = page[key]
+                break
+        if has_more is None and isinstance(page.get("next_offset"), int):
+            has_more = page["next_offset"] > offset
+    return {"uri": uri, "abstract": abstract, "overview": overview, "content": text, "offset": offset, "limit": limit, "hasMore": has_more}
 
 @router.post("/search")
 async def search(body: SearchRequest, ctx: Ctx):
