@@ -1,4 +1,4 @@
-import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Text, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { spotlight } from '@mantine/spotlight';
@@ -9,8 +9,10 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { getHealth, logout } from '../api/auth';
 import { queryKeys } from '../api/queryKeys';
 import { markSignedOut } from '../auth/session';
+import { BrandMark } from '../components/BrandMark';
 import { SearchSpotlight } from '../components/SearchSpotlight';
 import { updateUiPreferences, useUiPreferences } from '../lib/uiPreferences';
+import classes from './AppLayout.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
 import { NAV_ITEMS } from './navItems';
 
@@ -52,36 +54,36 @@ export function AppLayout() {
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
-            <Title order={3} fw={700}>
-              Astra
-            </Title>
+            <BrandMark size={24} />
+            <span className={classes.brandTitle}>Astra</span>
           </Group>
           <Group gap="xs" wrap="nowrap">
             <Tooltip label={prefs.sidebarDesktopCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
               <ActionIcon
                 visibleFrom="sm"
-                variant="default"
-                size="lg"
                 aria-label={prefs.sidebarDesktopCollapsed ? 'Show sidebar' : 'Hide sidebar'}
                 onClick={() => updateUiPreferences({ sidebarDesktopCollapsed: !prefs.sidebarDesktopCollapsed })}
               >
-                {prefs.sidebarDesktopCollapsed ? <IconLayoutSidebarLeftExpand size={18} /> : <IconLayoutSidebarLeftCollapse size={18} />}
+                {prefs.sidebarDesktopCollapsed ? (
+                  <IconLayoutSidebarLeftExpand size={18} stroke={1.5} />
+                ) : (
+                  <IconLayoutSidebarLeftCollapse size={18} stroke={1.5} />
+                )}
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="Search (Ctrl/Cmd+K)">
-              <ActionIcon variant="default" size="lg" aria-label="Search" onClick={() => spotlight.open()}>
-                <IconSearch size={18} stroke={1.5} />
-              </ActionIcon>
-            </Tooltip>
+            <button
+              type="button"
+              className={classes.searchTrigger}
+              onClick={() => spotlight.open()}
+              aria-label="Search (Ctrl/Cmd+K)"
+            >
+              <IconSearch size={15} stroke={1.5} />
+              <span>Search</span>
+              <span className={classes.searchShortcut}>⌘K</span>
+            </button>
             <ColorSchemeToggle />
             <Tooltip label="Log out">
-              <ActionIcon
-                variant="default"
-                size="lg"
-                aria-label="Log out"
-                loading={logoutMutation.isPending}
-                onClick={() => logoutMutation.mutate()}
-              >
+              <ActionIcon aria-label="Log out" loading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()}>
                 <IconLogout size={18} stroke={1.5} />
               </ActionIcon>
             </Tooltip>
@@ -103,14 +105,24 @@ export function AppLayout() {
                 active={active}
                 aria-current={active ? 'page' : undefined}
                 onClick={close}
+                className={classes.navItem}
+                classNames={{ root: active ? classes.navItemActive : undefined }}
               />
             );
           })}
         </AppShell.Section>
-        <AppShell.Section px="sm" pb="xs">
-          <Text size="xs" c="dimmed">
-            {health.data ? `v${health.data.version}` : ' '}
-          </Text>
+        <AppShell.Section p="xs">
+          <div className={classes.statusCard}>
+            <div className={classes.statusLabel}>
+              {health.data ? (health.data.state_db.ok ? 'agent online' : 'agent offline') : ' '}
+            </div>
+            <div className={classes.statusRow}>
+              <span
+                className={`${classes.statusDot} ${health.data?.state_db.ok ? classes.statusDotOk : classes.statusDotDown}`}
+              />
+              <span className={classes.statusMeta}>{health.data ? `v${health.data.version}` : ' '}</span>
+            </div>
+          </div>
         </AppShell.Section>
       </AppShell.Navbar>
 

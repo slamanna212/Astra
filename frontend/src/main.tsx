@@ -1,3 +1,10 @@
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-sans/700.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '@fontsource/ibm-plex-mono/600.css';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/spotlight/styles.css';
@@ -5,6 +12,7 @@ import '@mantine/dates/styles.css';
 import '@mantine/charts/styles.css';
 import '@mantine/code-highlight/styles.css';
 import '@mantine/dropzone/styles.css';
+import './styles/tokens.css';
 
 import { MantineProvider } from '@mantine/core';
 import { ModalsProvider } from '@mantine/modals';

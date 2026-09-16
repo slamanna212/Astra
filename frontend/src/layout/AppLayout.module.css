@@ -1,0 +1,110 @@
+.brandTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--astra-text);
+}
+
+.searchTrigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--astra-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
+  background: var(--astra-surface);
+  color: var(--astra-text-dim);
+  font-size: 13px;
+  width: 220px;
+  cursor: pointer;
+  transition: border-color var(--astra-transition);
+}
+
+.searchTrigger:hover {
+  border-color: var(--astra-border-strong);
+}
+
+.searchShortcut {
+  margin-left: auto;
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  border: 1px solid var(--astra-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.navItem {
+  padding: 9px 10px;
+  border-radius: var(--astra-radius);
+  font-size: 14px;
+  color: var(--astra-text-dim);
+  transition: background-color var(--astra-transition), color var(--astra-transition);
+}
+
+.navItem:hover {
+  background: var(--astra-hover);
+}
+
+.navItemActive,
+.navItemActive:hover {
+  background: var(--astra-primary-soft);
+  color: var(--astra-primary-text);
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 var(--astra-primary);
+}
+
+.statusCard {
+  padding: 10px;
+  border-radius: var(--astra-radius);
+  border: 1px solid var(--astra-divider);
+  background-color: var(--astra-bg);
+  background-image:
+    radial-gradient(1px 1px at 18px 14px, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 88px 30px, rgba(255, 255, 255, 0.28), transparent),
+    radial-gradient(1.4px 1.4px at 148px 16px, var(--astra-primary), transparent),
+    radial-gradient(1px 1px at 54px 46px, rgba(255, 255, 255, 0.22), transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:root[data-mantine-color-scheme='light'] .statusCard {
+  background-image:
+    radial-gradient(1px 1px at 18px 14px, rgba(16, 20, 24, 0.18), transparent),
+    radial-gradient(1px 1px at 88px 30px, rgba(16, 20, 24, 0.12), transparent),
+    radial-gradient(1.4px 1.4px at 148px 16px, var(--astra-primary), transparent),
+    radial-gradient(1px 1px at 54px 46px, rgba(16, 20, 24, 0.1), transparent);
+}
+
+.statusLabel {
+  font-size: 12px;
+  color: var(--astra-text-dim);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.statusDotOk {
+  background: var(--astra-ok);
+  box-shadow: 0 0 8px var(--astra-ok);
+}
+
+.statusDotDown {
+  background: var(--astra-danger);
+  box-shadow: 0 0 8px var(--astra-danger);
+}
+
+.statusMeta {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-text-dim);
+}

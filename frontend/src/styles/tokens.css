@@ -1,0 +1,177 @@
+/**
+ * Astra — Graphite tokens.
+ * Import once, after @mantine/core/styles.css:
+ *   import '@mantine/core/styles.css';
+ *   import './styles/tokens.css';
+ *
+ * Every value here also exists in theme.ts. Use the Mantine theme from TS/JSX;
+ * use these vars from CSS Modules. Never hardcode a hex in a component.
+ */
+
+:root {
+  /* ---- brand ---- */
+  --astra-teal-0:  #E8F8FA;
+  --astra-teal-3:  #71D3DF;
+  --astra-teal-6:  #2BB6C4;  /* primary, dark mode */
+  --astra-teal-7:  #1C9FAC;  /* hover on filled */
+  --astra-teal-8:  #0F7885;  /* primary, light mode */
+  --astra-teal-9:  #005E6A;
+
+  --astra-sand-3:  #F2C879;  /* accent, dark mode */
+  --astra-sand-6:  #D89B2C;
+  --astra-sand-8:  #8F6112;  /* accent text, light mode */
+
+  /* ---- neutral graphite ---- */
+  --astra-graphite-0: #E7EAEE;
+  --astra-graphite-1: #C6CCD4;
+  --astra-graphite-2: #98A1AB;
+  --astra-graphite-3: #6C747E;
+  --astra-graphite-4: #4A5159;
+  --astra-graphite-5: #343A41;
+  --astra-graphite-6: #272C34;
+  --astra-graphite-7: #171B20;
+  --astra-graphite-8: #13161A;
+  --astra-graphite-9: #0E1013;
+
+  /* ---- status (hue-fixed, same meaning in both schemes) ---- */
+  --astra-status-ok-dark:      #3FA987;
+  --astra-status-ok-light:     #257A5E;
+  --astra-status-warn-dark:    #F2C879;
+  --astra-status-warn-light:   #8F6112;
+  --astra-status-danger-dark:  #E2707F;
+  --astra-status-danger-light: #B33448;
+  --astra-status-info-dark:    #2BB6C4;
+  --astra-status-info-light:   #0F7885;
+
+  /* ---- geometry ---- */
+  --astra-radius: 6px;
+  --astra-radius-tight: 3px;   /* inline code, source tags */
+  --astra-radius-pill: 999px;  /* status badges, filter chips */
+
+  --astra-header-h: 56px;
+  --astra-navbar-w: 240px;
+  --astra-sessionlist-w: 352px;
+  --astra-session-row-h: 64px;
+  --astra-panel-header-h: 48px;
+  --astra-control-h: 32px;
+  --astra-input-h: 34px;
+
+  --astra-font: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --astra-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* label style shared by table headers, group headers, section eyebrows */
+  --astra-label-size: 10.5px;
+  --astra-label-tracking: 0.1em;
+
+  --astra-transition: 120ms cubic-bezier(.2,.6,.3,1);
+}
+
+/* ---- semantic roles: dark ---- */
+:root[data-mantine-color-scheme='dark'] {
+  --astra-bg:            var(--astra-graphite-9);
+  --astra-bg-chrome:     var(--astra-graphite-8);
+  --astra-surface:       var(--astra-graphite-7);
+  --astra-surface-sunk:  #15191E;             /* code blocks, tool-call bodies, zebra rows */
+  --astra-border:        var(--astra-graphite-6);
+  --astra-border-strong: var(--astra-graphite-4);
+  --astra-divider:       #1F242B;
+
+  --astra-text:          var(--astra-graphite-0);
+  --astra-text-body:     var(--astra-graphite-1);
+  --astra-text-dim:      var(--astra-graphite-2);
+  --astra-text-disabled: var(--astra-graphite-3);
+
+  --astra-primary:       var(--astra-teal-6);
+  --astra-primary-hover: var(--astra-teal-7);
+  --astra-primary-ink:   #04212A;             /* text on a filled primary */
+  --astra-primary-soft:  rgba(43,182,196,.15);
+  --astra-primary-text:  #7FD3DE;             /* teal text on dark surfaces */
+
+  --astra-accent:        var(--astra-sand-3);
+  --astra-accent-soft:   rgba(242,200,121,.15);
+
+  --astra-ok:            var(--astra-status-ok-dark);
+  --astra-ok-soft:       rgba(63,169,135,.16);
+  --astra-warn:          var(--astra-status-warn-dark);
+  --astra-warn-soft:     rgba(242,200,121,.15);
+  --astra-danger:        var(--astra-status-danger-dark);
+  --astra-danger-soft:   rgba(226,112,127,.16);
+
+  --astra-selected:      var(--astra-primary-soft);
+  --astra-hover:         rgba(255,255,255,.04);
+  --astra-focus-ring:    0 0 0 3px rgba(43,182,196,.25);
+  --astra-code-bg:       #15191E;
+  --astra-overlay:       rgba(6,8,10,.7);
+}
+
+/* ---- semantic roles: light ---- */
+:root[data-mantine-color-scheme='light'] {
+  --astra-bg:            #F4F5F6;
+  --astra-bg-chrome:     #FFFFFF;
+  --astra-surface:       #FFFFFF;
+  --astra-surface-sunk:  #F7F8F9;
+  --astra-border:        #E2E4E8;
+  --astra-border-strong: #C8CCD2;
+  --astra-divider:       #EDEEF1;
+
+  --astra-text:          #101418;
+  --astra-text-body:     #2B3038;
+  --astra-text-dim:      #5F656C;
+  --astra-text-disabled: #8C929A;
+
+  --astra-primary:       var(--astra-teal-8);
+  --astra-primary-hover: #0C656F;
+  --astra-primary-ink:   #FFFFFF;
+  --astra-primary-soft:  #E0F3F5;
+  --astra-primary-text:  #0B5F6A;
+
+  --astra-accent:        var(--astra-sand-8);
+  --astra-accent-soft:   #FBF0DA;
+
+  --astra-ok:            var(--astra-status-ok-light);
+  --astra-ok-soft:       #E4F6EC;
+  --astra-warn:          var(--astra-status-warn-light);
+  --astra-warn-soft:     #FBF0DA;
+  --astra-danger:        var(--astra-status-danger-light);
+  --astra-danger-soft:   #FCEAED;
+
+  --astra-selected:      var(--astra-primary-soft);
+  --astra-hover:         rgba(16,20,24,.035);
+  --astra-focus-ring:    0 0 0 3px rgba(15,120,133,.2);
+  --astra-code-bg:       #F1F3F5;
+  --astra-overlay:       rgba(16,20,24,.45);
+}
+
+/* ---- base ---- */
+body {
+  background: var(--astra-bg);
+  color: var(--astra-text-body);
+  font-family: var(--astra-font);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+a { color: var(--astra-primary-text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* The one recurring label treatment: table headers, group headers, eyebrows. */
+.astraLabel {
+  font-family: var(--astra-font-mono);
+  font-size: var(--astra-label-size);
+  font-weight: 500;
+  letter-spacing: var(--astra-label-tracking);
+  text-transform: uppercase;
+  color: var(--astra-text-dim);
+}
+
+/* Selected row in any list: tinted fill + 2px primary rail. Never a border box. */
+.astraSelectedRow {
+  background: var(--astra-selected);
+  box-shadow: inset 2px 0 0 var(--astra-primary);
+}
+
+/* Scrollbars — thin, neutral, always present in scrolling panes. */
+* { scrollbar-width: thin; scrollbar-color: var(--astra-graphite-5) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--astra-graphite-5); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
