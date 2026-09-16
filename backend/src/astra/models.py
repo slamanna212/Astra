@@ -535,3 +535,11 @@ class SkillWriteRequest(BaseModel):
 
 class SkillToggleRequest(BaseModel):
     enabled: bool
+
+
+class MemoryFilesResponse(BaseModel):
+    files: dict[str, str]
+
+
+class MemoryWriteRequest(BaseModel):
+    content: str = Field(max_length=1_000_000)

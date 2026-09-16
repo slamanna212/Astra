@@ -23,6 +23,7 @@ from astra.routes import files as files_routes
 from astra.routes import health as health_routes
 from astra.routes import insights as insights_routes
 from astra.routes import logs as logs_routes
+from astra.routes import memory as memory_routes
 from astra.routes import messages as message_routes
 from astra.routes import search as search_routes
 from astra.routes import sessions as session_routes
@@ -76,6 +77,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(insights_routes.router)
     app.include_router(files_routes.router)
     app.include_router(logs_routes.router)
+    app.include_router(memory_routes.router)
     app.include_router(cron_routes.router)
     app.include_router(skills_routes.router)
 
