@@ -23,7 +23,7 @@ Legend:
 - [x] Blocking clarify questions with choice and free-text answers
 - [x] Subagent activity events, transcript cards, and links to child sessions
 - [x] Server-side running turn survives navigation and supports multiple/reconnecting subscribers
-- [ ] Persist and restore composer drafts in browser storage
+- [x] Persist and restore composer drafts in browser storage
 - [x] Reconnect banner, extended 1.5–20 second backoff ladder, canonical-history polling, replay cursors, and session-scoped local partial-response recovery
 - [ ] **Partial** — token count and estimated cost are shown per session, but not per message and there is no context-fill ring
 - [ ] Auto-compaction command/status UI (`/compact`)
@@ -36,7 +36,7 @@ Legend:
 - [ ] Transparent chronological stream/worklog mode
 - [x] Live tokens-per-second display
 
-Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), and [`routes/chat.py`](backend/src/astra/routes/chat.py).
+Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), and [`routes/chat.py`](backend/src/astra/routes/chat.py).
 
 ## Conversation controls and rendering
 

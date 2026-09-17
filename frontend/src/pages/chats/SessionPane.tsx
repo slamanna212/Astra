@@ -24,6 +24,7 @@ import {
   loadChatRecovery,
   saveChatRecovery,
 } from '../../lib/chatRecovery';
+import { saveComposerDraft, useComposerDraft } from '../../lib/composerDrafts';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 
@@ -43,7 +44,7 @@ export default function SessionPane() {
   const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
   const [liveTps, setLiveTps] = useState<number | null>(null);
   const [turnTps, setTurnTps] = useState<{ tps: number; outputTokens: number } | null>(null);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useComposerDraft(sessionId);
   const [exportingFormat, setExportingFormat] = useState<ConversationExportFormat | null>(null);
   const [model, setModel] = useState<string | null | undefined>(undefined);
   const [provider, setProvider] = useState<string | null | undefined>(undefined);
@@ -81,6 +82,7 @@ export default function SessionPane() {
   const removeSession = useMutation({
     mutationFn: () => deleteSession(sessionId),
     onSuccess: () => {
+      saveComposerDraft(sessionId, '');
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
       navigate('/chats', { replace: true });
     },
@@ -290,7 +292,7 @@ export default function SessionPane() {
       if (runningRef.current) persist();
       if (raf.current !== null) cancelAnimationFrame(raf.current);
     };
-  }, [sessionId, queryClient]);
+  }, [sessionId, queryClient, setDraft]);
 
   const start = async (text: string) => {
     clearChatRecovery(sessionId);
