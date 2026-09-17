@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChildSession, SessionSummary } from '../../api/types';
 import { jsonResponse, render } from '../../test/render';
@@ -85,15 +86,22 @@ describe('SessionList', () => {
   it('fetches the next page when the window nears the end of loaded rows', async () => {
     const page1 = Array.from({ length: 5 }, (_, i) => makeSession(i));
     const page2 = Array.from({ length: 5 }, (_, i) => makeSession(i + 5));
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ items: page1, next_cursor: 'c1' }))
-      .mockResolvedValueOnce(jsonResponse({ items: page2, next_cursor: null }));
+    let listCalls = 0;
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/sessions/count')) return jsonResponse({ count: 0 });
+      listCalls += 1;
+      return listCalls === 1
+        ? jsonResponse({ items: page1, next_cursor: 'c1' })
+        : jsonResponse({ items: page2, next_cursor: null });
+    });
 
     render(<SessionList />, { route: '/chats' });
 
     await waitFor(() => expect(screen.getAllByTestId('session-row')).toHaveLength(10));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(String(fetchMock.mock.calls[1]![0])).toContain('cursor=c1');
+    expect(listCalls).toBe(2);
+    const listRequestUrls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes('/sessions/count'));
+    expect(listRequestUrls[1]).toContain('cursor=c1');
   });
 
   it('shows an empty state', async () => {
@@ -120,5 +128,25 @@ describe('SessionList', () => {
     expect(childRows[0]).toHaveAttribute('href', '/chats/child-a');
     expect(childRows[0]).toHaveStyle({ height: `${SESSION_CHILD_ROW_HEIGHT}px` });
     expect(screen.getByText('Sub-agent child-a')).toBeInTheDocument();
+  });
+
+  it('shows an archived-count toggle that switches the list to archived sessions', async () => {
+    const active = [makeSession(0)];
+    const archived = [makeSession(1, { archived: true })];
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/sessions/count')) return jsonResponse({ count: 3 });
+      if (url.includes('status=archived')) return jsonResponse({ items: archived, next_cursor: null });
+      return jsonResponse({ items: active, next_cursor: null });
+    });
+
+    const user = userEvent.setup();
+    render(<SessionList />, { route: '/chats' });
+
+    const toggle = await screen.findByText('Show 3 archived');
+    await user.click(toggle);
+
+    await screen.findByText('Back to active');
+    expect(String(fetchMock.mock.calls.at(-1)![0])).toContain('status=archived');
   });
 });

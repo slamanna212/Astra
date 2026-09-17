@@ -1,3 +1,18 @@
+.archivedToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--astra-text-dim);
+  transition: color var(--astra-transition);
+
+  @mixin hover {
+    color: var(--astra-text-body);
+  }
+}
+
 .scroller {
   flex: 1;
   min-height: 0;

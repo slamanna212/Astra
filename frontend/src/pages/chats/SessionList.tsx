@@ -1,13 +1,13 @@
-import { Button, Center, Loader, MultiSelect, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core';
-import { IconArchive, IconEyeOff, IconPlus, IconStarFilled } from '@tabler/icons-react';
-import { useInfiniteQuery, useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
+import { Button, Center, Group, Loader, MultiSelect, Stack, Text, UnstyledButton } from '@mantine/core';
+import { IconArchive, IconArrowLeft, IconEyeOff, IconPlus, IconStarFilled } from '@tabler/icons-react';
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { getChildSessions } from '../../api/messages';
 import { queryKeys } from '../../api/queryKeys';
-import { createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
-import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
+import { countArchivedSessions, createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
+import type { ChildSession, SessionSummary } from '../../api/types';
 import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
 import { formatCompactAge, formatCount, formatDateTime, sessionTitle } from '../../lib/format';
@@ -20,13 +20,6 @@ export const SESSION_CHILD_ROW_HEIGHT = 30;
 const LOAD_MORE_THRESHOLD = 10;
 
 const SOURCE_OPTIONS = KNOWN_SOURCES.map((s) => ({ value: s, label: s }));
-
-const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
-  { value: 'hidden', label: 'Hidden' },
-  { value: 'all', label: 'All' },
-];
 
 const SessionRow = memo(function SessionRow({ session, active, now }: { session: SessionSummary; active: boolean; now: number }) {
   const lastActivity = session.last_activity_at ?? session.started_at;
@@ -124,7 +117,8 @@ function rowKey(row: Row | undefined, index: number): string {
 
 export function SessionList({ selectedId }: { selectedId?: string }) {
   const [sources, setSources] = useState<string[]>([]);
-  const [status, setStatus] = useState<SessionStatus>('active');
+  const [showArchived, setShowArchived] = useState(false);
+  const status = showArchived ? 'archived' : 'active';
   const now = useNow();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -137,6 +131,14 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   });
 
   const filters = useMemo(() => ({ source: sources.length ? sources : null, status }), [sources, status]);
+
+  // Shown as "Show N archived" above the list, and kept fresh by the same `sessions.all`
+  // invalidation the list itself relies on after an archive/unarchive.
+  const archivedCountQuery = useQuery({
+    queryKey: queryKeys.sessions.count(filters.source),
+    queryFn: ({ signal }) => countArchivedSessions(filters.source, signal),
+  });
+  const archivedCount = archivedCountQuery.data ?? 0;
 
   const query = useInfiniteQuery({
     queryKey: queryKeys.sessions.list(filters),
@@ -218,24 +220,33 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   return (
     <>
       <Stack gap={8} p="md" style={{ borderBottom: '1px solid var(--astra-divider)' }}>
-        <Button fullWidth leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
-          New chat
-        </Button>
-        <MultiSelect
-          aria-label="Filter by conversation type"
-          placeholder="All types"
-          data={SOURCE_OPTIONS}
-          value={sources}
-          onChange={setSources}
-          clearable
-        />
-        <SegmentedControl
-          size="xs"
-          fullWidth
-          data={STATUS_OPTIONS}
-          value={status}
-          onChange={(value) => setStatus(value as SessionStatus)}
-        />
+        <Group gap={8} wrap="nowrap">
+          <MultiSelect
+            aria-label="Filter by conversation type"
+            placeholder="All types"
+            data={SOURCE_OPTIONS}
+            value={sources}
+            onChange={setSources}
+            clearable
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <Button leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
+            New chat
+          </Button>
+        </Group>
+        {showArchived ? (
+          <UnstyledButton className={classes.archivedToggle} onClick={() => setShowArchived(false)}>
+            <IconArrowLeft size={12} aria-hidden />
+            Back to active
+          </UnstyledButton>
+        ) : (
+          archivedCount > 0 && (
+            <UnstyledButton className={classes.archivedToggle} onClick={() => setShowArchived(true)}>
+              <IconArchive size={12} aria-hidden />
+              Show {formatCount(archivedCount)} archived
+            </UnstyledButton>
+          )
+        )}
       </Stack>
 
       {query.isPending ? (
