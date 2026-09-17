@@ -48,9 +48,9 @@ Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [
 - [x] In-progress text, reasoning, and tool/subagent activity recover from bounded browser storage; canonical completed messages remain authoritative
 - [x] Render Markdown and GitHub-flavored tables
 - [x] Syntax-highlight fenced code blocks
-- [ ] Code-block copy button with “Copied” feedback
-- [ ] Mermaid diagram rendering
-- [ ] KaTeX math rendering
+- [x] Code-block copy button with “Copied” feedback
+- [x] Mermaid diagram rendering
+- [x] KaTeX math rendering
 - [ ] Render Markdown image syntax and Hermes `MEDIA:` tokens inline
 - [x] Safe rendering that does not execute raw response HTML
 - [x] Collapsible reasoning/thinking blocks

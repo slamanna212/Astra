@@ -36,3 +36,21 @@
 .root :global(img) {
   max-width: 100%;
 }
+
+.root :global(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 2px;
+}
+
+.mermaid {
+  overflow-x: auto;
+  padding: var(--mantine-spacing-sm);
+  text-align: center;
+}
+
+.mermaid :global(svg) {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+}

@@ -1,12 +1,16 @@
 import { Anchor, Code, Table, Text } from '@mantine/core';
 import { isValidElement, lazy, Suspense, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import 'katex/dist/katex.min.css';
 import classes from './Markdown.module.css';
 
 // highlight.js is a genuinely heavy dependency (see CodePreview.tsx) — only fetched once a fenced
 // code block actually renders, and only when a caller opts in via `codeHighlight`.
 const CodePreview = lazy(() => import('./CodePreview'));
+const MermaidDiagram = lazy(() => import('./MermaidDiagram'));
 
 function extractCodeBlock(children: ReactNode): { code: string; language: string | null } {
   const child = Array.isArray(children) ? children[0] : children;
@@ -18,13 +22,29 @@ function extractCodeBlock(children: ReactNode): { code: string; language: string
   return { code: String(children ?? '').replace(/\n$/, ''), language: null };
 }
 
-function HighlightedPre({ children }: { children?: ReactNode }) {
+function MermaidBlock({ code }: { code: string }) {
+  return (
+    <Suspense fallback={<Code block>{code}</Code>}>
+      <MermaidDiagram definition={code} />
+    </Suspense>
+  );
+}
+
+function RichPre({ children }: { children?: ReactNode }) {
   const { code, language } = extractCodeBlock(children);
+  if (language?.toLowerCase() === 'mermaid') {
+    return <MermaidBlock code={code} />;
+  }
   return (
     <Suspense fallback={<Code block>{code}</Code>}>
       <CodePreview code={code} language={language} />
     </Suspense>
   );
+}
+
+function MermaidPre({ children }: { children?: ReactNode }) {
+  const { code, language } = extractCodeBlock(children);
+  return language?.toLowerCase() === 'mermaid' ? <MermaidBlock code={code} /> : <pre>{children}</pre>;
 }
 
 // Deliberately no rehype-raw: rendering raw HTML embedded in markdown from a file/tool source is
@@ -63,10 +83,14 @@ export function Markdown({
    * `<pre>`. Opt-in so most callers (file/memory previews) keep the lighter default. */
   codeHighlight?: boolean;
 }) {
-  const components = codeHighlight ? { ...baseComponents, pre: HighlightedPre } : baseComponents;
+  const components = { ...baseComponents, pre: codeHighlight ? RichPre : MermaidPre };
   return (
     <div className={classes.root}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={components}
+      >
         {children}
       </ReactMarkdown>
     </div>

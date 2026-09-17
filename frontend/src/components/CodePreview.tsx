@@ -70,7 +70,14 @@ const adapter = createHighlightJsAdapter(hljs);
 export default function CodePreview({ code, language }: { code: string; language: string | null }) {
   return (
     <CodeHighlightAdapterProvider adapter={adapter}>
-      <CodeHighlight code={code} language={language ?? 'plaintext'} withCopyButton copyLabel="Copy code" radius="sm" />
+      <CodeHighlight
+        code={code}
+        language={language ?? 'plaintext'}
+        withCopyButton
+        copyLabel="Copy"
+        copiedLabel="Copied"
+        radius="sm"
+      />
     </CodeHighlightAdapterProvider>
   );
 }
