@@ -18,9 +18,6 @@ Legend:
 - [x] Per-conversation model selection in the composer
 - [x] Provider-grouped, searchable model picker
 - [x] Use models/providers discovered from the active Hermes configuration
-- [ ] Configure custom/self-hosted providers (Ollama, LM Studio, vLLM) in the UI
-- [ ] Live `/v1/models` discovery for custom endpoints
-- [ ] Free-form OpenRouter model entry/autocomplete
 - [x] Live tool progress events and inline tool-call cards
 - [x] Dangerous-command approval prompt: once, session, always, or deny
 - [x] Blocking clarify questions with choice and free-text answers
@@ -75,8 +72,10 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [x] Archive/unarchive sessions
 - [x] Hide/unhide sessions
 - [ ] Duplicate sessions
-- [ ] Import/export full session JSON
-- [ ] Download a Markdown transcript
+- [x] Export full session JSON
+- [ ] Import full session JSON
+- [x] Download a Markdown transcript
+- [x] Download a PDF transcript
 - [ ] Session tags and tag filtering
 - [ ] Session projects/folders and project filtering
 - [ ] Today / Yesterday / Earlier collapsible date groups
@@ -94,7 +93,7 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [ ] Cross-channel handoff dock and transcript-summary card
 - [ ] Gateway route/failover metadata and model-switch warnings
 
-Local evidence: [`SessionList.tsx`](frontend/src/pages/chats/SessionList.tsx), [`SearchSpotlight.tsx`](frontend/src/components/SearchSpotlight.tsx), [`sessions.py`](backend/src/astra/sessions.py), [`search.py`](backend/src/astra/search.py), and [`messages.py`](backend/src/astra/messages.py).
+Local evidence: [`SessionList.tsx`](frontend/src/pages/chats/SessionList.tsx), [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`conversationExport.ts`](frontend/src/lib/conversationExport.ts), [`SearchSpotlight.tsx`](frontend/src/components/SearchSpotlight.tsx), [`sessions.py`](backend/src/astra/sessions.py), [`search.py`](backend/src/astra/search.py), and [`messages.py`](backend/src/astra/messages.py).
 
 ## Workspace and files
 

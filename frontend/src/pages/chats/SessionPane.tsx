@@ -1,5 +1,6 @@
-import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Paper, Stack, Text, TextInput, Tooltip } from '@mantine/core';
-import { IconArrowLeft, IconRefresh } from '@tabler/icons-react';
+import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Menu, Paper, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileText, IconRefresh } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -8,8 +9,15 @@ import { uploadFile } from '../../api/files';
 import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { deleteSession, getSession, updateSession } from '../../api/sessions';
+import { listAllMessages } from '../../api/messages';
 import { SourceBadge } from '../../components/SourceBadge';
 import { formatCost, formatCount, formatTokens, formatTps, sessionTitle } from '../../lib/format';
+import {
+  conversationExportBlob,
+  createConversationExport,
+  exportFilename,
+  type ConversationExportFormat,
+} from '../../lib/conversationExport';
 import {
   CHAT_RECONNECT_DELAYS_MS,
   clearChatRecovery,
@@ -36,6 +44,7 @@ export default function SessionPane() {
   const [liveTps, setLiveTps] = useState<number | null>(null);
   const [turnTps, setTurnTps] = useState<{ tps: number; outputTokens: number } | null>(null);
   const [draft, setDraft] = useState('');
+  const [exportingFormat, setExportingFormat] = useState<ConversationExportFormat | null>(null);
   const [model, setModel] = useState<string | null | undefined>(undefined);
   const [provider, setProvider] = useState<string | null | undefined>(undefined);
   const [activity, setActivity] = useState<string[]>([]);
@@ -296,6 +305,30 @@ export default function SessionPane() {
     setRunning(true);
   };
 
+  const downloadConversation = async (format: ConversationExportFormat) => {
+    if (!query.data || exportingFormat) return;
+    setExportingFormat(format);
+    try {
+      const messages = await listAllMessages(sessionId);
+      const data = createConversationExport(query.data, messages);
+      const blob = conversationExportBlob(data, format);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = exportFilename(query.data, format === 'markdown' ? 'md' : format);
+      anchor.click();
+      URL.revokeObjectURL(url);
+      notifications.show({ color: 'green', message: `Conversation downloaded as ${format === 'markdown' ? 'Markdown' : format.toUpperCase()}` });
+    } catch (error) {
+      notifications.show({
+        color: 'red',
+        message: error instanceof Error ? `Could not download conversation: ${error.message}` : 'Could not download conversation',
+      });
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   const back = (
     <Button
       component={Link}
@@ -358,6 +391,31 @@ export default function SessionPane() {
             <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ pinned: !s.pinned })}>{s.pinned ? 'Unpin' : 'Pin'}</Button>
             <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ archived: !s.archived })}>{s.archived ? 'Unarchive' : 'Archive'}</Button>
             <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ hidden: !s.hidden })}>{s.hidden ? 'Unhide' : 'Hide'}</Button>
+            <Menu position="bottom-end" shadow="md" width={190}>
+              <Menu.Target>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  leftSection={<IconDownload size={13} />}
+                  rightSection={<IconChevronDown size={11} />}
+                  loading={exportingFormat !== null}
+                >
+                  Download
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>Download conversation</Menu.Label>
+                <Menu.Item leftSection={<IconFileCode size={15} />} onClick={() => void downloadConversation('json')}>
+                  JSON
+                </Menu.Item>
+                <Menu.Item leftSection={<IconFileText size={15} />} onClick={() => void downloadConversation('markdown')}>
+                  Markdown
+                </Menu.Item>
+                <Menu.Item leftSection={<IconFileText size={15} />} onClick={() => void downloadConversation('pdf')}>
+                  PDF
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
             <Button size="compact-xs" color="red" variant="subtle" disabled={running} loading={removeSession.isPending} onClick={() => {
               if (window.confirm('Delete this conversation and its messages? This cannot be undone.')) removeSession.mutate();
             }}>Delete</Button>
