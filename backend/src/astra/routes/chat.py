@@ -13,6 +13,7 @@ from astra.deps import Ctx
 from astra.models import (
     ChatAnswerRequest,
     ChatApprovalRequest,
+    ChatModelOption,
     ChatOptions,
     ChatSendRequest,
     ChatState,
@@ -44,21 +45,43 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
         row = conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone()
         if row is None:
             return None
-        models = [r[0] for r in conn.execute(
-            "SELECT DISTINCT model FROM sessions WHERE model IS NOT NULL AND model != '' ORDER BY last_activity_at DESC LIMIT 30"
-        )]
+        model_rows = conn.execute(
+            "SELECT DISTINCT model, billing_provider FROM sessions"
+            " WHERE model IS NOT NULL AND model != ''"
+            " ORDER BY last_activity_at DESC LIMIT 30"
+        ).fetchall()
         providers = [r[0] for r in conn.execute(
             "SELECT DISTINCT billing_provider FROM sessions WHERE billing_provider IS NOT NULL AND billing_provider != '' ORDER BY last_activity_at DESC LIMIT 20"
         )]
-        return models, providers
+        return model_rows, providers
 
     values = await ctx.db.run(recent_values)
     if values is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    models, providers = values
+    model_rows, providers = values
+
+    # `model` and `billing_provider` are independent columns; pairing distinct rows recovers the
+    # actual provider a model was billed under last, rather than guessing from the model name.
+    model_names: list[str] = []
+    provider_for: dict[str, str | None] = {}
+    for model_name, billing_provider in model_rows:
+        if model_name not in provider_for:
+            model_names.append(model_name)
+            provider_for[model_name] = billing_provider or None
+
     aliases = model_config.get("aliases")
     if isinstance(aliases, dict):
-        models.extend(str(alias) for alias in aliases if isinstance(alias, str) and alias)
+        for alias_name, alias_target in aliases.items():
+            if not isinstance(alias_name, str) or not alias_name:
+                continue
+            if alias_name not in provider_for:
+                model_names.append(alias_name)
+            # Alias values are "<provider>/<model>" (the model id itself may contain "/").
+            if isinstance(alias_target, str) and "/" in alias_target:
+                provider_for[alias_name] = alias_target.split("/", 1)[0]
+            else:
+                provider_for.setdefault(alias_name, None)
+
     fallbacks = config.get("fallback_providers")
     if isinstance(fallbacks, list):
         for fallback in fallbacks:
@@ -67,19 +90,30 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
             fallback_model = fallback.get("model")
             fallback_provider = fallback.get("provider")
             if isinstance(fallback_model, str) and fallback_model:
-                models.append(fallback_model)
+                if fallback_model not in provider_for:
+                    model_names.append(fallback_model)
+                if isinstance(fallback_provider, str) and fallback_provider:
+                    provider_for[fallback_model] = fallback_provider
+                else:
+                    provider_for.setdefault(fallback_model, None)
             if isinstance(fallback_provider, str) and fallback_provider:
                 providers.append(fallback_provider)
-    if default_model and default_model not in models:
-        models.insert(0, default_model)
+
+    if default_model:
+        if default_model not in provider_for:
+            model_names.insert(0, default_model)
+            provider_for[default_model] = default_provider
+        elif default_provider:
+            provider_for[default_model] = default_provider
     if default_provider and default_provider not in providers:
         providers.insert(0, default_provider)
-    models = list(dict.fromkeys(models))
+    # Every provider a model actually resolved to must have a group to render into.
+    providers.extend(p for p in provider_for.values() if p)
     providers = list(dict.fromkeys(providers))
     return ChatOptions(
         default_model=default_model,
         default_provider=default_provider,
-        models=models,
+        models=[ChatModelOption(name=name, provider=provider_for.get(name)) for name in model_names],
         providers=providers,
     )
 

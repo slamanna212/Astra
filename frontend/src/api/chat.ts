@@ -10,10 +10,15 @@ export type ChatStreamEvent =
   | { type: 'subagent' | 'status'; [key: string]: unknown }
   | { type: 'done' | 'cancel' | 'error'; message?: string; late_steer?: string | null; tps?: number; output_tokens?: number };
 
+export interface ChatModelOption {
+  name: string;
+  provider: string | null;
+}
+
 export interface ChatOptions {
   default_model: string | null;
   default_provider: string | null;
-  models: string[];
+  models: ChatModelOption[];
   providers: string[];
 }
 

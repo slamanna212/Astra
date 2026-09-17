@@ -299,13 +299,15 @@ export default function SessionPane() {
         onSteer={(text) => steerChat(sessionId, text)}
         model={selectedModel}
         provider={selectedProvider}
-        models={options.data?.models ?? (s.model ? [s.model] : [])}
+        models={options.data?.models ?? (s.model ? [{ name: s.model, provider: null }] : [])}
         providers={options.data?.providers ?? []}
+        defaultModel={options.data?.default_model ?? null}
         onModelChange={setModel}
         onProviderChange={setProvider}
         draft={draft}
         onDraftChange={setDraft}
         onAttach={async (file) => (await uploadFile({ directory: '', file })).path}
+        liveTps={liveTps}
       />
     </Box>
   );

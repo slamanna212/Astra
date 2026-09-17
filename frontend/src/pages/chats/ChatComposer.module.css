@@ -1,0 +1,247 @@
+.wrapper {
+  padding: 0 12px 14px;
+}
+
+.card {
+  max-width: var(--astra-chat-content-w);
+  margin: 0 auto;
+  background: var(--astra-surface);
+  border: 1px solid var(--astra-border-strong);
+  border-radius: 10px;
+  padding: 12px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+
+.textarea {
+  font-size: 13.5px;
+  line-height: 1.6;
+  min-height: 44px;
+  color: var(--astra-text);
+}
+
+.textarea::placeholder {
+  color: var(--astra-text-disabled);
+}
+
+.controlRow {
+  align-items: center;
+}
+
+/* ---- model pill trigger ---- */
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: var(--astra-radius-pill);
+  background: var(--astra-bg-chrome);
+  border: 1px solid var(--astra-border-strong);
+  cursor: pointer;
+  transition: background var(--astra-transition);
+  font: inherit;
+}
+
+.pill:hover:not(:disabled) {
+  background: var(--astra-divider);
+}
+
+.pill:disabled {
+  opacity: 0.55;
+  border-color: var(--astra-border);
+  cursor: default;
+}
+
+.pillProvider {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-text-dim);
+}
+
+.pillSlash {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-border-strong);
+}
+
+.pillModel {
+  font-family: var(--astra-font-mono);
+  font-size: 12px;
+  color: var(--astra-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pillChevron {
+  color: var(--astra-text-dim);
+  flex-shrink: 0;
+}
+
+/* ---- running readout ---- */
+
+.runningDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--astra-accent);
+  display: inline-block;
+}
+
+/* ---- model menu ---- */
+
+.menuDropdown {
+  border: 1px solid var(--astra-border-strong);
+  display: flex;
+  flex-direction: column;
+}
+
+.filterHeader {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--astra-divider);
+}
+
+.filterInput {
+  font-size: 13px;
+}
+
+.menuList {
+  max-height: 326px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--astra-radius);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+}
+
+.groupHeader:hover {
+  background: var(--astra-divider);
+}
+
+.groupChevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--astra-text-dim);
+}
+
+.groupLabel {
+  flex: 1;
+}
+
+.groupCount {
+  font-family: var(--astra-font-mono);
+  font-size: 10.5px;
+  color: var(--astra-text-dim);
+}
+
+.activeDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--astra-primary);
+  flex-shrink: 0;
+}
+
+.groupDivider {
+  margin: 6px 4px;
+}
+
+.modelRow {
+  display: flex;
+  align-items: center;
+  padding: 7px 8px 7px 30px;
+  border-radius: var(--astra-radius);
+}
+
+.modelRowSelected {
+  background: var(--astra-primary-soft);
+}
+
+.modelRowLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.modelName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--astra-font-mono);
+  font-size: 12px;
+  color: var(--astra-text-body);
+}
+
+.modelNameSelected {
+  color: var(--astra-text);
+}
+
+.checkIcon {
+  color: var(--astra-primary);
+  flex-shrink: 0;
+}
+
+.hiddenIndicator {
+  display: none;
+}
+
+.emptyState {
+  padding: 10px 8px;
+  font-size: 12.5px;
+  color: var(--astra-text-dim);
+}
+
+.menuFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-top: 1px solid var(--astra-divider);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.menuFooter:hover {
+  background: var(--astra-hover);
+}
+
+.footerLabel {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--astra-text-body);
+}
+
+.footerModel {
+  font-family: var(--astra-font-mono);
+  font-size: 10.5px;
+  color: var(--astra-text-dim);
+}

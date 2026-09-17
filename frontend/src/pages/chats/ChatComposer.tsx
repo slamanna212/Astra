@@ -1,6 +1,38 @@
-import { ActionIcon, Badge, Box, Button, FileButton, Group, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { IconPaperclip, IconPlayerStop, IconX } from '@tabler/icons-react';
-import { useState } from 'react';
+import { ActionIcon, Badge, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
+import { IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconX } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+import type { ChatModelOption } from '../../api/chat';
+import { formatTps } from '../../lib/format';
+import classes from './ChatComposer.module.css';
+
+interface ModelGroup {
+  provider: string | null; // null = models with no known provider ("other")
+  models: ChatModelOption[];
+}
+
+function groupModels(models: ChatModelOption[], providerOrder: string[]): ModelGroup[] {
+  const byProvider = new Map<string, ChatModelOption[]>();
+  const other: ChatModelOption[] = [];
+  for (const option of models) {
+    if (option.provider) {
+      if (!byProvider.has(option.provider)) byProvider.set(option.provider, []);
+      byProvider.get(option.provider)!.push(option);
+    } else {
+      other.push(option);
+    }
+  }
+  const groups: ModelGroup[] = [];
+  for (const provider of providerOrder) {
+    const group = byProvider.get(provider);
+    if (group?.length) {
+      groups.push({ provider, models: group });
+      byProvider.delete(provider);
+    }
+  }
+  for (const [provider, group] of byProvider) groups.push({ provider, models: group });
+  if (other.length) groups.push({ provider: null, models: other });
+  return groups;
+}
 
 export function ChatComposer({
   running,
@@ -11,11 +43,13 @@ export function ChatComposer({
   provider,
   models,
   providers,
+  defaultModel,
   onModelChange,
   onProviderChange,
   draft,
   onDraftChange,
   onAttach,
+  liveTps,
 }: {
   running: boolean;
   onSend: (text: string) => Promise<void>;
@@ -23,17 +57,72 @@ export function ChatComposer({
   onSteer: (text: string) => Promise<void>;
   model: string | null;
   provider: string | null;
-  models: string[];
+  models: ChatModelOption[];
   providers: string[];
+  defaultModel: string | null;
   onModelChange: (value: string | null) => void;
   onProviderChange: (value: string | null) => void;
   draft: string;
   onDraftChange: (value: string) => void;
   onAttach: (file: File) => Promise<string>;
+  liveTps: number | null;
 }) {
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [menuOpened, setMenuOpened] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [expanded, setExpanded] = useState<Set<string | null>>(new Set());
+
+  const groups = useMemo(() => groupModels(models, providers), [models, providers]);
+  const trimmedFilter = filter.trim().toLowerCase();
+  const isFiltering = trimmedFilter.length > 0;
+
+  const visibleGroups = useMemo(() => {
+    if (!isFiltering) return groups;
+    return groups
+      .map((group) => {
+        const providerMatches = (group.provider ?? 'other').toLowerCase().includes(trimmedFilter);
+        const matchingModels = providerMatches
+          ? group.models
+          : group.models.filter((option) => option.name.toLowerCase().includes(trimmedFilter));
+        return { ...group, models: matchingModels };
+      })
+      .filter((group) => group.models.length > 0);
+  }, [groups, isFiltering, trimmedFilter]);
+
+  const matchCount = useMemo(() => visibleGroups.reduce((sum, group) => sum + group.models.length, 0), [visibleGroups]);
+
+  const openMenu = () => {
+    setExpanded(new Set(provider ? [provider] : []));
+    setFilter('');
+    setMenuOpened(true);
+  };
+  const closeMenu = () => {
+    setMenuOpened(false);
+    setFilter('');
+  };
+  const toggleGroup = (key: string | null) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const selectModel = (name: string) => {
+    const option = models.find((item) => item.name === name);
+    if (!option) return;
+    onModelChange(option.name);
+    onProviderChange(option.provider);
+    closeMenu();
+  };
+  const clearOverride = () => {
+    onModelChange(null);
+    onProviderChange(null);
+    closeMenu();
+  };
+
   const handleAttach = (file: File | null) => {
     if (!file) return;
     setUploadError(null);
@@ -52,18 +141,10 @@ export function ChatComposer({
     onDraftChange('');
     setAttachments([]);
   };
+
   return (
-    <Box p="md" pt="sm" style={{ borderTop: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}>
-      <Box
-        p="sm"
-        style={{
-          maxWidth: 'var(--astra-chat-content-w)',
-          margin: '0 auto',
-          border: '1px solid var(--astra-border)',
-          borderRadius: 8,
-          background: 'var(--astra-surface)',
-        }}
-      >
+    <Box className={classes.wrapper}>
+      <Box className={classes.card}>
         <Textarea
           variant="unstyled"
           value={draft}
@@ -72,6 +153,7 @@ export function ChatComposer({
           minRows={2}
           maxRows={8}
           placeholder={running ? 'Steer the running turn…' : 'Message Hermes…'}
+          classNames={{ input: classes.textarea }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
@@ -80,7 +162,7 @@ export function ChatComposer({
           }}
         />
         {attachments.length > 0 && (
-          <Group gap={6} mt="xs">
+          <Group gap={6}>
             {attachments.map((path) => (
               <Badge key={path} variant="light" rightSection={<IconX size={11} onClick={() => setAttachments((items) => items.filter((item) => item !== path))} />}>
                 {path}
@@ -88,35 +170,107 @@ export function ChatComposer({
             ))}
           </Group>
         )}
-        {uploadError && <Box c="red" fz="xs" mt={4}>{uploadError}</Box>}
-        <Group justify="space-between" mt="xs" wrap="nowrap">
-          <Group gap="xs" wrap="wrap">
-            <FileButton onChange={handleAttach}>
-              {(props) => (
-                <Tooltip label="Attach a workspace file">
-                  <ActionIcon {...props} variant="subtle" aria-label="Attach file" loading={uploading}>
-                    <IconPaperclip size={18} />
-                  </ActionIcon>
-                </Tooltip>
-              )}
-            </FileButton>
-            <Select size="xs" aria-label="Model" placeholder="Default model" value={model} onChange={onModelChange} data={models} searchable clearable w={190} disabled={running} />
-            {providers.length > 1 && <Select size="xs" aria-label="Provider" placeholder="Default provider" value={provider} onChange={onProviderChange} data={providers} searchable clearable w={145} disabled={running} />}
-            {running && <TextInput size="xs" value="Running" readOnly variant="unstyled" w={65} />}
-            <Text ff="monospace" fz={11} c="dimmed">
-              ⇧⏎ newline
-            </Text>
-          </Group>
-          <Group gap="xs" wrap="nowrap">
-            {running && (
-              <Button size="xs" color="red" variant="light" leftSection={<IconPlayerStop size={14} />} onClick={() => void onStop()}>
-                Stop
-              </Button>
+        {uploadError && <Text c="red" fz="xs">{uploadError}</Text>}
+        <Group gap={8} wrap="nowrap" className={classes.controlRow}>
+          <FileButton onChange={handleAttach}>
+            {(props) => (
+              <Tooltip label="Attach a workspace file">
+                <ActionIcon {...props} variant="subtle" size={30} radius={6} aria-label="Attach file" loading={uploading} c={running ? 'var(--astra-border-strong)' : 'var(--astra-text-dim)'}>
+                  <IconPaperclip size={17} />
+                </ActionIcon>
+              </Tooltip>
             )}
-            <Button onClick={() => void submit()} aria-label={running ? 'Send steer' : 'Send message'}>
-              Send
+          </FileButton>
+
+          <Menu opened={menuOpened} onChange={(opened) => (opened ? openMenu() : closeMenu())} position="top-start" offset={8} radius="md" trapFocus>
+            <Menu.Target>
+              <button type="button" className={classes.pill} aria-label="Model" disabled={running}>
+                <span className={classes.pillProvider}>{provider ?? '—'}</span>
+                <span className={classes.pillSlash}>/</span>
+                <span className={classes.pillModel}>{model ?? '—'}</span>
+                <IconChevronDown size={13} className={classes.pillChevron} />
+              </button>
+            </Menu.Target>
+            <Menu.Dropdown className={classes.menuDropdown} w={300} p={0}>
+              <Menu.Search
+                value={filter}
+                onChange={(event) => setFilter(event.currentTarget.value)}
+                placeholder={isFiltering ? `${matchCount} match${matchCount === 1 ? '' : 'es'}` : `Filter ${models.length} models`}
+                variant="unstyled"
+                classNames={{ wrapper: classes.filterHeader, input: classes.filterInput }}
+                leftSection={<IconSearch size={15} color="var(--astra-text-disabled)" />}
+                rightSection={
+                  <Text ff="monospace" fz={10.5} c="var(--astra-border-strong)">
+                    ↑↓
+                  </Text>
+                }
+              />
+              <Box className={classes.menuList}>
+                {visibleGroups.map((group, index) => {
+                  const groupKey = group.provider ?? 'other';
+                  const isExpanded = isFiltering || expanded.has(group.provider);
+                  const isActive = group.provider !== null && group.provider === provider;
+                  return (
+                    <Box key={groupKey}>
+                      <button type="button" className={classes.groupHeader} aria-expanded={isExpanded} onClick={() => toggleGroup(group.provider)}>
+                        <span className={classes.groupChevron}>{isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</span>
+                        <span className={`astraLabel ${classes.groupLabel}`}>{groupKey}</span>
+                        {isActive ? <span className={classes.activeDot} /> : <span className={classes.groupCount}>{group.models.length}</span>}
+                      </button>
+                      {isExpanded && (
+                        <Menu.RadioGroup value={model} onChange={selectModel}>
+                          {group.models.map((option) => {
+                            const selected = option.name === model;
+                            return (
+                              <Menu.RadioItem
+                                key={option.name}
+                                value={option.name}
+                                checked={selected}
+                                className={selected ? `${classes.modelRow} ${classes.modelRowSelected}` : classes.modelRow}
+                                classNames={{ itemIndicator: classes.hiddenIndicator, itemLabel: classes.modelRowLabel }}
+                              >
+                                <span className={selected ? `${classes.modelName} ${classes.modelNameSelected}` : classes.modelName}>{option.name}</span>
+                                {selected && <IconCheck size={13} className={classes.checkIcon} />}
+                              </Menu.RadioItem>
+                            );
+                          })}
+                        </Menu.RadioGroup>
+                      )}
+                      {index < visibleGroups.length - 1 && <Menu.Divider className={classes.groupDivider} />}
+                    </Box>
+                  );
+                })}
+                {visibleGroups.length === 0 && <Text className={classes.emptyState}>No models match “{filter.trim()}”</Text>}
+              </Box>
+              <button type="button" className={classes.menuFooter} onClick={clearOverride}>
+                <span className={classes.footerLabel}>Session default</span>
+                <span className={classes.footerModel}>{defaultModel ?? '—'}</span>
+              </button>
+            </Menu.Dropdown>
+          </Menu>
+
+          {running && (
+            <Group gap={6} wrap="nowrap">
+              <span className={classes.runningDot} />
+              <Text component="span" ff="monospace" fz={11} c="var(--astra-accent)">
+                {formatTps(liveTps)}
+              </Text>
+            </Group>
+          )}
+
+          <Box style={{ flex: 1 }} />
+          <Text ff="monospace" fz={11} c="var(--astra-text-dim)">
+            ⇧⏎ newline
+          </Text>
+
+          {running && (
+            <Button size="xs" h={30} color="red" variant="light" leftSection={<IconPlayerStop size={14} />} onClick={() => void onStop()}>
+              Stop
             </Button>
-          </Group>
+          )}
+          <Button h={30} onClick={() => void submit()} aria-label={running ? 'Send steer' : 'Send message'}>
+            {running ? 'Steer' : 'Send'}
+          </Button>
         </Group>
       </Box>
     </Box>

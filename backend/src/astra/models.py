@@ -385,10 +385,15 @@ class ChatState(BaseModel):
     running: bool
 
 
+class ChatModelOption(BaseModel):
+    name: str
+    provider: str | None = None
+
+
 class ChatOptions(BaseModel):
     default_model: str | None = None
     default_provider: str | None = None
-    models: list[str]
+    models: list[ChatModelOption]
     providers: list[str]
 
 
