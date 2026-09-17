@@ -42,6 +42,10 @@ describe('conversation exports', () => {
     const pdf = conversationToPdf(createConversationExport(session, [message]));
     const bytes = new Uint8Array(await pdf.arrayBuffer());
     expect(new TextDecoder().decode(bytes.slice(0, 8))).toBe('%PDF-1.4');
-    expect(await pdf.text()).toContain('/Type /Page');
+    const document = await pdf.text();
+    expect(document).toContain('/Type /Page');
+    expect(document).toContain('CONVERSATION EXPORT');
+    expect(document).toContain('0.169 0.714 0.769 rg');
+    expect(document).toContain('/BaseFont /Helvetica-Bold');
   });
 });

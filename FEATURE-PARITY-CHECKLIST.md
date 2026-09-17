@@ -73,7 +73,6 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [x] Hide/unhide sessions
 - [ ] Duplicate sessions
 - [x] Export full session JSON
-- [ ] Import full session JSON
 - [x] Download a Markdown transcript
 - [x] Download a PDF transcript
 - [ ] Session tags and tag filtering
