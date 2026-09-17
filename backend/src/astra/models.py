@@ -377,6 +377,12 @@ class ChatSendRequest(BaseModel):
     )
 
 
+class ChatCompactRequest(BaseModel):
+    focus_topic: str | None = Field(default=None, max_length=500)
+    model: str | None = Field(default=None, max_length=512)
+    provider: str | None = Field(default=None, max_length=128)
+
+
 class ChatRegenerateRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -410,6 +416,7 @@ class ChatTurnStarted(BaseModel):
 
 class ChatState(BaseModel):
     running: bool
+    recovery_available: bool = False
 
 
 class ChatModelOption(BaseModel):

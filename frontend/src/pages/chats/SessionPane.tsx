@@ -1,14 +1,14 @@
 import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Menu, Paper, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileText, IconRefresh } from '@tabler/icons-react';
+import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileText, IconGitBranch, IconRefresh } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { answerChat, approveChat, chatStreamUrl, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
+import { answerChat, approveChat, chatStreamUrl, compactChat, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
 import { uploadFile } from '../../api/files';
 import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
-import { deleteSession, getSession, updateSession } from '../../api/sessions';
+import { deleteSession, getSession, recoverSessionContext, updateSession } from '../../api/sessions';
 import { listAllMessages } from '../../api/messages';
 import { SourceBadge } from '../../components/SourceBadge';
 import { formatCost, formatCount, formatTokens, formatTps, sessionTitle } from '../../lib/format';
@@ -50,6 +50,9 @@ export default function SessionPane() {
   const [provider, setProvider] = useState<string | null | undefined>(undefined);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const [activity, setActivity] = useState<string[]>([]);
+  const [compaction, setCompaction] = useState<{ phase: 'running' | 'done'; message: string } | null>(null);
+  const [turnError, setTurnError] = useState<{ message: string; recoveryAvailable: boolean } | null>(null);
+  const [recoveringContext, setRecoveringContext] = useState(false);
   const raf = useRef<number | null>(null);
   const pendingText = useRef('');
   const pendingReasoning = useRef('');
@@ -113,6 +116,9 @@ export default function SessionPane() {
     setActivity(activityRef.current);
     setRunning(runningRef.current);
     setShowRecoveryBanner(recovered !== null);
+    setCompaction(null);
+    setTurnError(null);
+    setRecoveringContext(false);
     setConnection('connecting');
     setReconnectAttempt(0);
 
@@ -212,14 +218,21 @@ export default function SessionPane() {
         if (wasReconnect) void refreshCanonical();
       };
       currentSource.addEventListener('state', tracked((event) => {
-        const state = JSON.parse((event as MessageEvent).data) as { running: boolean };
+        const state = JSON.parse((event as MessageEvent).data) as { running: boolean; recovery_available?: boolean };
         runningRef.current = state.running;
         setRunning(state.running);
+        if (state.recovery_available) {
+          setTurnError({
+            message: 'The conversation is too large to compress safely in place.',
+            recoveryAvailable: true,
+          });
+        }
         // A missed terminal frame is recovered from durable canonical history.
         if (!state.running) terminal();
         else schedulePersist();
       }));
-      currentSource.addEventListener('started', tracked(() => {
+      currentSource.addEventListener('started', tracked((event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as { operation?: string };
         runningRef.current = true;
         streamingRef.current = '';
         reasoningRef.current = '';
@@ -231,6 +244,10 @@ export default function SessionPane() {
         setShowRecoveryBanner(false);
         setLiveTps(null);
         setTurnTps(null);
+        setTurnError(null);
+        setCompaction(payload.operation === 'compact'
+          ? { phase: 'running', message: 'Compacting context — summarizing earlier conversation…' }
+          : null);
         persist();
       }));
       currentSource.addEventListener('delta', tracked((event) => {
@@ -254,11 +271,32 @@ export default function SessionPane() {
         activityRef.current = [...items.slice(-4), `Subagent: ${(event as MessageEvent).data}`];
         return activityRef.current;
       })));
+      currentSource.addEventListener('status', tracked((event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as { kind?: string; message?: string };
+        if (payload.kind === 'compacting') {
+          setCompaction({ phase: 'running', message: payload.message || 'Compacting context…' });
+        } else if (payload.kind === 'compacted') {
+          setCompaction({ phase: 'done', message: payload.message || 'Context compaction complete.' });
+        }
+      }));
+      currentSource.addEventListener('compaction', tracked((event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as { before_messages?: number; after_messages?: number };
+        const counts = payload.before_messages !== undefined && payload.after_messages !== undefined
+          ? ` (${payload.before_messages} → ${payload.after_messages} active messages)`
+          : '';
+        setCompaction({ phase: 'done', message: `Context compaction complete${counts}.` });
+      }));
       currentSource.addEventListener('done', tracked(finish));
       currentSource.addEventListener('cancel', tracked(finish));
       currentSource.addEventListener('error', (event) => {
         if (event instanceof MessageEvent && event.data) {
           rememberEvent(event);
+          const payload = JSON.parse(event.data) as { message?: string; error_type?: string; recovery_available?: boolean };
+          setTurnError({
+            message: payload.message || 'The Hermes turn failed.',
+            recoveryAvailable: payload.error_type === 'compression_exhausted' || payload.recovery_available === true,
+          });
+          if (payload.error_type === 'compaction_failed') setCompaction(null);
           finish(event);
           return;
         }
@@ -310,7 +348,44 @@ export default function SessionPane() {
     setStreaming('');
     setReasoning('');
     setActivity([]);
+    setTurnError(null);
+    setCompaction(null);
     setRunning(true);
+  };
+
+  const compact = async (focusTopic: string | null) => {
+    clearChatRecovery(sessionId);
+    setTurnError(null);
+    setCompaction({ phase: 'running', message: focusTopic
+      ? `Compacting context with focus: ${focusTopic}`
+      : 'Compacting context — summarizing earlier conversation…' });
+    try {
+      await compactChat(sessionId, {
+        focus_topic: focusTopic,
+        model: selectedModel,
+        provider: selectedProvider,
+      });
+      runningRef.current = true;
+      setRunning(true);
+      return true;
+    } catch (error) {
+      setCompaction(null);
+      setTurnError({ message: error instanceof Error ? error.message : 'Context compaction failed.', recoveryAvailable: false });
+      return false;
+    }
+  };
+
+  const recoverContext = async () => {
+    setRecoveringContext(true);
+    try {
+      const continuation = await recoverSessionContext(sessionId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      navigate(`/chats/${encodeURIComponent(continuation.id)}`);
+    } catch (error) {
+      notifications.show({ color: 'red', message: error instanceof Error ? error.message : 'Could not start focused continuation' });
+    } finally {
+      setRecoveringContext(false);
+    }
   };
 
   const downloadConversation = async (format: ConversationExportFormat) => {
@@ -503,6 +578,26 @@ export default function SessionPane() {
         </Box>
       </Box>
       <Box style={{ maxWidth: 'var(--astra-chat-content-w)', width: '100%', margin: '0 auto' }}>
+        {compaction && (
+          <Alert m="sm" color={compaction.phase === 'running' ? 'blue' : 'green'} title={compaction.phase === 'running' ? 'Compacting context' : 'Context compacted'} role="status">
+            <Group justify="space-between" wrap="wrap">
+              <Text size="sm">{compaction.message}</Text>
+              {compaction.phase === 'done' && <Button size="compact-xs" variant="subtle" onClick={() => setCompaction(null)}>Dismiss</Button>}
+            </Group>
+          </Alert>
+        )}
+        {turnError && (
+          <Alert m="sm" color="red" title={turnError.recoveryAvailable ? 'Context compression exhausted' : 'Turn failed'}>
+            <Group justify="space-between" align="center" wrap="wrap">
+              <Text size="sm">{turnError.message}</Text>
+              {turnError.recoveryAvailable && (
+                <Button size="xs" leftSection={<IconGitBranch size={14} />} loading={recoveringContext} onClick={() => void recoverContext()}>
+                  Start focused continuation
+                </Button>
+              )}
+            </Group>
+          </Alert>
+        )}
         {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
         {streaming && (
           <Box p="sm">
@@ -550,6 +645,7 @@ export default function SessionPane() {
         onSend={start}
         onStop={() => stopChat(sessionId)}
         onSteer={(text) => steerChat(sessionId, text)}
+        onCompact={compact}
         model={selectedModel}
         provider={selectedProvider}
         models={options.data?.models ?? (s.model ? [{ name: s.model, provider: null }] : [])}

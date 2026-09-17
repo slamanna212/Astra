@@ -42,6 +42,12 @@ export function forkSession(id: string, messageId: number): Promise<SessionDetai
   });
 }
 
+export function recoverSessionContext(id: string): Promise<SessionDetail> {
+  return apiFetch<SessionDetail>(`/sessions/${encodeURIComponent(id)}/recover-context`, {
+    method: 'POST',
+  });
+}
+
 export function updateSession(
   id: string,
   body: { title?: string | null; pinned?: boolean; archived?: boolean; hidden?: boolean },

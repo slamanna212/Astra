@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import sys
 import threading
+import time
 import types
 from typing import Any
 
@@ -248,17 +250,139 @@ async def test_final_usage_averages_output_tokens_over_the_whole_turn(base_setti
     await manager.close()
 
 
+@pytest.mark.anyio
+async def test_manual_compaction_streams_status_and_archives_history(base_settings, monkeypatch):
+    class CompactDB:
+        def __init__(self):
+            self.archived = None
+
+        def get_messages_as_conversation(self, _session_id):
+            return [
+                {"role": "user", "content": "one"},
+                {"role": "assistant", "content": "two"},
+                {"role": "user", "content": "three"},
+                {"role": "assistant", "content": "four"},
+                {"role": "user", "content": "five"},
+            ]
+
+        def get_active_message_watermark(self, _session_id):
+            return 42
+
+        def archive_and_compact(self, session_id, messages, *, watermark, tail_count):
+            self.archived = (session_id, messages, watermark, tail_count)
+
+    class Compressor:
+        def compress(self, messages, *, focus_topic, force):
+            assert focus_topic == "deployment"
+            assert force is True
+            return [messages[0], {"role": "assistant", "content": "summary"}, messages[-1]]
+
+    db = CompactDB()
+    agent = type("CompactAgent", (), {"session_db": db, "context_compressor": Compressor()})()
+    manager = ChatManager(base_settings, max_workers=1)
+    monkeypatch.setattr(manager, "_build_agent", lambda _turn: agent)
+
+    await manager.start_compaction("session-1", "deployment", model=None, provider=None)
+    subscriber, running = await manager.subscribe("session-1")
+    assert running
+    status = await next_named(subscriber, "status")
+    done = await next_named(subscriber, "done")
+
+    assert status.data["kind"] == "compacting"
+    assert done.data["before_messages"] == 5
+    assert done.data["after_messages"] == 3
+    assert db.archived == ("session-1", [
+        {"role": "user", "content": "one"},
+        {"role": "assistant", "content": "summary"},
+        {"role": "user", "content": "five"},
+    ], 42, 0)
+    await manager.close()
+
+
+def test_compression_exhaustion_classifier_handles_structured_and_legacy_errors():
+    assert ChatManager._is_compression_exhausted({"compression_exhausted": True})
+    assert ChatManager._is_compression_exhausted(RuntimeError("context compression exhausted"))
+    assert not ChatManager._is_compression_exhausted({"failed": True, "error": "rate limited"})
+
+
 def test_chat_state_and_options_are_canonical_and_do_not_expose_keys(authed):
     session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
     state = authed.get(f"/api/chat/{session_id}/state")
     assert state.status_code == 200
-    assert state.json() == {"running": False}
+    assert state.json() == {"running": False, "recovery_available": False}
     options = authed.get(f"/api/chat/{session_id}/options")
     assert options.status_code == 200
     payload = options.json()
     assert set(payload) == {"default_model", "default_provider", "models", "providers"}
     assert "api_key" not in options.text
     assert authed.get("/api/chat/not-a-session/state").status_code == 404
+
+
+def test_compact_route_starts_a_streamed_manual_compaction(authed, monkeypatch):
+    session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
+    calls = []
+
+    async def start_compaction(session_id, focus_topic, *, model, provider):
+        calls.append((session_id, focus_topic, model, provider))
+
+    monkeypatch.setattr(authed.app.state.ctx.chat, "start_compaction", start_compaction)
+    response = authed.post(
+        f"/api/chat/{session_id}/compact",
+        json={"focus_topic": "deployment", "model": "test-model", "provider": "test-provider"},
+        headers=CSRF,
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {"running": True}
+    assert calls == [(session_id, "deployment", "test-model", "test-provider")]
+
+
+def test_context_recovery_creates_empty_focused_continuation(authed, monkeypatch):
+    session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
+
+    class RecoveryDB:
+        def __init__(self, path):
+            self.conn = sqlite3.connect(path)
+            self.conn.row_factory = sqlite3.Row
+
+        def get_session(self, target):
+            row = self.conn.execute("SELECT * FROM sessions WHERE id = ?", (target,)).fetchone()
+            return dict(row) if row else None
+
+        def create_session(self, target, source, **kwargs):
+            self.conn.execute(
+                "INSERT INTO sessions (id, source, model, system_prompt, parent_session_id, started_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (target, source, kwargs.get("model"), kwargs.get("system_prompt"), kwargs.get("parent_session_id"), time.time()),
+            )
+            self.conn.commit()
+
+        def set_session_title(self, target, title):
+            self.conn.execute("UPDATE sessions SET title = ? WHERE id = ?", (title, target))
+            self.conn.commit()
+            return True
+
+        def delete_session(self, target):
+            self.conn.execute("DELETE FROM sessions WHERE id = ?", (target,))
+            self.conn.commit()
+
+        def close(self):
+            self.conn.close()
+
+    monkeypatch.setattr("astra.routes.sessions.session_db_class", lambda: RecoveryDB)
+    authed.app.state.ctx.chat._compression_recovery.add(session_id)
+    response = authed.post(f"/api/sessions/{session_id}/recover-context", headers=CSRF)
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["parent_session_id"] == session_id
+    assert payload["source"] == "webui"
+    assert payload["message_count"] == 0
+    assert payload["title"].endswith("(focused continuation)")
+    assert not authed.app.state.ctx.chat.recovery_available(session_id)
+
+    with sqlite3.connect(authed.app.state.ctx.settings.paths.state_db) as conn:
+        conn.execute("DELETE FROM sessions WHERE id = ?", (payload["id"],))
 
 
 def test_regenerate_rewinds_selected_response_and_starts_replacement(

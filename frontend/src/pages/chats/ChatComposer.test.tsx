@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { render } from '../../test/render';
 import { ChatComposer } from './ChatComposer';
 
-function Harness({ onSend, onAttach }: { onSend: (text: string) => Promise<void>; onAttach: (file: File) => Promise<string> }) {
+function Harness({ onSend, onAttach, onCompact = vi.fn(async () => true) }: {
+  onSend: (text: string) => Promise<void>;
+  onAttach: (file: File) => Promise<string>;
+  onCompact?: (focusTopic: string | null) => Promise<boolean>;
+}) {
   const [draft, setDraft] = useState('');
   const [model, setModel] = useState<string | null>('model-a');
   const [provider, setProvider] = useState<string | null>('acme');
@@ -16,6 +20,7 @@ function Harness({ onSend, onAttach }: { onSend: (text: string) => Promise<void>
       onSend={onSend}
       onStop={vi.fn()}
       onSteer={vi.fn()}
+      onCompact={onCompact}
       model={model}
       provider={provider}
       models={[
@@ -63,5 +68,29 @@ describe('ChatComposer', () => {
     await user.click(screen.getByRole('menuitemradio', { name: 'high' }));
 
     expect(screen.getByRole('button', { name: 'Reasoning effort' })).toHaveTextContent('high');
+  });
+
+  it('runs /compact locally with an optional focus topic', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn(async () => undefined);
+    const onCompact = vi.fn(async () => true);
+    render(<Harness onSend={onSend} onAttach={vi.fn(async () => 'file')} onCompact={onCompact} />);
+
+    await user.type(screen.getByPlaceholderText('Message Hermes…'), '/compact deployment decisions');
+    await user.click(screen.getByLabelText('Send message'));
+
+    expect(onCompact).toHaveBeenCalledWith('deployment decisions');
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('Message Hermes…')).toHaveValue('');
+  });
+
+  it('offers one-click context compaction', async () => {
+    const user = userEvent.setup();
+    const onCompact = vi.fn(async () => true);
+    render(<Harness onSend={vi.fn(async () => undefined)} onAttach={vi.fn(async () => 'file')} onCompact={onCompact} />);
+
+    await user.click(screen.getByRole('button', { name: 'Compact context' }));
+
+    expect(onCompact).toHaveBeenCalledWith(null);
   });
 });

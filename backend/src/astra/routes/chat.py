@@ -13,6 +13,7 @@ from astra.deps import Ctx
 from astra.models import (
     ChatAnswerRequest,
     ChatApprovalRequest,
+    ChatCompactRequest,
     ChatModelOption,
     ChatOptions,
     ChatRegenerateRequest,
@@ -33,7 +34,10 @@ async def state(session_id: str, ctx: Ctx) -> ChatState:
     )
     if not exists:
         raise HTTPException(status_code=404, detail="Session not found")
-    return ChatState(running=await ctx.chat.is_running(session_id))
+    return ChatState(
+        running=await ctx.chat.is_running(session_id),
+        recovery_available=ctx.chat.recovery_available(session_id),
+    )
 
 
 @router.get("/{session_id}/options", response_model=ChatOptions)
@@ -214,6 +218,29 @@ async def regenerate(session_id: str, body: ChatRegenerateRequest, ctx: Ctx) -> 
     return ChatTurnStarted()
 
 
+@router.post("/{session_id}/compact", response_model=ChatTurnStarted, status_code=202)
+async def compact(session_id: str, body: ChatCompactRequest, ctx: Ctx) -> ChatTurnStarted:
+    if len(session_id) > 256:
+        raise HTTPException(status_code=404, detail="Session not found")
+    exists = await ctx.db.run(
+        lambda conn: conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is not None
+    )
+    if not exists:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        await ctx.chat.start_compaction(
+            session_id,
+            body.focus_topic,
+            model=body.model,
+            provider=body.provider,
+        )
+    except SessionBusy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except ChatError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return ChatTurnStarted()
+
+
 @router.get("/{session_id}/stream")
 async def stream(session_id: str, request: Request, ctx: Ctx) -> StreamingResponse:
     if len(session_id) > 256:
@@ -236,7 +263,7 @@ async def stream(session_id: str, request: Request, ctx: Ctx) -> StreamingRespon
         subscriber, running = await ctx.chat.subscribe(session_id, after_seq=after_seq)
         try:
             yield ": connected\n\n"
-            yield f"event: state\ndata: {json.dumps({'running': running})}\n\n"
+            yield f"event: state\ndata: {json.dumps({'running': running, 'recovery_available': ctx.chat.recovery_available(session_id)})}\n\n"
             while True:
                 if await request.is_disconnected():
                     return

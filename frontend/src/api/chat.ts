@@ -1,14 +1,16 @@
 import { apiFetch, buildUrl } from './client';
 
 export type ChatStreamEvent =
-  | { type: 'state' | 'started'; running: boolean }
+  | { type: 'state' | 'started'; running: boolean; recovery_available?: boolean; operation?: 'chat' | 'compact' }
   | { type: 'delta'; text: string; tps?: number }
   | { type: 'reasoning'; text: string }
   | { type: 'tool'; args: string[] }
   | { type: 'clarify'; id: number; question: string; choices: unknown[] | null }
   | { type: 'approval'; request_id: string; command?: string; description?: string; pattern_keys?: string[] }
-  | { type: 'subagent' | 'status'; [key: string]: unknown }
-  | { type: 'done' | 'cancel' | 'error'; message?: string; late_steer?: string | null; tps?: number; output_tokens?: number };
+  | { type: 'status'; kind: 'status' | 'compacting' | 'compacted'; message: string }
+  | { type: 'compaction'; phase: 'done'; before_messages?: number; after_messages?: number; focus_topic?: string | null }
+  | { type: 'subagent'; [key: string]: unknown }
+  | { type: 'done' | 'cancel' | 'error'; message?: string; error_type?: string; recovery_available?: boolean; late_steer?: string | null; tps?: number; output_tokens?: number };
 
 export interface ChatModelOption {
   name: string;
@@ -36,6 +38,13 @@ export function getChatOptions(sessionId: string, signal?: AbortSignal) {
 
 export function sendChat(sessionId: string, body: { message: string } & ChatModelSettings) {
   return apiFetch<{ running: true }>(`/chat/${encodeURIComponent(sessionId)}/send`, { method: 'POST', body });
+}
+
+export function compactChat(sessionId: string, body: { focus_topic?: string | null } & ChatModelSettings) {
+  return apiFetch<{ running: true }>(`/chat/${encodeURIComponent(sessionId)}/compact`, {
+    method: 'POST',
+    body,
+  });
 }
 
 export function regenerateChat(

@@ -89,6 +89,7 @@ class Turn:
     started_at: float = field(default_factory=time.monotonic)
     start_output_tokens: int = 0
     recent_delta_times: deque[float] = field(default_factory=lambda: deque(maxlen=64))
+    operation: str = "chat"
 
 
 @dataclass(slots=True)
@@ -141,6 +142,7 @@ class ChatManager:
         self._max_cached_agents = max_cached_agents
         self._lock = asyncio.Lock()
         self._closed = False
+        self._compression_recovery: set[str] = set()
 
     async def close(self) -> None:
         self._closed = True
@@ -168,6 +170,15 @@ class ChatManager:
     async def is_running(self, session_id: str) -> bool:
         async with self._lock:
             return session_id in self._turns
+
+    def recovery_available(self, session_id: str) -> bool:
+        return session_id in self._compression_recovery
+
+    def consume_recovery(self, session_id: str) -> bool:
+        if session_id not in self._compression_recovery:
+            return False
+        self._compression_recovery.discard(session_id)
+        return True
 
     async def commit_idle(self) -> None:
         """Commit and evict cached agents that are not executing a turn.
@@ -202,6 +213,7 @@ class ChatManager:
             raise ChatError("message must not be empty")
         if self._closed:
             raise ChatError("chat service is shutting down")
+        self._compression_recovery.discard(session_id)
         async with self._lock:
             if session_id in self._turns:
                 raise SessionBusy("a turn is already running for this session")
@@ -217,6 +229,32 @@ class ChatManager:
             self._emit(turn, "started", {"running": True})
         loop = asyncio.get_running_loop()
         loop.run_in_executor(self._executor, self._run_turn, turn)
+
+    async def start_compaction(
+        self,
+        session_id: str,
+        focus_topic: str | None,
+        *,
+        model: str | None,
+        provider: str | None,
+    ) -> None:
+        """Run an explicit in-place Hermes context compaction as a streamed job."""
+        if self._closed:
+            raise ChatError("chat service is shutting down")
+        async with self._lock:
+            if session_id in self._turns:
+                raise SessionBusy("a turn is already running for this session")
+            turn = Turn(
+                session_id=session_id,
+                message=(focus_topic or "").strip(),
+                model=model,
+                provider=provider,
+                operation="compact",
+            )
+            self._turns[session_id] = turn
+            turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
+            self._emit(turn, "started", {"running": True, "operation": "compact"})
+        asyncio.get_running_loop().run_in_executor(self._executor, self._run_compaction, turn)
 
     async def start_after_prepare(
         self,
@@ -382,7 +420,7 @@ class ChatManager:
             "tool_progress_callback": lambda *args, **kwargs: self._tool_callback(turn, *args, **kwargs),
             "clarify_callback": lambda question, choices=None, *args: self._clarify_callback(turn, question, choices),
             "event_callback": lambda name, data=None: self._agent_event_callback(turn, name, data),
-            "status_callback": lambda status, *args, **kwargs: self._emit(turn, "status", {"status": str(status)}),
+            "status_callback": lambda status, *args, **kwargs: self._status_callback(turn, status, *args),
         }
         for name, callback in callbacks.items():
             if hasattr(agent, name):
@@ -495,13 +533,28 @@ class ChatManager:
                 turn.accepting_steers = False
                 late_steer = self._drain_late_steer(agent)
             usage = self._final_usage(turn)
-            if turn.cancel.is_set():
+            if self._is_compression_exhausted(result):
+                self._compression_recovery.add(turn.session_id)
+                self._emit(turn, "error", {
+                    "message": "The conversation is too large to compress safely in place.",
+                    "error_type": "compression_exhausted",
+                    "recovery_available": True,
+                })
+            elif turn.cancel.is_set():
                 self._emit(turn, "cancel", {"reason": "Cancelled by user", "late_steer": late_steer, **usage})
             else:
                 self._emit(turn, "done", {"result": {"status": "completed", "has_result": bool(result)}, "late_steer": late_steer, **usage})
         except Exception as exc:
             log.exception("chat turn failed for session %s", turn.session_id)
-            self._emit(turn, "error", {"message": "The Hermes turn failed. Check server logs for details."})
+            if self._is_compression_exhausted(exc):
+                self._compression_recovery.add(turn.session_id)
+                self._emit(turn, "error", {
+                    "message": "The conversation is too large to compress safely in place.",
+                    "error_type": "compression_exhausted",
+                    "recovery_available": True,
+                })
+            else:
+                self._emit(turn, "error", {"message": "The Hermes turn failed. Check server logs for details."})
         finally:
             with turn.lock:
                 turn.accepting_steers = False
@@ -510,6 +563,104 @@ class ChatManager:
             except Exception:
                 log.debug("failed to unregister approval bridge", exc_info=True)
             turn.done.set()
+
+    def _run_compaction(self, turn: Turn) -> None:
+        db: Any = None
+        lock_holder: str | None = None
+        try:
+            agent = self._build_agent(turn)
+            with turn.lock:
+                turn.agent = agent
+            self._emit(turn, "status", {
+                "kind": "compacting",
+                "message": "Compacting context — summarizing earlier conversation…",
+            })
+            db = getattr(agent, "session_db", None) or getattr(agent, "_session_db", None)
+            if db is None:
+                raise ChatError("The active Hermes runtime does not expose a session store for compaction.")
+            acquire_lock = getattr(db, "try_acquire_compression_lock", None)
+            if callable(acquire_lock):
+                lock_holder = f"astra:{threading.get_ident()}:{time.monotonic_ns()}"
+                if not acquire_lock(turn.session_id, lock_holder):
+                    lock_holder = None
+                    raise ChatError("Context compression is already running for this conversation.")
+            history = db.get_messages_as_conversation(turn.session_id)
+            if len(history) < 4:
+                raise ChatError("Not enough conversation to compact yet (at least 4 messages are required).")
+            watermark_fn = getattr(db, "get_active_message_watermark", None)
+            watermark = watermark_fn(turn.session_id) if callable(watermark_fn) else None
+            compressed = agent.context_compressor.compress(
+                history,
+                focus_topic=turn.message or None,
+                force=True,
+            )
+            if turn.cancel.is_set():
+                self._emit(turn, "cancel", {"reason": "Compaction cancelled by user"})
+                return
+            if compressed == history:
+                raise ChatError("This conversation could not be compacted further.")
+            # Hermes tags the verbatim tail so its originals can be archived as superseded
+            # duplicates instead of summarized-away history. The orchestration layer normally
+            # consumes this private marker; manual compaction owns that responsibility here.
+            tail_count = 0
+            for message in compressed:
+                if isinstance(message, dict) and message.pop("_compaction_tail", None):
+                    tail_count += 1
+            archive = getattr(db, "archive_and_compact", None)
+            if callable(archive):
+                archive(
+                    turn.session_id,
+                    compressed,
+                    **_supported(archive, {
+                        "watermark": watermark,
+                        "tail_count": tail_count,
+                        "lock_holder": lock_holder,
+                    }),
+                )
+            else:
+                # Compatibility with older Hermes releases. This loses the archived display
+                # prefix, but retains a valid live model context rather than failing /compact.
+                db.replace_messages(turn.session_id, compressed)
+            self._compression_recovery.discard(turn.session_id)
+            payload = {
+                "phase": "done",
+                "before_messages": len(history),
+                "after_messages": len(compressed),
+                "focus_topic": turn.message or None,
+            }
+            self._emit(turn, "compaction", payload)
+            self._emit(turn, "done", {"result": {"status": "compacted"}, **payload})
+        except ChatError as exc:
+            self._emit(turn, "error", {"message": str(exc), "error_type": "compaction_failed"})
+        except Exception:
+            log.exception("manual compaction failed for session %s", turn.session_id)
+            self._emit(turn, "error", {
+                "message": "Context compaction failed. Check server logs for details.",
+                "error_type": "compaction_failed",
+            })
+        finally:
+            if db is not None and lock_holder is not None:
+                release_lock = getattr(db, "release_compression_lock", None)
+                if callable(release_lock):
+                    try:
+                        release_lock(turn.session_id, lock_holder)
+                    except Exception:
+                        log.debug("failed to release manual compression lock", exc_info=True)
+            with turn.lock:
+                turn.accepting_steers = False
+            turn.done.set()
+
+    @staticmethod
+    def _is_compression_exhausted(value: Any) -> bool:
+        if isinstance(value, dict) and value.get("compression_exhausted"):
+            return True
+        text = str(value).lower()
+        return (
+            "compression_exhausted" in text
+            or "compression exhausted" in text
+            or ("context length exceeded" in text and "cannot compress further" in text)
+            or ("context compression" in text and "max compression attempts" in text)
+        )
 
     @staticmethod
     def _drain_late_steer(agent: Any) -> str | None:
@@ -565,6 +716,17 @@ class ChatManager:
         if text:
             self._emit(turn, "reasoning", {"text": str(text)})
 
+    def _status_callback(self, turn: Turn, status: Any, *args: Any) -> None:
+        status_text = str(status)
+        message = " ".join(str(item) for item in args if item is not None).strip() or status_text
+        lowered = f"{status_text} {message}".lower()
+        kind = "status"
+        if status_text == "compacted" or "compaction complete" in lowered:
+            kind = "compacted"
+        elif "compact" in lowered or "compress" in lowered:
+            kind = "compacting"
+        self._emit(turn, "status", {"kind": kind, "message": message[:1200]})
+
     def _tool_callback(self, turn: Turn, *args: Any, **kwargs: Any) -> None:
         # Hermes callback shape changes between releases; preserve only JSON-safe summaries.
         payload: dict[str, Any] = {"args": [str(item)[:4096] for item in args]}
@@ -573,6 +735,14 @@ class ChatManager:
 
     def _agent_event_callback(self, turn: Turn, name: Any, data: Any) -> None:
         event_name = str(name)
+        if event_name == "session:compress":
+            raw = data if isinstance(data, dict) else {}
+            self._emit(turn, "compaction", {
+                "phase": "done",
+                "in_place": bool(raw.get("in_place")),
+                "compression_count": raw.get("compression_count"),
+            })
+            return
         if event_name.startswith(("subagent", "delegate")):
             payload = data if isinstance(data, dict) else {"message": str(data)}
             self._emit(turn, "subagent", {key: str(value)[:4096] for key, value in payload.items()})

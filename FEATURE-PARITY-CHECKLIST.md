@@ -26,8 +26,8 @@ Legend:
 - [x] Persist and restore composer drafts in browser storage
 - [x] Reconnect banner, extended 1.5–20 second backoff ladder, canonical-history polling, replay cursors, and session-scoped local partial-response recovery
 - [ ] **Partial** — token count and estimated cost are shown per session, but not per message and there is no context-fill ring
-- [ ] Auto-compaction command/status UI (`/compact`)
-- [ ] One-click recovery from exhausted context compression
+- [x] Auto-compaction status UI plus streamed manual `/compact [focus]` (`/compress` alias and one-click composer control)
+- [x] One-click focused-continuation recovery from exhausted context compression
 - [x] `requestAnimationFrame`-throttled token/reasoning rendering
 - [x] Stop/cancel a running turn
 - [x] Reasoning-effort selector in chat
@@ -36,7 +36,7 @@ Legend:
 - [ ] Transparent chronological stream/worklog mode
 - [x] Live tokens-per-second display
 
-Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), and [`routes/chat.py`](backend/src/astra/routes/chat.py).
+Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), [`routes/chat.py`](backend/src/astra/routes/chat.py), and [`routes/sessions.py`](backend/src/astra/routes/sessions.py).
 
 ## Conversation controls and rendering
 
@@ -187,7 +187,7 @@ Local evidence: [`SettingsPage.tsx`](frontend/src/pages/settings/SettingsPage.ts
 - [x] Approval-pending card in the active chat
 - [ ] Provider/model mismatch warning
 - [ ] Slash-command registry and autocomplete
-- [ ] WebUI-local commands such as `/help`, `/clear`, `/model`, `/workspace`, `/new`, `/usage`, `/theme`, `/compact`, `/queue`, `/interrupt`, `/steer`, `/goal`, `/btw`, `/reasoning`, `/skills`, and `/toolsets`
+- [ ] **Partial** — `/compact [focus]` and its `/compress` alias run locally; the other WebUI-local commands (`/help`, `/clear`, `/model`, `/workspace`, `/new`, `/usage`, `/theme`, `/queue`, `/interrupt`, `/steer`, `/goal`, `/btw`, `/reasoning`, `/skills`, and `/toolsets`) remain unimplemented
 - [x] Usage/cost insights dashboard by date, model, provider, source, auxiliary task, and top session
 - [x] Searchable/tailable agent, error, and gateway logs
 

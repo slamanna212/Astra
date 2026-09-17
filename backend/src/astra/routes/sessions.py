@@ -178,6 +178,51 @@ async def session_fork(session_id: str, body: SessionForkRequest, ctx: Ctx) -> S
     return detail
 
 
+@router.post("/{session_id}/recover-context", response_model=SessionDetail, status_code=201)
+async def recover_context(session_id: str, ctx: Ctx) -> SessionDetail:
+    """Start an empty, focused continuation after context compression is exhausted."""
+    if len(session_id) > 256:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if await ctx.chat.is_running(session_id):
+        raise HTTPException(status_code=409, detail="Wait for the active turn to finish")
+    if not ctx.chat.recovery_available(session_id):
+        raise HTTPException(status_code=409, detail="Context recovery is no longer available")
+    continuation_id = str(uuid4())
+
+    def _recover(db):
+        source = db.get_session(session_id)
+        if source is None:
+            return False
+        db.create_session(
+            continuation_id,
+            "webui",
+            model=source.get("model"),
+            system_prompt=source.get("system_prompt"),
+            parent_session_id=session_id,
+        )
+        try:
+            title = source.get("title") or source.get("display_name") or "Conversation"
+            db.set_session_title(continuation_id, f"{title} (focused continuation)")
+        except Exception:
+            db.delete_session(continuation_id)
+            raise
+        return True
+
+    try:
+        found = await anyio.to_thread.run_sync(_with_session_db, ctx, _recover)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    if not found:
+        raise HTTPException(status_code=404, detail="Session not found")
+    ctx.chat.consume_recovery(session_id)
+    detail = await ctx.db.run_with_schema(
+        lambda conn, schema: get_session(conn, schema, continuation_id)
+    )
+    if detail is None:
+        raise HTTPException(status_code=500, detail="Focused continuation was not persisted")
+    return detail
+
+
 @router.patch("/{session_id}", response_model=SessionDetail)
 async def session_update(session_id: str, body: SessionUpdateRequest, ctx: Ctx) -> SessionDetail:
     if len(session_id) > 256:

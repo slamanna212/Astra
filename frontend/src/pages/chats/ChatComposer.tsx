@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
-import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconX } from '@tabler/icons-react';
+import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
@@ -41,6 +41,7 @@ export function ChatComposer({
   onSend,
   onStop,
   onSteer,
+  onCompact,
   model,
   provider,
   models,
@@ -59,6 +60,7 @@ export function ChatComposer({
   onSend: (text: string) => Promise<void>;
   onStop: () => Promise<void>;
   onSteer: (text: string) => Promise<void>;
+  onCompact: (focusTopic: string | null) => Promise<boolean>;
   model: string | null;
   provider: string | null;
   models: ChatModelOption[];
@@ -134,6 +136,11 @@ export function ChatComposer({
       .finally(() => setUploading(false));
   };
   const submit = async () => {
+    const compactMatch = attachments.length === 0 && draft.trim().match(/^\/(?:compact|compress)(?:\s+([\s\S]*))?$/i);
+    if (!running && compactMatch) {
+      if (await onCompact(compactMatch[1]?.trim() || null)) onDraftChange('');
+      return;
+    }
     const references = attachments.map((path) => `[Attached workspace file: ${path}]`).join('\n');
     const value = [references, draft.trim()].filter(Boolean).join('\n\n');
     if (!value) return;
@@ -283,6 +290,19 @@ export function ChatComposer({
           )}
 
           <Box style={{ flex: 1 }} />
+          {!running && (
+            <Tooltip label="Compact earlier context (/compact)">
+              <ActionIcon
+                variant="subtle"
+                size={30}
+                radius={6}
+                aria-label="Compact context"
+                onClick={() => void onCompact(null)}
+              >
+                <IconSparkles size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           <Text ff="monospace" fz={11} c="var(--astra-text-dim)">
             ⇧⏎ newline
           </Text>
