@@ -27,9 +27,15 @@ const NEAR_BOTTOM_PX = 200;
 export function Transcript({
   sessionId,
   highlightMessageId,
+  running = false,
+  model,
+  provider,
 }: {
   sessionId: string;
   highlightMessageId?: number;
+  running?: boolean;
+  model?: string | null;
+  provider?: string | null;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -209,10 +215,14 @@ export function Transcript({
                 {row.kind === 'message' && (
                   <MessageRow
                     message={row.message}
+                    sessionId={sessionId}
                     toolResults={toolResults}
                     consumedToolCallIds={consumedToolCallIds}
                     childSessions={childSessions}
                     highlighted={row.message.id === highlightMessageId}
+                    running={running}
+                    model={model}
+                    provider={provider}
                   />
                 )}
               </div>

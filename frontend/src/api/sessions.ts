@@ -35,6 +35,13 @@ export function createSession(body: { title?: string; model?: string }): Promise
   return apiFetch<SessionDetail>('/sessions', { method: 'POST', body });
 }
 
+export function forkSession(id: string, messageId: number): Promise<SessionDetail> {
+  return apiFetch<SessionDetail>(`/sessions/${encodeURIComponent(id)}/fork`, {
+    method: 'POST',
+    body: { message_id: messageId },
+  });
+}
+
 export function updateSession(
   id: string,
   body: { title?: string | null; pinned?: boolean; archived?: boolean; hidden?: boolean },

@@ -30,6 +30,16 @@ export function sendChat(sessionId: string, body: { message: string; model?: str
   return apiFetch<{ running: true }>(`/chat/${encodeURIComponent(sessionId)}/send`, { method: 'POST', body });
 }
 
+export function regenerateChat(
+  sessionId: string,
+  body: { message_id: number; model?: string | null; provider?: string | null },
+) {
+  return apiFetch<{ running: true }>(`/chat/${encodeURIComponent(sessionId)}/regenerate`, {
+    method: 'POST',
+    body,
+  });
+}
+
 export function stopChat(sessionId: string) {
   return apiFetch<void>(`/chat/${encodeURIComponent(sessionId)}/stop`, { method: 'POST' });
 }

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
+import types
 from typing import Any
 
 import pytest
 
 import astra.chat as chatmod
 from astra.chat import ChatManager
+from .conftest import CSRF
 
 
 @pytest.fixture
@@ -255,3 +258,56 @@ def test_chat_state_and_options_are_canonical_and_do_not_expose_keys(authed):
     assert set(payload) == {"default_model", "default_provider", "models", "providers"}
     assert "api_key" not in options.text
     assert authed.get("/api/chat/not-a-session/state").status_code == 404
+
+
+def test_regenerate_rewinds_selected_response_and_starts_replacement(
+    authed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: dict[str, Any] = {}
+
+    class RewindDB:
+        def __init__(self, _path) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+        def get_active_message_ids(self, session_id: str) -> list[int]:
+            assert session_id == "session-1"
+            return [10, 11]
+
+        def get_messages_as_conversation(self, session_id: str, include_row_ids: bool):
+            assert session_id == "session-1" and include_row_ids
+            return [
+                {"_row_id": 10, "role": "user", "content": "Try this again"},
+                {"_row_id": 11, "role": "assistant", "content": "First answer"},
+            ]
+
+        def rewind_to_message(self, session_id: str, message_id: int, **kwargs):
+            calls["rewind"] = (session_id, message_id, kwargs)
+            return {"rewound_count": 2, "target_message": {}, "new_head_id": None}
+
+    monkeypatch.setattr("astra.routes.sessions.session_db_class", lambda: RewindDB)
+    agent_module = types.ModuleType("agent")
+    compressor_module = types.ModuleType("agent.context_compressor")
+    compressor_module.user_originated_turn_view = lambda message: message if message.get("role") == "user" else None
+    compressor_module.split_user_originated_turn = lambda message: (None, message)
+    compressor_module.retryable_user_text = lambda content: content if isinstance(content, str) else ""
+    monkeypatch.setitem(sys.modules, "agent", agent_module)
+    monkeypatch.setitem(sys.modules, "agent.context_compressor", compressor_module)
+
+    async def start_after_prepare(session_id, prepare, *, model, provider):
+        calls["start"] = (session_id, await asyncio.to_thread(prepare), model, provider)
+
+    monkeypatch.setattr(authed.app.state.ctx.chat, "start_after_prepare", start_after_prepare)
+    response = authed.post(
+        "/api/chat/session-1/regenerate",
+        json={"message_id": 11, "model": "test-model", "provider": "test-provider"},
+        headers=CSRF,
+    )
+
+    assert response.status_code == 202, response.text
+    assert response.json() == {"running": True}
+    assert calls["start"] == ("session-1", "Try this again", "test-model", "test-provider")
+    assert calls["rewind"][0:2] == ("session-1", 10)
+    assert calls["rewind"][2]["expected_active_ids"] == [10, 11]

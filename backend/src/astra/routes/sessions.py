@@ -9,7 +9,14 @@ from fastapi import APIRouter, HTTPException, Query
 
 from astra.deps import Ctx
 from astra.hermes_bridge import session_db_class
-from astra.models import SessionCount, SessionCreateRequest, SessionDetail, SessionPage, SessionUpdateRequest
+from astra.models import (
+    SessionCount,
+    SessionCreateRequest,
+    SessionDetail,
+    SessionForkRequest,
+    SessionPage,
+    SessionUpdateRequest,
+)
 from astra.sessions import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -112,6 +119,62 @@ async def session_detail(session_id: str, ctx: Ctx) -> SessionDetail:
     detail = await ctx.db.run_with_schema(lambda conn, schema: get_session(conn, schema, session_id))
     if detail is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    return detail
+
+
+@router.post("/{session_id}/fork", response_model=SessionDetail, status_code=201)
+async def session_fork(session_id: str, body: SessionForkRequest, ctx: Ctx) -> SessionDetail:
+    """Create a child conversation containing the active transcript through one message."""
+    if len(session_id) > 256:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if await ctx.chat.is_running(session_id):
+        raise HTTPException(status_code=409, detail="Stop the active turn before forking this conversation")
+    fork_id = str(uuid4())
+
+    def _fork(db):
+        source = db.get_session(session_id)
+        if source is None:
+            return False
+        messages = db.get_messages(session_id, include_compacted=True)
+        selected: list[dict] = []
+        found = False
+        for message in messages:
+            selected.append(message)
+            if int(message.get("id", -1)) == body.message_id:
+                found = True
+                break
+        if not found:
+            raise ValueError("Message not found in the active conversation")
+        db.create_session(
+            fork_id,
+            "webui",
+            model=source.get("model"),
+            system_prompt=source.get("system_prompt"),
+            parent_session_id=session_id,
+        )
+        try:
+            db.replace_messages(fork_id, selected)
+            base_title = source.get("title") or source.get("display_name") or "Conversation"
+            title = (
+                db.get_next_title_in_lineage(base_title)
+                if callable(getattr(db, "get_next_title_in_lineage", None))
+                else f"{base_title} (fork)"
+            )
+            db.set_session_title(fork_id, title)
+        except Exception:
+            db.delete_session(fork_id)
+            raise
+        return True
+
+    try:
+        found = await anyio.to_thread.run_sync(_with_session_db, ctx, _fork)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    if not found:
+        raise HTTPException(status_code=404, detail="Session not found")
+    detail = await ctx.db.run_with_schema(lambda conn, schema: get_session(conn, schema, fork_id))
+    if detail is None:
+        raise HTTPException(status_code=500, detail="Fork was not persisted")
     return detail
 
 

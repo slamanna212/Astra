@@ -96,6 +96,12 @@ class SessionCreateRequest(BaseModel):
     model: str | None = Field(default=None, max_length=512)
 
 
+class SessionForkRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    message_id: int = Field(ge=1)
+
+
 class SessionUpdateRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -363,6 +369,14 @@ class ChildSessionsResponse(BaseModel):
 
 class ChatSendRequest(BaseModel):
     message: str = Field(min_length=1, max_length=200_000)
+    model: str | None = Field(default=None, max_length=512)
+    provider: str | None = Field(default=None, max_length=128)
+
+
+class ChatRegenerateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    message_id: int = Field(ge=1)
     model: str | None = Field(default=None, max_length=512)
     provider: str | None = Field(default=None, max_length=128)
 

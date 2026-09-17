@@ -426,7 +426,13 @@ export default function SessionPane() {
           </Alert>
         )}
         <Box style={{ flex: 1, minHeight: 0 }}>
-          <Transcript sessionId={sessionId} highlightMessageId={highlightMessageId} />
+          <Transcript
+            sessionId={sessionId}
+            highlightMessageId={highlightMessageId}
+            running={running}
+            model={selectedModel}
+            provider={selectedProvider}
+          />
         </Box>
       </Box>
       <Box style={{ maxWidth: 'var(--astra-chat-content-w)', width: '100%', margin: '0 auto' }}>

@@ -15,11 +15,13 @@ from astra.models import (
     ChatApprovalRequest,
     ChatModelOption,
     ChatOptions,
+    ChatRegenerateRequest,
     ChatSendRequest,
     ChatState,
     ChatSteerRequest,
     ChatTurnStarted,
 )
+from astra.routes.sessions import _with_session_db
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -132,6 +134,76 @@ async def send(session_id: str, body: ChatSendRequest, ctx: Ctx) -> ChatTurnStar
         raise HTTPException(status_code=409, detail=str(exc)) from None
     except ChatError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+    return ChatTurnStarted()
+
+
+@router.post("/{session_id}/regenerate", response_model=ChatTurnStarted, status_code=202)
+async def regenerate(session_id: str, body: ChatRegenerateRequest, ctx: Ctx) -> ChatTurnStarted:
+    """Rewind to the user turn that led to a selected message and run it again."""
+    if len(session_id) > 256:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    def _rewind(db):
+        from agent.context_compressor import (
+            retryable_user_text,
+            split_user_originated_turn,
+            user_originated_turn_view,
+        )
+
+        active_ids = db.get_active_message_ids(session_id)
+        messages = db.get_messages_as_conversation(session_id, include_row_ids=True)
+        selected_index = next(
+            (
+                index
+                for index, message in enumerate(messages)
+                if int(message.get("_row_id", -1)) == body.message_id
+            ),
+            None,
+        )
+        if selected_index is None:
+            raise ValueError("Message not found in the active conversation")
+        target = messages[selected_index]
+        if user_originated_turn_view(target) is not None:
+            user = target
+        else:
+            user = next(
+                (
+                    message
+                    for message in reversed(messages[: selected_index + 1])
+                    if user_originated_turn_view(message) is not None
+                ),
+                None,
+            )
+        if user is None:
+            raise ValueError("This message does not have a text user prompt to retry")
+        handoff, live_view = split_user_originated_turn(user)
+        if live_view is None:
+            raise ValueError("This message does not have a user prompt to retry")
+        prompt = retryable_user_text(live_view.get("content"))
+        db.rewind_to_message(
+            session_id,
+            int(user["_row_id"]),
+            preserve_compaction_handoff=handoff is not None,
+            expected_active_ids=active_ids,
+            expected_target_content=live_view.get("content"),
+        )
+        return prompt
+
+    try:
+        await ctx.chat.start_after_prepare(
+            session_id,
+            lambda: _with_session_db(ctx, _rewind),
+            model=body.model,
+            provider=body.provider,
+        )
+    except SessionBusy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except ChatError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     return ChatTurnStarted()
 
 

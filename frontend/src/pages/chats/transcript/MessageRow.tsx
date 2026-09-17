@@ -34,12 +34,20 @@ export function MessageRow({
   consumedToolCallIds,
   childSessions,
   highlighted,
+  sessionId,
+  running,
+  model,
+  provider,
 }: {
   message: Message;
   toolResults: Map<string, Message>;
   consumedToolCallIds: Set<string>;
   childSessions: ChildSession[];
   highlighted: boolean;
+  sessionId: string;
+  running: boolean;
+  model?: string | null;
+  provider?: string | null;
 }) {
   if (message.display_kind) {
     return <DisplayKindNotice message={message} />;
@@ -49,15 +57,19 @@ export function MessageRow({
     return <OrphanToolResult message={message} />;
   }
   if (message.role === 'user') {
-    return <UserMessage message={message} highlighted={highlighted} />;
+    return <UserMessage sessionId={sessionId} message={message} highlighted={highlighted} running={running} model={model} provider={provider} />;
   }
   if (message.role === 'assistant') {
     return (
       <AssistantMessage
         message={message}
+        sessionId={sessionId}
         toolResults={toolResults}
         childSessions={childSessions}
         highlighted={highlighted}
+        running={running}
+        model={model}
+        provider={provider}
       />
     );
   }

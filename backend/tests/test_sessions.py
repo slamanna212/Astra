@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from astra.db import Schema, StateDB
 from astra.sessions import ListParams, build_list_query, list_sessions
+from .conftest import CSRF
 
 
 def _all_rows(db_path: Path) -> list[dict[str, Any]]:
@@ -330,3 +331,88 @@ def test_session_crud_uses_canonical_state_db(
     deleted = client.delete(f"/api/sessions/{session_id}", headers=CSRF)
     assert deleted.status_code == 204, deleted.text
     assert client.get(f"/api/sessions/{session_id}").status_code == 404
+
+
+def test_fork_copies_through_selected_message(
+    authed: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class ForkDB:
+        fork_id: str | None = None
+        copied: list[dict[str, Any]] = []
+
+        def __init__(self, _path) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+        def get_session(self, session_id: str):
+            assert session_id == "source-session"
+            return {"id": session_id, "title": "Original", "model": "test-model", "system_prompt": "system"}
+
+        def get_messages(self, session_id: str, include_compacted: bool):
+            assert session_id == "source-session" and include_compacted
+            return [
+                {"id": 1, "role": "user", "content": "one"},
+                {"id": 2, "role": "assistant", "content": "two"},
+                {"id": 3, "role": "user", "content": "three"},
+            ]
+
+        def create_session(self, session_id: str, source: str, **kwargs) -> None:
+            assert source == "webui"
+            assert kwargs["parent_session_id"] == "source-session"
+            self.fork_id = session_id
+
+        def replace_messages(self, session_id: str, messages: list[dict[str, Any]]) -> None:
+            assert session_id == self.fork_id
+            self.copied = messages
+
+        def get_next_title_in_lineage(self, base: str) -> str:
+            assert base == "Original"
+            return "Original #2"
+
+        def set_session_title(self, session_id: str, title: str) -> None:
+            assert session_id == self.fork_id and title == "Original #2"
+
+        def delete_session(self, _session_id: str) -> None:
+            raise AssertionError("successful fork must not be deleted")
+
+    fake = ForkDB(None)
+    monkeypatch.setattr("astra.routes.sessions.session_db_class", lambda: lambda _path: fake)
+
+    original_run = authed.app.state.ctx.db.run_with_schema
+
+    async def detail_after_fork(_operation):
+        return {
+            "id": fake.fork_id,
+            "title": "Original #2",
+            "display_name": None,
+            "source": "webui",
+            "model": "test-model",
+            "started_at": 1,
+            "last_activity_at": 1,
+            "ended_at": None,
+            "message_count": 2,
+            "tool_call_count": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "estimated_cost_usd": None,
+            "pinned": False,
+            "archived": False,
+            "hidden": False,
+            "parent_session_id": "source-session",
+            "last_activity_description": None,
+            "child_count": 0,
+        }
+
+    authed.app.state.ctx.db.run_with_schema = detail_after_fork
+    try:
+        response = authed.post(
+            "/api/sessions/source-session/fork", json={"message_id": 2}, headers=CSRF
+        )
+    finally:
+        authed.app.state.ctx.db.run_with_schema = original_run
+
+    assert response.status_code == 201, response.text
+    assert response.json()["parent_session_id"] == "source-session"
+    assert [message["id"] for message in fake.copied] == [1, 2]

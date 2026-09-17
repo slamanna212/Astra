@@ -24,6 +24,15 @@
   padding: 10px 14px;
 }
 
+.userMessage {
+  max-width: 70%;
+  min-width: 0;
+}
+
+.userMessage .userBubble {
+  max-width: 100%;
+}
+
 .assistantContent {
   max-width: 78%;
   min-width: 0;
@@ -34,6 +43,27 @@
   font-family: var(--astra-font-mono);
   font-size: 11px;
   color: var(--astra-text-dim);
+}
+
+.messageInteractive {
+  border-radius: var(--mantine-radius-md);
+  outline: none;
+}
+
+.messageFooter {
+  min-height: 22px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.messageInteractive:hover .messageFooter,
+.messageInteractive:focus-within .messageFooter,
+.messageInteractive[data-revealed] .messageFooter {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .highlighted {

@@ -20,7 +20,7 @@ from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import anyio.to_thread
 import yaml
@@ -201,6 +201,35 @@ class ChatManager:
             turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
             self._emit(turn, "started", {"running": True})
         loop = asyncio.get_running_loop()
+        loop.run_in_executor(self._executor, self._run_turn, turn)
+
+    async def start_after_prepare(
+        self,
+        session_id: str,
+        prepare: Callable[[], str],
+        *,
+        model: str | None,
+        provider: str | None,
+    ) -> None:
+        """Reserve a session, mutate its transcript, then start the replacement turn.
+
+        Holding the service lock across ``prepare`` prevents another browser request from
+        starting a turn in the small gap between a regenerate rewind and its replacement.
+        Hermes' write-side lease checks still protect against other processes.
+        """
+        if self._closed:
+            raise ChatError("chat service is shutting down")
+        async with self._lock:
+            if session_id in self._turns:
+                raise SessionBusy("a turn is already running for this session")
+            loop = asyncio.get_running_loop()
+            message = (await loop.run_in_executor(self._executor, prepare)).strip()
+            if not message:
+                raise ChatError("message must not be empty")
+            turn = Turn(session_id=session_id, message=message, model=model, provider=provider)
+            self._turns[session_id] = turn
+            turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
+            self._emit(turn, "started", {"running": True})
         loop.run_in_executor(self._executor, self._run_turn, turn)
 
     async def subscribe(self, session_id: str, *, after_seq: int = 0) -> tuple[asyncio.Queue[ChatEvent], bool]:

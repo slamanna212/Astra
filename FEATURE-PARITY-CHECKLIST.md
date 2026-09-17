@@ -43,11 +43,11 @@ Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [
 
 ## Conversation controls and rendering
 
-- [ ] Copy an entire message to the clipboard
+- [x] Copy an entire message to the clipboard
 - [ ] Edit a past/last user message and regenerate from that point
-- [ ] Regenerate/retry the last assistant response
+- [x] Regenerate/retry the last assistant response
 - [ ] Clear/truncate a conversation
-- [ ] Branch/fork a conversation from a selected message
+- [x] Branch/fork a conversation from a selected message
 - [x] In-progress text, reasoning, and tool/subagent activity recover from bounded browser storage; canonical completed messages remain authoritative
 - [x] Render Markdown and GitHub-flavored tables
 - [x] Syntax-highlight fenced code blocks
@@ -70,7 +70,6 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [x] Delete sessions
 - [x] Rename sessions
 - [ ] **Partial** — Hermes may title canonical sessions during a turn, but Astra has no configurable adaptive auto-title cadence
-- [ ] Configurable auxiliary model for LLM-generated session titles
 - [x] Search session titles and full message content
 - [x] Pin/star sessions to the top
 - [x] Archive/unarchive sessions

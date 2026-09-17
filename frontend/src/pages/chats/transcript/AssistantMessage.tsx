@@ -1,29 +1,53 @@
-import { Group, Stack, Text } from '@mantine/core';
+import { Group, Stack } from '@mantine/core';
+import { useState } from 'react';
 import { BrandMark } from '../../../components/BrandMark';
 import { Markdown } from '../../../components/Markdown';
 import type { ChildSession, Message } from '../../../api/types';
-import { formatDateTime } from '../../../lib/format';
 import { ReasoningBlock } from './ReasoningBlock';
 import { ToolCallCard } from './ToolCallCard';
 import classes from './Transcript.module.css';
 import { ContentParts } from './ContentParts';
+import { MessageActions } from './MessageActions';
 
 export function AssistantMessage({
   message,
+  sessionId,
   toolResults,
   childSessions,
   highlighted,
+  running,
+  model,
+  provider,
 }: {
+  sessionId: string;
   message: Message;
   toolResults: Map<string, Message>;
   childSessions: ChildSession[];
   highlighted: boolean;
+  running: boolean;
+  model?: string | null;
+  provider?: string | null;
 }) {
+  const [revealed, setRevealed] = useState(false);
   const text = typeof message.content === 'string' ? message.content : null;
   const parts = Array.isArray(message.content) ? message.content : null;
 
   return (
-    <Group align="flex-start" gap="xs" wrap="nowrap" className={highlighted ? classes.highlighted : undefined}>
+    <Group
+      align="flex-start"
+      gap="xs"
+      wrap="nowrap"
+      className={`${classes.messageInteractive} ${highlighted ? classes.highlighted : ''}`}
+      data-revealed={revealed || undefined}
+      tabIndex={0}
+      onClick={() => setRevealed((value) => !value)}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          setRevealed((value) => !value);
+        }
+      }}
+    >
       <BrandMark size={24} />
       <Stack gap={8} className={classes.assistantContent}>
         {message.reasoning && <ReasoningBlock reasoning={message.reasoning} />}
@@ -38,11 +62,7 @@ export function AssistantMessage({
             childSessions={childSessions}
           />
         ))}
-        <Text component="span" className={classes.timestamp}>
-          {formatDateTime(message.timestamp)}
-          {message.truncated && ' · truncated'}
-          {message.compacted && ' · from compaction summary'}
-        </Text>
+        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} align="left" />
       </Stack>
     </Group>
   );
