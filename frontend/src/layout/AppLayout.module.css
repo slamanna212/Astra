@@ -41,6 +41,28 @@
   transition: background-color var(--astra-transition), color var(--astra-transition);
 }
 
+@media (min-width: 48em) {
+  .navItem {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .navItem :global(.tabler-icon) {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+.navItemBody {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 48em) {
+  .navItemBody {
+    display: none;
+  }
+}
+
 .navItem:hover {
   background: var(--astra-hover);
 }
@@ -68,6 +90,15 @@
   gap: 4px;
 }
 
+@media (min-width: 48em) {
+  .statusCard {
+    align-items: center;
+    padding: 8px 4px;
+    border: none;
+    background: none;
+  }
+}
+
 :root[data-mantine-color-scheme='light'] .statusCard {
   background-image:
     radial-gradient(1px 1px at 18px 14px, rgba(16, 20, 24, 0.18), transparent),
@@ -76,15 +107,34 @@
     radial-gradient(1px 1px at 54px 46px, rgba(16, 20, 24, 0.1), transparent);
 }
 
+@media (min-width: 48em) {
+  :root[data-mantine-color-scheme='light'] .statusCard {
+    background-image: none;
+  }
+}
+
 .statusLabel {
   font-size: 12px;
   color: var(--astra-text-dim);
+}
+
+@media (min-width: 48em) {
+  .statusLabel {
+    display: none;
+  }
 }
 
 .statusDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+@media (min-width: 48em) {
+  .statusDot {
+    width: 10px;
+    height: 10px;
+  }
 }
 
 .statusDotOk {
@@ -101,4 +151,10 @@
   font-family: var(--astra-font-mono);
   font-size: 11px;
   color: var(--astra-text-dim);
+}
+
+@media (min-width: 48em) {
+  .statusMeta {
+    display: none;
+  }
 }

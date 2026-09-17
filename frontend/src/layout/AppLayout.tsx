@@ -50,7 +50,11 @@ export function AppLayout() {
   return (
     <AppShell
       header={{ height: HEADER_HEIGHT }}
-      navbar={{ width: 240, breakpoint: 'sm', collapsed: { mobile: !opened, desktop: prefs.sidebarDesktopCollapsed } }}
+      navbar={{
+        width: { base: 240, sm: 72 },
+        breakpoint: 'sm',
+        collapsed: { mobile: !opened, desktop: prefs.sidebarDesktopCollapsed },
+      }}
       padding={0}
     >
       <SearchSpotlight />
@@ -99,18 +103,19 @@ export function AppLayout() {
           {NAV_ITEMS.map((item) => {
             const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
             return (
-              <NavLink
-                key={item.to}
-                component={Link}
-                to={item.to}
-                label={item.label}
-                leftSection={<item.icon size={18} stroke={1.5} />}
-                active={active}
-                aria-current={active ? 'page' : undefined}
-                onClick={close}
-                className={classes.navItem}
-                classNames={{ root: active ? classes.navItemActive : undefined }}
-              />
+              <Tooltip key={item.to} label={item.label} position="right" openDelay={200} visibleFrom="sm">
+                <NavLink
+                  component={Link}
+                  to={item.to}
+                  label={item.label}
+                  leftSection={<item.icon size={18} stroke={1.5} />}
+                  active={active}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={close}
+                  className={classes.navItem}
+                  classNames={{ root: active ? classes.navItemActive : undefined, body: classes.navItemBody }}
+                />
+              </Tooltip>
             );
           })}
         </AppShell.Section>

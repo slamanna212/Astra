@@ -78,4 +78,13 @@ describe('SettingsPage', () => {
     // SegmentedControl re-renders with the new value selected; no crash / no stray request.
     expect(screen.getByLabelText('Color scheme')).toBeInTheDocument();
   });
+
+  it('changes the chat font size', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(makeStatus()));
+    const user = userEvent.setup();
+    render(<SettingsPage />);
+
+    await user.click(screen.getByText('Large'));
+    expect(screen.getByLabelText('Chat font size')).toBeInTheDocument();
+  });
 });
