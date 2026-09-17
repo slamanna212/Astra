@@ -108,6 +108,7 @@ export interface ChildSession {
   display_name: string | null;
   started_at: number | null;
   source: string | null;
+  message_count: number | null;
 }
 
 export interface ChildSessionsResponse {

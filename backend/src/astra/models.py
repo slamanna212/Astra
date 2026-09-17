@@ -347,6 +347,7 @@ class ChildSession(BaseModel):
     display_name: str | None = None
     started_at: float | None = None
     source: str | None = None
+    message_count: int | None = None
 
 
 class ChildSessionsResponse(BaseModel):

@@ -322,7 +322,8 @@ def list_child_sessions(conn: sqlite3.Connection, schema: Schema, session_id: st
     """
     if not schema.has("sessions", "parent_session_id"):
         return []
-    fields = [c for c in ("id", "title", "display_name", "started_at", "source") if schema.has("sessions", c)]
+    all_fields = ("id", "title", "display_name", "started_at", "source", "message_count")
+    fields = [c for c in all_fields if schema.has("sessions", c)]
     if "id" not in fields:
         return []
     rows = conn.execute(
@@ -330,7 +331,4 @@ def list_child_sessions(conn: sqlite3.Connection, schema: Schema, session_id: st
         (session_id,),
     ).fetchall()
     present = set(fields)
-    return [
-        ChildSession(**{f: (row[f] if f in present else None) for f in ("id", "title", "display_name", "started_at", "source")})
-        for row in rows
-    ]
+    return [ChildSession(**{f: (row[f] if f in present else None) for f in all_fields}) for row in rows]

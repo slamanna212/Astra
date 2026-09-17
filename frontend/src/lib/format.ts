@@ -25,6 +25,21 @@ export function formatRelativeTime(epochSeconds: number | null | undefined, nowM
   });
 }
 
+/**
+ * Ultra-compact age, no "ago" suffix, for fixed-width list columns: "5m", "3h", "2d", "1w".
+ * Beyond ~4 weeks falls back to a short date so it never overflows a narrow column.
+ */
+export function formatCompactAge(epochSeconds: number | null | undefined, nowMs: number = Date.now()): string {
+  if (epochSeconds === null || epochSeconds === undefined || !Number.isFinite(epochSeconds)) return '—';
+  const diff = Math.max(0, nowMs / 1000 - epochSeconds);
+  if (diff < MINUTE) return 'now';
+  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m`;
+  if (diff < DAY) return `${Math.floor(diff / HOUR)}h`;
+  if (diff < WEEK) return `${Math.floor(diff / DAY)}d`;
+  if (diff < 4 * WEEK) return `${Math.floor(diff / WEEK)}w`;
+  return formatRelativeTime(epochSeconds, nowMs);
+}
+
 /** Absolute local date-time for tooltips/detail views. */
 export function formatDateTime(epochSeconds: number | null | undefined): string {
   if (epochSeconds === null || epochSeconds === undefined || !Number.isFinite(epochSeconds)) return '—';

@@ -1,16 +1,5 @@
-import {
-  Badge,
-  Button,
-  Center,
-  Group,
-  Loader,
-  MultiSelect,
-  SegmentedControl,
-  Stack,
-  Text,
-  UnstyledButton,
-} from '@mantine/core';
-import { IconChevronRight, IconMessage, IconPlus } from '@tabler/icons-react';
+import { Button, Center, Loader, MultiSelect, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core';
+import { IconArchive, IconEyeOff, IconPlus, IconStarFilled } from '@tabler/icons-react';
 import { useInfiniteQuery, useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,15 +8,14 @@ import { getChildSessions } from '../../api/messages';
 import { queryKeys } from '../../api/queryKeys';
 import { createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
 import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
-import { SourceBadge } from '../../components/SourceBadge';
-import { KNOWN_SOURCES } from '../../lib/sources';
+import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
-import { formatCount, formatDateTime, formatRelativeTime, sessionTitle } from '../../lib/format';
+import { formatCompactAge, formatCount, formatDateTime, sessionTitle } from '../../lib/format';
 import classes from './SessionList.module.css';
 
-export const SESSION_ROW_HEIGHT = 64;
-/** Condensed row for a nested sub-agent session (title + timestamp only, no meta line). */
-export const SESSION_CHILD_ROW_HEIGHT = 48;
+export const SESSION_ROW_HEIGHT = 44;
+/** Nested sub-agent row: title + message count only, no age/type dot. */
+export const SESSION_CHILD_ROW_HEIGHT = 30;
 /** Start fetching the next page when the last rendered row is within this many rows of the end. */
 const LOAD_MORE_THRESHOLD = 10;
 
@@ -40,17 +28,9 @@ const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
-interface SessionRowProps {
-  session: SessionSummary;
-  active: boolean;
-  now: number;
-  expanded: boolean;
-  onToggleExpanded: (id: string) => void;
-}
-
-const SessionRow = memo(function SessionRow({ session, active, now, expanded, onToggleExpanded }: SessionRowProps) {
+const SessionRow = memo(function SessionRow({ session, active, now }: { session: SessionSummary; active: boolean; now: number }) {
   const lastActivity = session.last_activity_at ?? session.started_at;
-  const hasChildren = session.child_count > 0;
+  const showStatus = session.pinned || session.archived || session.hidden;
   return (
     <UnstyledButton
       component={Link}
@@ -62,73 +42,46 @@ const SessionRow = memo(function SessionRow({ session, active, now, expanded, on
       aria-current={active ? 'page' : undefined}
       data-testid="session-row"
     >
-      <Group gap={6} wrap="nowrap">
-        {session.pinned && (
-          <Text component="span" c="sand" fz={11} style={{ flexShrink: 0 }} aria-label="Pinned">
-            ★
-          </Text>
-        )}
-        <Text size="sm" fw={500} truncate="end" style={{ flex: 1, minWidth: 0 }}>
-          {sessionTitle(session)}
-        </Text>
-        <Text component="span" className={classes.meta} style={{ flexShrink: 0 }} title={formatDateTime(lastActivity)}>
-          {formatRelativeTime(lastActivity, now)}
-        </Text>
-      </Group>
-      <Group gap={6} wrap="nowrap">
-        <SourceBadge source={session.source} />
-        {session.archived && (
-          <Badge size="xs" variant="outline" color="gray" radius="xl">
-            archived
-          </Badge>
-        )}
-        {session.hidden && (
-          <Badge size="xs" variant="outline" color="gray" radius="xl">
-            hidden
-          </Badge>
-        )}
-        {hasChildren && (
-          <UnstyledButton
-            className={classes.expandToggle}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onToggleExpanded(session.id);
-            }}
-            aria-expanded={expanded}
-            aria-label={`${expanded ? 'Hide' : 'Show'} ${session.child_count} sub-agent${session.child_count === 1 ? '' : 's'}`}
-          >
-            <Group gap={4} wrap="nowrap">
-              <IconChevronRight
-                size={11}
-                style={{ transform: expanded ? 'rotate(90deg)' : undefined, transition: 'transform 120ms ease' }}
-              />
-              <Text component="span" className={classes.meta}>
-                {session.child_count} sub-agent{session.child_count === 1 ? '' : 's'}
-              </Text>
-            </Group>
-          </UnstyledButton>
-        )}
-        <Group gap={3} wrap="nowrap" ml="auto">
-          <IconMessage size={12} aria-hidden color="var(--astra-text-dim)" />
-          <Text component="span" className={classes.meta} aria-label={`${session.message_count} messages`}>
-            {formatCount(session.message_count)}
-          </Text>
-        </Group>
-      </Group>
+      <span className={classes.dot} style={{ background: `var(--mantine-color-${sourceColor(session.source)}-6)` }} aria-hidden />
+      <Text
+        size="sm"
+        fw={400}
+        truncate="end"
+        className={classes.title}
+        c={active ? 'var(--astra-text)' : 'var(--astra-text-body)'}
+      >
+        {sessionTitle(session)}
+      </Text>
+      <Text component="span" className={classes.meta} aria-label={`${session.message_count} messages`}>
+        {formatCount(session.message_count)}
+      </Text>
+      <Text component="span" className={classes.age} title={formatDateTime(lastActivity)}>
+        {formatCompactAge(lastActivity, now)}
+      </Text>
+      {showStatus && (
+        <span className={classes.statusIcons}>
+          {session.pinned && (
+            <span role="img" aria-label="Pinned" title="Pinned">
+              <IconStarFilled size={11} color="var(--astra-accent)" aria-hidden />
+            </span>
+          )}
+          {session.archived && (
+            <span role="img" aria-label="Archived" title="Archived">
+              <IconArchive size={12} color="var(--astra-text-dim)" aria-hidden />
+            </span>
+          )}
+          {session.hidden && (
+            <span role="img" aria-label="Hidden" title="Hidden">
+              <IconEyeOff size={12} color="var(--astra-text-dim)" aria-hidden />
+            </span>
+          )}
+        </span>
+      )}
     </UnstyledButton>
   );
 });
 
-const SessionChildRow = memo(function SessionChildRow({
-  session,
-  active,
-  now,
-}: {
-  session: ChildSession;
-  active: boolean;
-  now: number;
-}) {
+const SessionChildRow = memo(function SessionChildRow({ session, active }: { session: ChildSession; active: boolean }) {
   return (
     <UnstyledButton
       component={Link}
@@ -139,12 +92,11 @@ const SessionChildRow = memo(function SessionChildRow({
       aria-current={active ? 'page' : undefined}
       data-testid="session-child-row"
     >
-      <span className={classes.childDot} aria-hidden />
-      <Text size="sm" truncate="end" style={{ flex: 1, minWidth: 0 }}>
+      <Text size="sm" truncate="end" className={classes.childTitle}>
         {sessionTitle(session)}
       </Text>
-      <Text component="span" className={classes.meta} style={{ flexShrink: 0 }} title={formatDateTime(session.started_at)}>
-        {formatRelativeTime(session.started_at, now)}
+      <Text component="span" className={classes.childMeta} aria-label={`${session.message_count ?? 0} messages`}>
+        {formatCount(session.message_count)}
       </Text>
     </UnstyledButton>
   );
@@ -173,7 +125,6 @@ function rowKey(row: Row | undefined, index: number): string {
 export function SessionList({ selectedId }: { selectedId?: string }) {
   const [sources, setSources] = useState<string[]>([]);
   const [status, setStatus] = useState<SessionStatus>('active');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const now = useNow();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -198,19 +149,9 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   const sessions = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
 
-  const toggleExpanded = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const expandedIds = useMemo(() => Array.from(expanded), [expanded]);
+  // Sub-agent groups are always expanded (option 1c has no manual disclosure control);
+  // fetch children for every parent that has them.
+  const expandedIds = useMemo(() => sessions.filter((s) => s.child_count > 0).map((s) => s.id), [sessions]);
   const childQueries = useQueries({
     queries: expandedIds.map((id) => ({
       queryKey: queryKeys.messages.children(id),
@@ -231,7 +172,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     const out: Row[] = [];
     sessions.forEach((session, topIndex) => {
       out.push({ kind: 'parent', session, topIndex });
-      if (expanded.has(session.id)) {
+      if (session.child_count > 0) {
         const entry = childrenById.get(session.id);
         if (!entry || entry.isLoading) {
           out.push({ kind: 'child-loading', parentId: session.id, topIndex });
@@ -244,7 +185,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     });
     if (hasNextPage) out.push({ kind: 'loader', topIndex: sessions.length });
     return out;
-  }, [sessions, expanded, childrenById, hasNextPage]);
+  }, [sessions, childrenById, hasNextPage]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -276,7 +217,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
 
   return (
     <>
-      <Stack gap={8} p="sm" style={{ borderBottom: '1px solid var(--astra-divider)' }}>
+      <Stack gap={8} p="md" style={{ borderBottom: '1px solid var(--astra-divider)' }}>
         <Button fullWidth leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
           New chat
         </Button>
@@ -339,15 +280,9 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
                   }}
                 >
                   {!row ? null : row.kind === 'parent' ? (
-                    <SessionRow
-                      session={row.session}
-                      active={row.session.id === selectedId}
-                      now={now}
-                      expanded={expanded.has(row.session.id)}
-                      onToggleExpanded={toggleExpanded}
-                    />
+                    <SessionRow session={row.session} active={row.session.id === selectedId} now={now} />
                   ) : row.kind === 'child' ? (
-                    <SessionChildRow session={row.session} active={row.session.id === selectedId} now={now} />
+                    <SessionChildRow session={row.session} active={row.session.id === selectedId} />
                   ) : row.kind === 'child-loading' ? (
                     <div className={classes.childIndent} style={{ height: SESSION_CHILD_ROW_HEIGHT }}>
                       <Loader size={12} aria-label="Loading sub-agents" />

@@ -177,7 +177,7 @@ export const theme = createTheme({
     headerHeight: 56,
     navbarWidth: 240,
     sessionListWidth: 352,
-    sessionRowHeight: 64,
+    sessionRowHeight: 44,
     panelHeaderHeight: 48,
     controlHeight: 32,
     inputHeight: 34,

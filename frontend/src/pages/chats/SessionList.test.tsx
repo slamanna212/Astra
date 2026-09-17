@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChildSession, SessionSummary } from '../../api/types';
 import { jsonResponse, render } from '../../test/render';
@@ -30,8 +30,15 @@ function makeSession(i: number, overrides: Partial<SessionSummary> = {}): Sessio
   };
 }
 
-function makeChildSession(id: string, startedAt: number): ChildSession {
-  return { id, title: `Sub-agent ${id}`, display_name: null, started_at: startedAt, source: 'subagent' };
+function makeChildSession(id: string, startedAt: number, messageCount = 3): ChildSession {
+  return {
+    id,
+    title: `Sub-agent ${id}`,
+    display_name: null,
+    started_at: startedAt,
+    source: 'subagent',
+    message_count: messageCount,
+  };
 }
 
 const VIEWPORT_HEIGHT = 640;
@@ -95,7 +102,7 @@ describe('SessionList', () => {
     expect(await screen.findByText('No sessions.')).toBeInTheDocument();
   });
 
-  it('nests sub-agent children under their parent, collapsed by default', async () => {
+  it('nests sub-agent children under their parent, always expanded', async () => {
     const parent = makeSession(0, { child_count: 2 });
     const children = [makeChildSession('child-a', Date.now() / 1000 - 10), makeChildSession('child-b', Date.now() / 1000 - 5)];
     fetchMock.mockImplementation(async (input) => {
@@ -107,18 +114,11 @@ describe('SessionList', () => {
     render(<SessionList />, { route: '/chats' });
 
     expect(await screen.findAllByTestId('session-row')).toHaveLength(1);
-    expect(screen.queryByTestId('session-child-row')).not.toBeInTheDocument();
-
-    const toggle = screen.getByRole('button', { name: /show 2 sub-agents/i });
-    fireEvent.click(toggle);
 
     const childRows = await screen.findAllByTestId('session-child-row');
     expect(childRows).toHaveLength(2);
     expect(childRows[0]).toHaveAttribute('href', '/chats/child-a');
     expect(childRows[0]).toHaveStyle({ height: `${SESSION_CHILD_ROW_HEIGHT}px` });
     expect(screen.getByText('Sub-agent child-a')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /hide 2 sub-agents/i }));
-    await waitFor(() => expect(screen.queryByTestId('session-child-row')).not.toBeInTheDocument());
   });
 });
