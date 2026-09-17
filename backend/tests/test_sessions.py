@@ -85,6 +85,21 @@ def test_default_excludes_archived_and_hidden(authed: TestClient, fixture_db_pat
     assert all(i["hidden"] for i in only_hidden)
 
 
+def test_count_endpoint_matches_listing(authed: TestClient, fixture_db_path: Path) -> None:
+    rows = [r for r in _all_rows(fixture_db_path) if r["source"] != "subagent"]
+
+    resp = authed.get("/api/sessions/count", params={"status": "archived"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"count": sum(1 for r in rows if r["archived"])}
+
+    resp = authed.get("/api/sessions/count", params={"status": "active"})
+    assert resp.json() == {"count": sum(1 for r in rows if not r["archived"] and not r["hidden"])}
+
+    only_archived, _ = _walk(authed, limit=50, status="archived")
+    resp = authed.get("/api/sessions/count", params={"status": "archived"})
+    assert resp.json()["count"] == len(only_archived)
+
+
 def test_default_listing_excludes_subagent_but_source_filter_returns_them(
     authed: TestClient, fixture_db_path: Path
 ) -> None:

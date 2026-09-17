@@ -87,6 +87,10 @@ class SessionPage(BaseModel):
     next_cursor: str | None
 
 
+class SessionCount(BaseModel):
+    count: int
+
+
 class SessionCreateRequest(BaseModel):
     title: str | None = Field(default=None, max_length=512)
     model: str | None = Field(default=None, max_length=512)

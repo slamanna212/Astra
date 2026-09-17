@@ -9,13 +9,14 @@ from fastapi import APIRouter, HTTPException, Query
 
 from astra.deps import Ctx
 from astra.hermes_bridge import session_db_class
-from astra.models import SessionCreateRequest, SessionDetail, SessionPage, SessionUpdateRequest
+from astra.models import SessionCount, SessionCreateRequest, SessionDetail, SessionPage, SessionUpdateRequest
 from astra.sessions import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
     InvalidCursor,
     ListParams,
     SessionStatus,
+    count_sessions_by_status,
     get_session,
     list_sessions,
 )
@@ -59,6 +60,21 @@ async def sessions_list(
     except InvalidCursor as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return SessionPage(items=items, next_cursor=next_cursor)
+
+
+@router.get("/count", response_model=SessionCount)
+async def sessions_count(
+    ctx: Ctx,
+    source: Annotated[list[str] | None, Query()] = None,
+    status: SessionStatus = "archived",
+) -> SessionCount:
+    if source is not None and len(source) > 32:
+        raise HTTPException(status_code=422, detail="too many source filters")
+    sources = tuple(dict.fromkeys(s for s in (source or []) if s))
+    count = await ctx.db.run_with_schema(
+        lambda conn, schema: count_sessions_by_status(conn, schema, status, sources)
+    )
+    return SessionCount(count=count)
 
 
 @router.post("", response_model=SessionDetail, status_code=201)

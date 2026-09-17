@@ -227,3 +227,29 @@ def get_session(conn: sqlite3.Connection, schema: Schema, session_id: str) -> Se
 
 def count_sessions(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0])
+
+
+def count_sessions_by_status(
+    conn: sqlite3.Connection, schema: Schema, status: SessionStatus, sources: Sequence[str] = ()
+) -> int:
+    """Row count for the sidebar's "Show N archived" affordance. Mirrors ``build_list_query``'s
+    WHERE-clause logic (minus cursor/ordering) so the count matches what that filter would list.
+    """
+    where: list[str] = []
+    args: list[Any] = []
+    if sources and schema.has("sessions", "source"):
+        where.append(f"source IN ({', '.join('?' for _ in sources)})")
+        args.extend(sources)
+    elif schema.has("sessions", "source"):
+        where.append("COALESCE(source, '') != 'subagent'")
+    if status == "active":
+        if schema.has("sessions", "archived"):
+            where.append("COALESCE(archived, 0) = 0")
+        if schema.has("sessions", "hidden"):
+            where.append("COALESCE(hidden, 0) = 0")
+    elif status == "archived" and schema.has("sessions", "archived"):
+        where.append("COALESCE(archived, 0) != 0")
+    elif status == "hidden" and schema.has("sessions", "hidden"):
+        where.append("COALESCE(hidden, 0) != 0")
+    sql = "SELECT COUNT(*) FROM sessions" + (f" WHERE {' AND '.join(where)}" if where else "")
+    return int(conn.execute(sql, args).fetchone()[0])

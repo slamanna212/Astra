@@ -12,6 +12,7 @@ export const queryKeys = {
     lists: () => [...queryKeys.sessions.all, 'list'] as const,
     list: (filters: Required<SessionListFilters>) => [...queryKeys.sessions.lists(), filters] as const,
     detail: (id: string) => [...queryKeys.sessions.all, 'detail', id] as const,
+    count: (source: string[] | null) => [...queryKeys.sessions.all, 'count', 'archived', source] as const,
   },
   insights: {
     all: ['insights'] as const,

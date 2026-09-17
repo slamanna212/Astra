@@ -20,6 +20,13 @@ export function listSessions(params: ListSessionsParams = {}, signal?: AbortSign
   });
 }
 
+export function countArchivedSessions(source: string[] | null, signal?: AbortSignal): Promise<number> {
+  return apiFetch<{ count: number }>('/sessions/count', {
+    signal,
+    query: { status: 'archived', source: source ?? undefined },
+  }).then((r) => r.count);
+}
+
 export function getSession(id: string, signal?: AbortSignal): Promise<SessionDetail> {
   return apiFetch<SessionDetail>(`/sessions/${encodeURIComponent(id)}`, { signal });
 }
