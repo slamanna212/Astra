@@ -22,6 +22,7 @@ export interface SessionSummary {
   hidden: boolean;
   parent_session_id: string | null;
   last_activity_description: string | null;
+  child_count: number;
 }
 
 /** Detail response: a SessionSummary plus backend-defined extra fields (typed loosely for now). */

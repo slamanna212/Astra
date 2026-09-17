@@ -36,3 +36,67 @@
   font-size: 11px;
   color: var(--astra-text-dim);
 }
+
+.expandToggle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--astra-text-dim);
+  border-radius: var(--mantine-radius-sm);
+
+  @mixin hover {
+    color: var(--astra-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--astra-primary);
+    outline-offset: 1px;
+  }
+}
+
+.childIndent {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--mantine-spacing-md) 0 calc(var(--mantine-spacing-md) + var(--mantine-spacing-lg));
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--mantine-spacing-md) + 8px);
+    width: 1px;
+    background: var(--astra-divider);
+  }
+}
+
+.childRow {
+  composes: childIndent;
+  border-bottom: 1px solid var(--astra-divider);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--astra-transition);
+
+  @mixin hover {
+    background-color: var(--astra-hover);
+  }
+
+  &[data-active] {
+    background: var(--astra-selected);
+    box-shadow: inset 2px 0 0 var(--astra-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--astra-primary);
+    outline-offset: -2px;
+  }
+}
+
+.childDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--mantine-color-grape-6);
+}

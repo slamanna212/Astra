@@ -54,6 +54,7 @@ class SessionSummary(BaseModel):
     hidden: bool = False
     parent_session_id: str | None = None
     last_activity_description: str | None = None
+    child_count: int = 0
 
 
 class SessionDetail(SessionSummary):

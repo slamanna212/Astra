@@ -52,21 +52,25 @@ def _walk(client: TestClient, **params: Any) -> tuple[list[dict[str, Any]], int]
 
 def test_pagination_walks_everything_in_order(authed: TestClient, fixture_db_path: Path) -> None:
     rows = _all_rows(fixture_db_path)
+    assert len(rows) == 86
+    # No explicit source filter: default listing hides subagent sessions (they're rendered
+    # nested under their parent in the sidebar instead of as top-level rows).
+    visible = [r for r in rows if r["source"] != "subagent"]
     items, pages = _walk(authed, limit=7, status="all")
     ids = [i["id"] for i in items]
-    assert len(ids) == len(set(ids)) == len(rows) == 86
-    assert ids == _expected_order(rows)
-    assert pages == -(-86 // 7)
+    assert len(ids) == len(set(ids)) == len(visible) == 80
+    assert ids == _expected_order(visible)
+    assert pages == -(-80 // 7)
 
 
 def test_pinned_first_false_order(authed: TestClient, fixture_db_path: Path) -> None:
-    rows = _all_rows(fixture_db_path)
+    rows = [r for r in _all_rows(fixture_db_path) if r["source"] != "subagent"]
     items, _ = _walk(authed, limit=10, status="all", pinned_first=False)
     assert [i["id"] for i in items] == _expected_order(rows, pinned_first=False)
 
 
 def test_default_excludes_archived_and_hidden(authed: TestClient, fixture_db_path: Path) -> None:
-    rows = _all_rows(fixture_db_path)
+    rows = [r for r in _all_rows(fixture_db_path) if r["source"] != "subagent"]
     items, _ = _walk(authed, limit=50)
     visible = [r for r in rows if not r["archived"] and not r["hidden"]]
     assert {i["id"] for i in items} == {r["id"] for r in visible}
@@ -79,6 +83,22 @@ def test_default_excludes_archived_and_hidden(authed: TestClient, fixture_db_pat
     only_hidden, _ = _walk(authed, limit=50, status="hidden")
     assert {i["id"] for i in only_hidden} == {r["id"] for r in rows if r["hidden"]}
     assert all(i["hidden"] for i in only_hidden)
+
+
+def test_default_listing_excludes_subagent_but_source_filter_returns_them(
+    authed: TestClient, fixture_db_path: Path
+) -> None:
+    rows = _all_rows(fixture_db_path)
+    subagent_ids = {r["id"] for r in rows if r["source"] == "subagent"}
+    assert subagent_ids  # fixture has subagent rows; the test is meaningless otherwise
+
+    items, _ = _walk(authed, limit=50, status="all")
+    assert not ({i["id"] for i in items} & subagent_ids)
+    assert all(i["source"] != "subagent" for i in items)
+
+    only_subagent, _ = _walk(authed, limit=50, status="all", source=["subagent"])
+    assert {i["id"] for i in only_subagent} == subagent_ids
+    assert all(i["source"] == "subagent" for i in only_subagent)
 
 
 def test_source_filter_repeatable(authed: TestClient, fixture_db_path: Path) -> None:
@@ -95,8 +115,9 @@ def test_summary_shape(authed: TestClient) -> None:
         "id", "title", "display_name", "source", "model", "started_at", "last_activity_at",
         "ended_at", "message_count", "tool_call_count", "input_tokens", "output_tokens",
         "estimated_cost_usd", "pinned", "archived", "hidden", "parent_session_id",
-        "last_activity_description",
+        "last_activity_description", "child_count",
     }
+    assert isinstance(item["child_count"], int)
     assert isinstance(item["started_at"], float)
     assert isinstance(item["pinned"], bool)
     assert body["next_cursor"]
@@ -112,7 +133,8 @@ def test_pinned_rows_come_first(authed: TestClient) -> None:
 def test_limit_bounds(authed: TestClient) -> None:
     assert authed.get("/api/sessions", params={"limit": 0}).status_code == 422
     assert authed.get("/api/sessions", params={"limit": 201}).status_code == 422
-    assert len(authed.get("/api/sessions", params={"limit": 200, "status": "all"}).json()["items"]) == 86
+    # 86 fixture rows minus 6 subagent rows hidden from the default (no source filter) listing.
+    assert len(authed.get("/api/sessions", params={"limit": 200, "status": "all"}).json()["items"]) == 80
     assert len(authed.get("/api/sessions").json()["items"]) == 50
 
 
@@ -172,6 +194,40 @@ def test_connection_is_read_only(fixture_db_path: Path) -> None:
         with pytest.raises(sqlite3.OperationalError):
             conn.execute("UPDATE sessions SET title = 'x' WHERE 0")
     db.close()
+
+
+def test_child_count(make_client: Any, fixture_db_path: Path, tmp_path: Path) -> None:
+    """child_count reflects the number of sessions with parent_session_id pointing at this row,
+    regardless of the children's own archived/hidden status (the fixture DB has zero
+    parent/child links by default, so this seeds some directly)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    shutil.copy2(fixture_db_path, home / "state.db")
+    # Non-subagent rows only, so the parents are guaranteed visible in the default listing.
+    rows = [r for r in _all_rows(fixture_db_path) if r["source"] != "subagent"]
+    parent_with_children, parent_with_one, parent_with_none, child_a, child_b, child_c = (
+        r["id"] for r in rows[:6]
+    )
+
+    conn = sqlite3.connect(home / "state.db")
+    conn.execute(
+        "UPDATE sessions SET parent_session_id = ? WHERE id IN (?, ?)",
+        (parent_with_children, child_a, child_b),
+    )
+    conn.execute("UPDATE sessions SET parent_session_id = ? WHERE id = ?", (parent_with_one, child_c))
+    conn.commit()
+    conn.close()
+
+    from .conftest import login
+
+    client = make_client(hermes_home=home)
+    login(client)
+    body = client.get("/api/sessions", params={"limit": 200, "status": "all"}).json()
+    by_id = {i["id"]: i for i in body["items"]}
+
+    assert by_id[parent_with_children]["child_count"] == 2
+    assert by_id[parent_with_one]["child_count"] == 1
+    assert by_id[parent_with_none]["child_count"] == 0
 
 
 def test_query_plan_is_single_scan(fixture_db_path: Path) -> None:

@@ -40,6 +40,7 @@ _INT_DEFAULT_ZERO = {
     "reasoning_tokens",
     "api_call_count",
     "rewind_count",
+    "child_count",
 }
 
 SUMMARY_FIELDS: tuple[str, ...] = tuple(SessionSummary.model_fields)
@@ -138,6 +139,12 @@ def build_list_query(schema: Schema, params: ListParams) -> tuple[str, list[Any]
     if params.sources and schema.has("sessions", "source"):
         where.append(f"source IN ({', '.join('?' for _ in params.sources)})")
         args.extend(params.sources)
+    elif schema.has("sessions", "source"):
+        # Default listing (no explicit source filter): hide delegate_task subagent
+        # sessions here — the sidebar renders them nested under their parent instead
+        # of as top-level rows. An explicit ?source=subagent filter still returns
+        # them, flat, same as before.
+        where.append("COALESCE(source, '') != 'subagent'")
     if params.status == "active":
         if schema.has("sessions", "archived"):
             where.append("COALESCE(archived, 0) = 0")
@@ -165,6 +172,23 @@ def build_list_query(schema: Schema, params: ListParams) -> tuple[str, list[Any]
     return sql, args
 
 
+def _child_counts(conn: sqlite3.Connection, schema: Schema, ids: Sequence[str]) -> dict[str, int]:
+    """Sub-agent child counts for the given parent ids, via one indexed IN-list query.
+
+    Kept separate from ``build_list_query`` (rather than a correlated subquery there) so the
+    main list query's plan stays a single scan (see ``test_query_plan_is_single_scan``).
+    """
+    if not ids or not schema.has("sessions", "parent_session_id"):
+        return {}
+    placeholders = ", ".join("?" for _ in ids)
+    rows = conn.execute(
+        f"SELECT parent_session_id, COUNT(*) AS n FROM sessions "
+        f"WHERE parent_session_id IN ({placeholders}) GROUP BY parent_session_id",
+        list(ids),
+    ).fetchall()
+    return {str(row["parent_session_id"]): int(row["n"]) for row in rows}
+
+
 def list_sessions(
     conn: sqlite3.Connection, schema: Schema, params: ListParams
 ) -> tuple[list[SessionSummary], str | None]:
@@ -172,7 +196,12 @@ def list_sessions(
     rows = conn.execute(sql, args).fetchall()
     has_more = len(rows) > params.limit
     rows = rows[: params.limit]
-    items = [SessionSummary(**_row_to_dict(r, SUMMARY_FIELDS)) for r in rows]
+    counts = _child_counts(conn, schema, [str(r["id"]) for r in rows])
+    items = []
+    for r in rows:
+        data = _row_to_dict(r, SUMMARY_FIELDS)
+        data["child_count"] = counts.get(str(r["id"]), 0)
+        items.append(SessionSummary(**data))
     next_cursor = None
     if has_more and rows:
         last = rows[-1]
