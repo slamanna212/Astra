@@ -146,7 +146,10 @@ async def stream(session_id: str, request: Request, ctx: Ctx) -> StreamingRespon
         raise HTTPException(status_code=404, detail="Session not found")
 
     async def event_source():
-        raw_last_id = request.headers.get("last-event-id", "0")
+        # A newly-created EventSource cannot set Last-Event-ID. The explicit cursor lets the
+        # frontend retain the same replay position across its extended reconnect ladder and
+        # after restoring a locally cached partial response from a page reload.
+        raw_last_id = request.headers.get("last-event-id") or request.query_params.get("after_seq", "0")
         try:
             after_seq = max(0, int(raw_last_id))
         except ValueError:

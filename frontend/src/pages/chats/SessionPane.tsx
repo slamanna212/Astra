@@ -1,5 +1,5 @@
 import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Paper, Stack, Text, TextInput, Tooltip } from '@mantine/core';
-import { IconArrowLeft } from '@tabler/icons-react';
+import { IconArrowLeft, IconRefresh } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -10,6 +10,12 @@ import { queryKeys } from '../../api/queryKeys';
 import { deleteSession, getSession, updateSession } from '../../api/sessions';
 import { SourceBadge } from '../../components/SourceBadge';
 import { formatCost, formatCount, formatTokens, formatTps, sessionTitle } from '../../lib/format';
+import {
+  CHAT_RECONNECT_DELAYS_MS,
+  clearChatRecovery,
+  loadChatRecovery,
+  saveChatRecovery,
+} from '../../lib/chatRecovery';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 
@@ -25,6 +31,8 @@ export default function SessionPane() {
   const [clarifyText, setClarifyText] = useState('');
   const [approval, setApproval] = useState<{ request_id: string; command?: string; description?: string } | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
   const [liveTps, setLiveTps] = useState<number | null>(null);
   const [turnTps, setTurnTps] = useState<{ tps: number; outputTokens: number } | null>(null);
   const [draft, setDraft] = useState('');
@@ -34,6 +42,12 @@ export default function SessionPane() {
   const raf = useRef<number | null>(null);
   const pendingText = useRef('');
   const pendingReasoning = useRef('');
+  const streamingRef = useRef('');
+  const reasoningRef = useRef('');
+  const activityRef = useRef<string[]>([]);
+  const runningRef = useRef(false);
+  const lastEventIdRef = useRef(0);
+  const retryNowRef = useRef<() => void>(() => {});
   const highlightParam = searchParams.get('m');
   const highlightMessageId = highlightParam && /^\d+$/.test(highlightParam) ? Number(highlightParam) : undefined;
 
@@ -66,55 +80,89 @@ export default function SessionPane() {
   const selectedProvider = provider === undefined ? (options.data?.default_provider ?? null) : provider;
 
   useEffect(() => {
-    const source = new EventSource(chatStreamUrl(sessionId));
-    source.onopen = () => setConnection('live');
+    let disposed = false;
+    let source: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let persistTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+    let opened = false;
+
+    const recovered = loadChatRecovery(sessionId);
+    streamingRef.current = recovered?.streaming ?? '';
+    reasoningRef.current = recovered?.reasoning ?? '';
+    activityRef.current = recovered?.activity ?? [];
+    runningRef.current = recovered !== null;
+    lastEventIdRef.current = recovered?.lastEventId ?? 0;
+    pendingText.current = '';
+    pendingReasoning.current = '';
+    // Synchronize React with session-scoped browser recovery state when the route changes.
+    setStreaming(streamingRef.current);
+    setReasoning(reasoningRef.current);
+    setActivity(activityRef.current);
+    setRunning(runningRef.current);
+    setShowRecoveryBanner(recovered !== null);
+    setConnection('connecting');
+    setReconnectAttempt(0);
+
+    const persist = () => {
+      if (persistTimer !== null) clearTimeout(persistTimer);
+      persistTimer = null;
+      if (!runningRef.current) return;
+      saveChatRecovery(sessionId, {
+        lastEventId: lastEventIdRef.current,
+        streaming: streamingRef.current + pendingText.current,
+        reasoning: reasoningRef.current + pendingReasoning.current,
+        activity: activityRef.current,
+      });
+    };
+    const schedulePersist = () => {
+      if (persistTimer === null) persistTimer = setTimeout(persist, 1_000);
+    };
     const flush = () => {
       raf.current = null;
       if (pendingText.current) {
         const next = pendingText.current;
         pendingText.current = '';
-        setStreaming((value) => value + next);
+        setStreaming((value) => {
+          streamingRef.current = value + next;
+          return streamingRef.current;
+        });
       }
       if (pendingReasoning.current) {
         const next = pendingReasoning.current;
         pendingReasoning.current = '';
-        setReasoning((value) => value + next);
+        setReasoning((value) => {
+          reasoningRef.current = value + next;
+          return reasoningRef.current;
+        });
       }
+      schedulePersist();
     };
     const schedule = () => {
       if (raf.current === null) raf.current = requestAnimationFrame(flush);
     };
+    const refreshCanonical = () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all }),
+    ]);
     const terminal = () => {
       flush();
+      runningRef.current = false;
       setRunning(false);
       setClarify(null);
       setApproval(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      clearChatRecovery(sessionId);
+      setShowRecoveryBanner(false);
+      void refreshCanonical().then(() => {
+        if (disposed) return;
+        streamingRef.current = '';
+        reasoningRef.current = '';
+        activityRef.current = [];
+        setStreaming('');
+        setReasoning('');
+        setActivity([]);
+      });
     };
-    source.addEventListener('state', (event) => {
-      const state = JSON.parse((event as MessageEvent).data) as { running: boolean };
-      setRunning(state.running);
-      // If completion happened while this browser was disconnected, the terminal SSE frame is
-      // no longer replayable after the turn is evicted. Canonical history closes that gap.
-      if (!state.running) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      }
-    });
-    source.addEventListener('started', () => { setRunning(true); setStreaming(''); setReasoning(''); setActivity([]); setLiveTps(null); setTurnTps(null); });
-    source.addEventListener('delta', (event) => {
-      const data = JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string; tps?: number };
-      pendingText.current += data.text;
-      if (data.tps !== undefined) setLiveTps(data.tps);
-      schedule();
-    });
-    source.addEventListener('reasoning', (event) => { pendingReasoning.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text; schedule(); });
-    source.addEventListener('clarify', (event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null }));
-    source.addEventListener('approval', (event) => setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string }));
-    source.addEventListener('approval_resolved', () => setApproval(null));
-    source.addEventListener('tool', (event) => setActivity((items) => [...items.slice(-4), `Tool: ${(event as MessageEvent).data}`]));
-    source.addEventListener('subagent', (event) => setActivity((items) => [...items.slice(-4), `Subagent: ${(event as MessageEvent).data}`]));
     const finish = (event: Event) => {
       if (event instanceof MessageEvent && event.data) {
         const payload = JSON.parse(event.data) as { late_steer?: string | null; tps?: number; output_tokens?: number };
@@ -126,22 +174,125 @@ export default function SessionPane() {
       setLiveTps(null);
       terminal();
     };
-    source.addEventListener('done', finish);
-    source.addEventListener('cancel', finish);
-    source.addEventListener('error', (event) => {
-      if (event instanceof MessageEvent && event.data) finish(event);
-      else {
+
+    const rememberEvent = (event: Event) => {
+      const id = Number((event as MessageEvent).lastEventId);
+      if (Number.isSafeInteger(id) && id > lastEventIdRef.current) lastEventIdRef.current = id;
+      schedulePersist();
+    };
+    const tracked = (handler: (event: Event) => void) => (event: Event) => {
+      rememberEvent(event);
+      handler(event);
+    };
+
+    const connect = () => {
+      if (disposed) return;
+      source?.close();
+      const currentSource = new EventSource(chatStreamUrl(sessionId, lastEventIdRef.current));
+      source = currentSource;
+      currentSource.onopen = () => {
+        if (disposed || source !== currentSource) return;
+        const wasReconnect = opened || attempt > 0;
+        opened = true;
+        attempt = 0;
+        setReconnectAttempt(0);
+        setConnection('live');
+        if (wasReconnect) void refreshCanonical();
+      };
+      currentSource.addEventListener('state', tracked((event) => {
+        const state = JSON.parse((event as MessageEvent).data) as { running: boolean };
+        runningRef.current = state.running;
+        setRunning(state.running);
+        // A missed terminal frame is recovered from durable canonical history.
+        if (!state.running) terminal();
+        else schedulePersist();
+      }));
+      currentSource.addEventListener('started', tracked(() => {
+        runningRef.current = true;
+        streamingRef.current = '';
+        reasoningRef.current = '';
+        activityRef.current = [];
+        setRunning(true);
+        setStreaming('');
+        setReasoning('');
+        setActivity([]);
+        setShowRecoveryBanner(false);
+        setLiveTps(null);
+        setTurnTps(null);
+        persist();
+      }));
+      currentSource.addEventListener('delta', tracked((event) => {
+        const data = JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string; tps?: number };
+        pendingText.current += data.text;
+        if (data.tps !== undefined) setLiveTps(data.tps);
+        schedule();
+      }));
+      currentSource.addEventListener('reasoning', tracked((event) => {
+        pendingReasoning.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text;
+        schedule();
+      }));
+      currentSource.addEventListener('clarify', tracked((event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null })));
+      currentSource.addEventListener('approval', tracked((event) => setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string })));
+      currentSource.addEventListener('approval_resolved', tracked(() => setApproval(null)));
+      currentSource.addEventListener('tool', tracked((event) => setActivity((items) => {
+        activityRef.current = [...items.slice(-4), `Tool: ${(event as MessageEvent).data}`];
+        return activityRef.current;
+      })));
+      currentSource.addEventListener('subagent', tracked((event) => setActivity((items) => {
+        activityRef.current = [...items.slice(-4), `Subagent: ${(event as MessageEvent).data}`];
+        return activityRef.current;
+      })));
+      currentSource.addEventListener('done', tracked(finish));
+      currentSource.addEventListener('cancel', tracked(finish));
+      currentSource.addEventListener('error', (event) => {
+        if (event instanceof MessageEvent && event.data) {
+          rememberEvent(event);
+          finish(event);
+          return;
+        }
+        currentSource.close();
+        if (disposed || source !== currentSource || retryTimer !== null) return;
         setConnection('reconnecting');
-        void queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) });
-      }
-    });
-    return () => { source.close(); if (raf.current !== null) cancelAnimationFrame(raf.current); };
+        void refreshCanonical();
+        const index = Math.min(attempt, CHAT_RECONNECT_DELAYS_MS.length - 1);
+        const delay = CHAT_RECONNECT_DELAYS_MS[index];
+        attempt += 1;
+        setReconnectAttempt(index + 1);
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          connect();
+        }, delay);
+      });
+    };
+
+    retryNowRef.current = () => {
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      retryTimer = null;
+      connect();
+      void refreshCanonical();
+    };
+    connect();
+    return () => {
+      disposed = true;
+      source?.close();
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      if (persistTimer !== null) clearTimeout(persistTimer);
+      if (runningRef.current) persist();
+      if (raf.current !== null) cancelAnimationFrame(raf.current);
+    };
   }, [sessionId, queryClient]);
 
   const start = async (text: string) => {
+    clearChatRecovery(sessionId);
+    setShowRecoveryBanner(false);
     await sendChat(sessionId, { message: text, model: selectedModel, provider: selectedProvider });
+    streamingRef.current = '';
+    reasoningRef.current = '';
+    activityRef.current = [];
+    runningRef.current = true;
     setStreaming('');
     setReasoning('');
+    setActivity([]);
     setRunning(true);
   };
 
@@ -246,8 +397,37 @@ export default function SessionPane() {
         </Group>
       </Stack>
 
-      <Box style={{ flex: 1, minHeight: 0 }}>
-        <Transcript sessionId={sessionId} highlightMessageId={highlightMessageId} />
+      <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {(showRecoveryBanner || connection === 'reconnecting') && (
+          <Alert
+            m="sm"
+            color="yellow"
+            title={connection === 'reconnecting' ? 'Connection interrupted' : 'Response restored'}
+            role="status"
+          >
+            <Group justify="space-between" align="center" wrap="wrap">
+              <Text size="sm">
+                {connection === 'reconnecting'
+                  ? `Reconnecting to the live response (attempt ${reconnectAttempt}/${CHAT_RECONNECT_DELAYS_MS.length}). Your partial response is saved in this browser.`
+                  : 'A response was in progress when you last left. The saved partial response is shown while Astra refreshes canonical history.'}
+              </Text>
+              <Group gap="xs">
+                {showRecoveryBanner && (
+                  <Button size="compact-xs" variant="subtle" onClick={() => {
+                    setShowRecoveryBanner(false);
+                    clearChatRecovery(sessionId);
+                  }}>Dismiss</Button>
+                )}
+                <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={13} />} onClick={() => retryNowRef.current()}>
+                  Refresh now
+                </Button>
+              </Group>
+            </Group>
+          </Alert>
+        )}
+        <Box style={{ flex: 1, minHeight: 0 }}>
+          <Transcript sessionId={sessionId} highlightMessageId={highlightMessageId} />
+        </Box>
       </Box>
       <Box style={{ maxWidth: 'var(--astra-chat-content-w)', width: '100%', margin: '0 auto' }}>
         {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}

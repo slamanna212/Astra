@@ -27,7 +27,7 @@ Legend:
 - [x] Subagent activity events, transcript cards, and links to child sessions
 - [x] Server-side running turn survives navigation and supports multiple/reconnecting subscribers
 - [ ] Persist and restore composer drafts in browser storage
-- [ ] **Partial** — reconnection state is shown and canonical history is refreshed, but there is no upstream-style reconnect banner, extended backoff ladder, or local partial-response recovery
+- [x] Reconnect banner, extended 1.5–20 second backoff ladder, canonical-history polling, replay cursors, and session-scoped local partial-response recovery
 - [ ] **Partial** — token count and estimated cost are shown per session, but not per message and there is no context-fill ring
 - [ ] Auto-compaction command/status UI (`/compact`)
 - [ ] One-click recovery from exhausted context compression
@@ -39,7 +39,7 @@ Legend:
 - [ ] Transparent chronological stream/worklog mode
 - [x] Live tokens-per-second display
 
-Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), and [`routes/chat.py`](backend/src/astra/routes/chat.py).
+Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), and [`routes/chat.py`](backend/src/astra/routes/chat.py).
 
 ## Conversation controls and rendering
 
@@ -48,7 +48,7 @@ Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [
 - [ ] Regenerate/retry the last assistant response
 - [ ] Clear/truncate a conversation
 - [ ] Branch/fork a conversation from a selected message
-- [ ] **Partial** — canonical tool calls and completed messages recover after reconnect, but in-progress text/tool crash recovery is not persisted in browser storage
+- [x] In-progress text, reasoning, and tool/subagent activity recover from bounded browser storage; canonical completed messages remain authoritative
 - [x] Render Markdown and GitHub-flavored tables
 - [x] Syntax-highlight fenced code blocks
 - [ ] Code-block copy button with “Copied” feedback
@@ -221,16 +221,10 @@ Local evidence: [`auth.py`](backend/src/astra/auth.py), [`middleware.py`](backen
 
 - [x] Responsive hamburger/sidebar navigation
 - [x] Responsive master/detail layouts for chat, files, cron, and skills
-- [ ] Mobile bottom navigation bar
 - [ ] Dedicated files slide-over panel
 - [ ] Audited 44 px minimum touch targets/container-query composer behavior
 - [ ] PWA manifest, service worker, offline shell, and install flow
 - [x] SVG favicon/brand mark
-- [ ] Voice dictation
-- [ ] Hands-free conversational voice mode
-- [ ] Text-to-speech response playback and voice controls
-- [ ] Internationalization/localized UI
-- [ ] RTL/CJK-specific input support audit
 - [ ] Branded onboarding flow
 
 Local evidence: [`AppLayout.tsx`](frontend/src/layout/AppLayout.tsx), responsive page CSS modules, and [`favicon.svg`](frontend/public/favicon.svg).

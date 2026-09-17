@@ -49,6 +49,9 @@ export function approveChat(sessionId: string, requestId: string, choice: 'once'
   });
 }
 
-export function chatStreamUrl(sessionId: string): string {
-  return buildUrl(`/chat/${encodeURIComponent(sessionId)}/stream`);
+export function chatStreamUrl(sessionId: string, afterSeq = 0): string {
+  const url = buildUrl(`/chat/${encodeURIComponent(sessionId)}/stream`);
+  if (afterSeq <= 0) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}after_seq=${encodeURIComponent(afterSeq)}`;
 }
