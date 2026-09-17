@@ -16,7 +16,7 @@
 }
 
 .textarea {
-  font-size: 13.5px;
+  font-size: var(--astra-chat-font-size, 14px);
   line-height: 1.6;
   min-height: 44px;
   color: var(--astra-text);

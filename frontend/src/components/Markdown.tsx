@@ -48,7 +48,7 @@ const baseComponents: Components = {
   th: Table.Th,
   td: Table.Td,
   p: ({ children, ...props }) => (
-    <Text component="p" size="sm" {...props}>
+    <Text component="p" style={{ fontSize: 'inherit' }} {...props}>
       {children}
     </Text>
   ),

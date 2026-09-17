@@ -1,5 +1,5 @@
 .root {
-  font-size: 14px;
+  font-size: var(--astra-chat-font-size, 14px);
   line-height: 1.6;
   color: var(--astra-text-body);
 }
@@ -14,7 +14,7 @@
 
 .root :global(code) {
   font-family: var(--astra-font-mono);
-  font-size: 12.5px;
+  font-size: calc(var(--astra-chat-font-size, 14px) * 0.89);
   background-color: var(--astra-surface-sunk);
   border-radius: var(--astra-radius-tight);
   padding: 1px 5px;

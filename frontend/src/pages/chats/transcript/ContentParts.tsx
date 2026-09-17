@@ -14,7 +14,11 @@ export function ContentParts({ parts }: { parts: MessageContentPart[] }) {
         const type = part.type.toLowerCase();
         const text = stringValue(part, 'text') ?? stringValue(part, 'content');
         if ((type === 'text' || type === 'input_text' || type === 'output_text') && text) {
-          return <Text key={index} size="sm" style={{ whiteSpace: 'pre-wrap' }}>{text}</Text>;
+          return (
+            <Text key={index} style={{ fontSize: 'var(--astra-chat-font-size, 14px)', whiteSpace: 'pre-wrap' }}>
+              {text}
+            </Text>
+          );
         }
         const nestedImage = part.image_url;
         const imageUrl =

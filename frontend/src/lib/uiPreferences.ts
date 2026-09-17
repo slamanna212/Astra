@@ -4,13 +4,19 @@ import { useSyncExternalStore } from 'react';
  * UI-only preferences. This intentionally lives in browser localStorage, under an
  * Astra-specific key, and has no API capable of accepting conversation content.
  */
+export type ChatFontSize = 'sm' | 'md' | 'lg' | 'xl';
+
+/** Point sizes the chat transcript/composer render at for each ChatFontSize setting. */
+export const CHAT_FONT_SIZES: Record<ChatFontSize, number> = { sm: 13, md: 14, lg: 16, xl: 18 };
+
 export interface UiPreferences {
   sidebarDesktopCollapsed: boolean;
   cronAdvancedOpen: boolean;
+  chatFontSize: ChatFontSize;
 }
 
 const KEY = 'astra.ui-preferences.v1';
-const DEFAULTS: UiPreferences = { sidebarDesktopCollapsed: false, cronAdvancedOpen: true };
+const DEFAULTS: UiPreferences = { sidebarDesktopCollapsed: false, cronAdvancedOpen: true, chatFontSize: 'md' };
 let current = read();
 const listeners = new Set<() => void>();
 
@@ -21,6 +27,7 @@ function read(): UiPreferences {
     return {
       sidebarDesktopCollapsed: value.sidebarDesktopCollapsed === true,
       cronAdvancedOpen: value.cronAdvancedOpen !== false,
+      chatFontSize: value.chatFontSize && value.chatFontSize in CHAT_FONT_SIZES ? value.chatFontSize : DEFAULTS.chatFontSize,
     };
   } catch {
     return DEFAULTS;

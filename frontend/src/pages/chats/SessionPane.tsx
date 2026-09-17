@@ -253,7 +253,7 @@ export default function SessionPane() {
         {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
         {streaming && (
           <Box p="sm">
-            <Text style={{ whiteSpace: 'pre-wrap' }}>{streaming}</Text>
+            <Text style={{ fontSize: 'var(--astra-chat-font-size, 14px)', whiteSpace: 'pre-wrap' }}>{streaming}</Text>
             {liveTps !== null && (
               <Text fz={11} c="dimmed" ff="monospace" mt={4}>
                 {formatTps(liveTps)}

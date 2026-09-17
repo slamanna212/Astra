@@ -4,14 +4,14 @@ import { notifications } from '@mantine/notifications';
 import { spotlight } from '@mantine/spotlight';
 import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { getHealth, logout } from '../api/auth';
 import { queryKeys } from '../api/queryKeys';
 import { markSignedOut } from '../auth/session';
 import { BrandMark } from '../components/BrandMark';
 import { SearchSpotlight } from '../components/SearchSpotlight';
-import { updateUiPreferences, useUiPreferences } from '../lib/uiPreferences';
+import { CHAT_FONT_SIZES, updateUiPreferences, useUiPreferences } from '../lib/uiPreferences';
 import classes from './AppLayout.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
 import { NAV_ITEMS } from './navItems';
@@ -24,6 +24,10 @@ export function AppLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const prefs = useUiPreferences();
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--astra-chat-font-size', `${CHAT_FONT_SIZES[prefs.chatFontSize]}px`);
+  }, [prefs.chatFontSize]);
 
   const health = useQuery({
     queryKey: queryKeys.health,

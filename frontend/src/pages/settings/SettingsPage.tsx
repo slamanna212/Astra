@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getStatus } from '../../api/auth';
 import { queryKeys } from '../../api/queryKeys';
 import { formatCount } from '../../lib/format';
-import { updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
+import { type ChatFontSize, updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
 
 function StatusFact({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
@@ -47,6 +47,28 @@ export default function SettingsPage() {
               { label: <Group gap={6} wrap="nowrap"><IconSun size={14} /><span>Light</span></Group>, value: 'light' },
               { label: <Group gap={6} wrap="nowrap"><IconMoon size={14} /><span>Dark</span></Group>, value: 'dark' },
               { label: <Group gap={6} wrap="nowrap"><IconDeviceDesktop size={14} /><span>Auto</span></Group>, value: 'auto' },
+            ]}
+          />
+        </Stack>
+      </Card>
+
+      <Card withBorder p="md">
+        <Title order={3} mb="sm">
+          Chat
+        </Title>
+        <Stack gap="xs">
+          <Text size="sm" c="dimmed">
+            Font size
+          </Text>
+          <SegmentedControl
+            aria-label="Chat font size"
+            value={prefs.chatFontSize}
+            onChange={(value) => updateUiPreferences({ chatFontSize: value as ChatFontSize })}
+            data={[
+              { label: 'Small', value: 'sm' },
+              { label: 'Medium', value: 'md' },
+              { label: 'Large', value: 'lg' },
+              { label: 'Extra large', value: 'xl' },
             ]}
           />
         </Stack>

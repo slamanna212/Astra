@@ -56,6 +56,7 @@
   --astra-control-h: 32px;
   --astra-input-h: 34px;
   --astra-chat-content-w: 1080px; /* reading column cap for transcript/composer, like Claude Code's chat view */
+  --astra-chat-font-size: 14px; /* overridden at runtime from Settings → Chat → Font size */
 
   --astra-font: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   --astra-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;

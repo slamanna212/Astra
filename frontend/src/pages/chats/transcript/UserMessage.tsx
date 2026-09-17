@@ -12,7 +12,18 @@ export function UserMessage({ message, highlighted }: { message: Message; highli
   return (
     <Group justify="flex-end" className={highlighted ? classes.highlighted : undefined}>
       <Stack gap={4} className={classes.userBubble}>
-        {text && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.55 }}>{text}</Text>}
+        {text && (
+          <Text
+            style={{
+              fontSize: 'var(--astra-chat-font-size, 14px)',
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+              lineHeight: 1.55,
+            }}
+          >
+            {text}
+          </Text>
+        )}
         {parts && <ContentParts parts={parts} />}
         <Text component="span" className={classes.timestamp} style={{ color: 'inherit', opacity: 0.75 }}>
           {formatDateTime(message.timestamp)}

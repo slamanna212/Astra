@@ -72,7 +72,7 @@ export function ChatComposer({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [menuOpened, setMenuOpened] = useState(false);
   const [filter, setFilter] = useState('');
-  const [expanded, setExpanded] = useState<Set<string | null>>(new Set());
+  const [expandedGroup, setExpandedGroup] = useState<string | null | undefined>(undefined);
 
   const groups = useMemo(() => groupModels(models, providers), [models, providers]);
   const trimmedFilter = filter.trim().toLowerCase();
@@ -94,7 +94,7 @@ export function ChatComposer({
   const matchCount = useMemo(() => visibleGroups.reduce((sum, group) => sum + group.models.length, 0), [visibleGroups]);
 
   const openMenu = () => {
-    setExpanded(new Set(provider ? [provider] : []));
+    setExpandedGroup(provider ?? undefined);
     setFilter('');
     setMenuOpened(true);
   };
@@ -103,12 +103,7 @@ export function ChatComposer({
     setFilter('');
   };
   const toggleGroup = (key: string | null) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setExpandedGroup((prev) => (prev === key ? undefined : key));
   };
   const selectModel = (name: string) => {
     const option = models.find((item) => item.name === name);
@@ -208,7 +203,7 @@ export function ChatComposer({
               <Box className={classes.menuList}>
                 {visibleGroups.map((group, index) => {
                   const groupKey = group.provider ?? 'other';
-                  const isExpanded = isFiltering || expanded.has(group.provider);
+                  const isExpanded = isFiltering || expandedGroup === group.provider;
                   const isActive = group.provider !== null && group.provider === provider;
                   return (
                     <Box key={groupKey}>
