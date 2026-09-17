@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getStatus } from '../../api/auth';
 import { queryKeys } from '../../api/queryKeys';
 import { formatCount } from '../../lib/format';
-import { type BusyTurnMode, type ChatFontSize, updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
+import { type ActivityDisplayMode, type BusyTurnMode, type ChatFontSize, updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
 
 function StatusFact({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
@@ -71,6 +71,21 @@ export default function SettingsPage() {
               { label: 'Extra large', value: 'xl' },
             ]}
           />
+          <Text size="sm" c="dimmed" mt="sm">
+            Activity display
+          </Text>
+          <SegmentedControl
+            aria-label="Chat activity display"
+            value={prefs.activityDisplayMode}
+            onChange={(value) => updateUiPreferences({ activityDisplayMode: value as ActivityDisplayMode })}
+            data={[
+              { label: 'Transparent stream', value: 'transparent_stream' },
+              { label: 'Compact worklog', value: 'compact_worklog' },
+            ]}
+          />
+          <Text size="xs" c="dimmed">
+            Transparent stream shows thinking, tool calls, results, and response text in execution order. Compact worklog groups operational details.
+          </Text>
           <Text size="sm" c="dimmed" mt="sm">
             While Hermes is responding
           </Text>

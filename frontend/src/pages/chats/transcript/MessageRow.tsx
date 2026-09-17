@@ -2,6 +2,7 @@ import { Badge, Box, Code, Group, Text } from '@mantine/core';
 import type { ChildSession, Message } from '../../../api/types';
 import type { ReasoningEffort } from '../../../api/chat';
 import { formatDateTime } from '../../../lib/format';
+import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
 import { AssistantMessage } from './AssistantMessage';
 import { DisplayKindNotice } from './DisplayKindNotice';
 import classes from './Transcript.module.css';
@@ -42,6 +43,7 @@ export function MessageRow({
   reasoningEffort,
   sessionTokens,
   sessionCostUsd,
+  activityDisplayMode,
 }: {
   message: Message;
   toolResults: Map<string, Message>;
@@ -55,6 +57,7 @@ export function MessageRow({
   reasoningEffort?: ReasoningEffort | null;
   sessionTokens?: number;
   sessionCostUsd?: number | null;
+  activityDisplayMode: ActivityDisplayMode;
 }) {
   if (message.display_kind) {
     return <DisplayKindNotice message={message} />;
@@ -80,6 +83,7 @@ export function MessageRow({
         reasoningEffort={reasoningEffort}
         sessionTokens={sessionTokens}
         sessionCostUsd={sessionCostUsd}
+        activityDisplayMode={activityDisplayMode}
       />
     );
   }

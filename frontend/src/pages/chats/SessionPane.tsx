@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Menu, Paper, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Menu, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileText, IconGitBranch, IconRefresh } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,9 +27,11 @@ import {
 import { saveComposerDraft, useComposerDraft } from '../../lib/composerDrafts';
 import { clearBusyTurnQueue, enqueueBusyTurnMessage, loadBusyTurnQueue, removeBusyTurnMessage, type QueuedTurnMessage } from '../../lib/busyTurnQueue';
 import { updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
+import { appendLiveActivity, parseLiveActivityData, type LiveActivityEvent } from '../../lib/liveActivity';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 import { ContextRing } from './ContextRing';
+import { LiveTurnActivity } from './LiveTurnActivity';
 
 export default function SessionPane() {
   const { sessionId = '' } = useParams();
@@ -38,8 +40,6 @@ export default function SessionPane() {
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
   const [turnState, setTurnState] = useState<{ sessionId: string; known: boolean }>({ sessionId, known: false });
-  const [streaming, setStreaming] = useState('');
-  const [reasoning, setReasoning] = useState('');
   const [clarify, setClarify] = useState<{ id: number; question: string; choices: unknown[] | null } | null>(null);
   const [clarifyText, setClarifyText] = useState('');
   const [approval, setApproval] = useState<{ request_id: string; command?: string; description?: string } | null>(null);
@@ -57,16 +57,17 @@ export default function SessionPane() {
     sessionId,
     messages: loadBusyTurnQueue(sessionId),
   }));
-  const [activity, setActivity] = useState<string[]>([]);
+  const [liveEvents, setLiveEvents] = useState<LiveActivityEvent[]>([]);
   const [compaction, setCompaction] = useState<{ phase: 'running' | 'done'; message: string } | null>(null);
   const [turnError, setTurnError] = useState<{ message: string; recoveryAvailable: boolean } | null>(null);
   const [recoveringContext, setRecoveringContext] = useState(false);
   const raf = useRef<number | null>(null);
   const pendingText = useRef('');
   const pendingReasoning = useRef('');
+  const pendingLiveEvents = useRef<LiveActivityEvent[]>([]);
   const streamingRef = useRef('');
   const reasoningRef = useRef('');
-  const activityRef = useRef<string[]>([]);
+  const liveEventsRef = useRef<LiveActivityEvent[]>([]);
   const runningRef = useRef(false);
   const lastEventIdRef = useRef(0);
   const retryNowRef = useRef<() => void>(() => {});
@@ -117,15 +118,20 @@ export default function SessionPane() {
     const recovered = loadChatRecovery(sessionId);
     streamingRef.current = recovered?.streaming ?? '';
     reasoningRef.current = recovered?.reasoning ?? '';
-    activityRef.current = recovered?.activity ?? [];
+    liveEventsRef.current = recovered?.events?.length
+      ? recovered.events
+      : [
+          ...(recovered?.reasoning ? [{ kind: 'reasoning' as const, text: recovered.reasoning }] : []),
+          ...(recovered?.activity ?? []).map((text) => ({ kind: 'tool' as const, data: { value: text } })),
+          ...(recovered?.streaming ? [{ kind: 'assistant' as const, text: recovered.streaming }] : []),
+        ];
     runningRef.current = recovered !== null;
     lastEventIdRef.current = recovered?.lastEventId ?? 0;
     pendingText.current = '';
     pendingReasoning.current = '';
+    pendingLiveEvents.current = [];
     // Synchronize React with session-scoped browser recovery state when the route changes.
-    setStreaming(streamingRef.current);
-    setReasoning(reasoningRef.current);
-    setActivity(activityRef.current);
+    setLiveEvents(liveEventsRef.current);
     setRunning(runningRef.current);
     setShowRecoveryBanner(recovered !== null);
     setCompaction(null);
@@ -143,7 +149,8 @@ export default function SessionPane() {
         lastEventId: lastEventIdRef.current,
         streaming: streamingRef.current + pendingText.current,
         reasoning: reasoningRef.current + pendingReasoning.current,
-        activity: activityRef.current,
+        activity: [],
+        events: appendLiveActivity(liveEventsRef.current, pendingLiveEvents.current),
       });
     };
     const schedulePersist = () => {
@@ -154,18 +161,18 @@ export default function SessionPane() {
       if (pendingText.current) {
         const next = pendingText.current;
         pendingText.current = '';
-        setStreaming((value) => {
-          streamingRef.current = value + next;
-          return streamingRef.current;
-        });
+        streamingRef.current += next;
       }
       if (pendingReasoning.current) {
         const next = pendingReasoning.current;
         pendingReasoning.current = '';
-        setReasoning((value) => {
-          reasoningRef.current = value + next;
-          return reasoningRef.current;
-        });
+        reasoningRef.current += next;
+      }
+      if (pendingLiveEvents.current.length > 0) {
+        const additions = pendingLiveEvents.current;
+        pendingLiveEvents.current = [];
+        liveEventsRef.current = appendLiveActivity(liveEventsRef.current, additions);
+        setLiveEvents(liveEventsRef.current);
       }
       schedulePersist();
     };
@@ -188,10 +195,8 @@ export default function SessionPane() {
         if (disposed) return;
         streamingRef.current = '';
         reasoningRef.current = '';
-        activityRef.current = [];
-        setStreaming('');
-        setReasoning('');
-        setActivity([]);
+        liveEventsRef.current = [];
+        setLiveEvents([]);
       });
     };
     const finish = (event: Event) => {
@@ -251,11 +256,12 @@ export default function SessionPane() {
         setTurnState({ sessionId, known: true });
         streamingRef.current = '';
         reasoningRef.current = '';
-        activityRef.current = [];
+        liveEventsRef.current = [];
+        pendingText.current = '';
+        pendingReasoning.current = '';
+        pendingLiveEvents.current = [];
         setRunning(true);
-        setStreaming('');
-        setReasoning('');
-        setActivity([]);
+        setLiveEvents([]);
         setShowRecoveryBanner(false);
         setLiveTps(null);
         setTurnTps(null);
@@ -268,24 +274,27 @@ export default function SessionPane() {
       currentSource.addEventListener('delta', tracked((event) => {
         const data = JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string; tps?: number };
         pendingText.current += data.text;
+        pendingLiveEvents.current.push({ kind: 'assistant', text: data.text });
         if (data.tps !== undefined) setLiveTps(data.tps);
         schedule();
       }));
       currentSource.addEventListener('reasoning', tracked((event) => {
-        pendingReasoning.current += (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text;
+        const text = (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text;
+        pendingReasoning.current += text;
+        pendingLiveEvents.current.push({ kind: 'reasoning', text });
         schedule();
       }));
       currentSource.addEventListener('clarify', tracked((event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null })));
       currentSource.addEventListener('approval', tracked((event) => setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string })));
       currentSource.addEventListener('approval_resolved', tracked(() => setApproval(null)));
-      currentSource.addEventListener('tool', tracked((event) => setActivity((items) => {
-        activityRef.current = [...items.slice(-4), `Tool: ${(event as MessageEvent).data}`];
-        return activityRef.current;
-      })));
-      currentSource.addEventListener('subagent', tracked((event) => setActivity((items) => {
-        activityRef.current = [...items.slice(-4), `Subagent: ${(event as MessageEvent).data}`];
-        return activityRef.current;
-      })));
+      currentSource.addEventListener('tool', tracked((event) => {
+        pendingLiveEvents.current.push({ kind: 'tool', data: parseLiveActivityData((event as MessageEvent).data) });
+        schedule();
+      }));
+      currentSource.addEventListener('subagent', tracked((event) => {
+        pendingLiveEvents.current.push({ kind: 'subagent', data: parseLiveActivityData((event as MessageEvent).data) });
+        schedule();
+      }));
       currentSource.addEventListener('status', tracked((event) => {
         const payload = JSON.parse((event as MessageEvent).data) as { kind?: string; message?: string };
         if (payload.kind === 'compacting') {
@@ -358,12 +367,13 @@ export default function SessionPane() {
     });
     streamingRef.current = '';
     reasoningRef.current = '';
-    activityRef.current = [];
+    liveEventsRef.current = [];
+    pendingText.current = '';
+    pendingReasoning.current = '';
+    pendingLiveEvents.current = [];
     runningRef.current = true;
     setTurnState({ sessionId, known: true });
-    setStreaming('');
-    setReasoning('');
-    setActivity([]);
+    setLiveEvents([]);
     setTurnError(null);
     setCompaction(null);
     setRunning(true);
@@ -632,6 +642,7 @@ export default function SessionPane() {
             reasoningEffort={reasoningEffort}
             sessionTokens={s.input_tokens + s.output_tokens}
             sessionCostUsd={s.estimated_cost_usd}
+            activityDisplayMode={prefs.activityDisplayMode}
           />
         </Box>
       </Box>
@@ -656,16 +667,11 @@ export default function SessionPane() {
             </Group>
           </Alert>
         )}
-        {reasoning && <Alert m="sm" color="gray" title="Thinking">{reasoning}</Alert>}
-        {streaming && (
-          <Box p="sm">
-            <Text style={{ fontSize: 'var(--astra-chat-font-size, 14px)', whiteSpace: 'pre-wrap' }}>{streaming}</Text>
-            {liveTps !== null && (
-              <Text fz={11} c="dimmed" ff="monospace" mt={4}>
-                {formatTps(liveTps)}
-              </Text>
-            )}
-          </Box>
+        <LiveTurnActivity events={liveEvents} mode={prefs.activityDisplayMode} />
+        {liveTps !== null && (
+          <Text fz={11} c="dimmed" ff="monospace" px="sm">
+            {formatTps(liveTps)}
+          </Text>
         )}
         {!running && turnTps && (
           <Text fz={11} c="dimmed" ff="monospace" px="sm">
@@ -696,7 +702,6 @@ export default function SessionPane() {
             </Group>
           </Alert>
         )}
-        {activity.length > 0 && <Paper mx="sm" p="xs" withBorder>{activity.map((item, index) => <Text size="xs" c="dimmed" key={`${index}-${item}`}>{item}</Text>)}</Paper>}
         {queuedMessages.length > 0 && (
           <Alert m="sm" color="blue" title={`${queuedMessages.length} message${queuedMessages.length === 1 ? '' : 's'} queued`} role="status">
             <Group justify="space-between" align="center" wrap="wrap">

@@ -6,6 +6,7 @@ import { useSyncExternalStore } from 'react';
  */
 export type ChatFontSize = 'sm' | 'md' | 'lg' | 'xl';
 export type BusyTurnMode = 'queue' | 'interrupt' | 'steer';
+export type ActivityDisplayMode = 'transparent_stream' | 'compact_worklog';
 
 /** Point sizes the chat transcript/composer render at for each ChatFontSize setting. */
 export const CHAT_FONT_SIZES: Record<ChatFontSize, number> = { sm: 13, md: 14, lg: 16, xl: 18 };
@@ -15,6 +16,7 @@ export interface UiPreferences {
   cronAdvancedOpen: boolean;
   chatFontSize: ChatFontSize;
   busyTurnMode: BusyTurnMode;
+  activityDisplayMode: ActivityDisplayMode;
 }
 
 const KEY = 'astra.ui-preferences.v1';
@@ -23,6 +25,7 @@ const DEFAULTS: UiPreferences = {
   cronAdvancedOpen: true,
   chatFontSize: 'md',
   busyTurnMode: 'steer',
+  activityDisplayMode: 'transparent_stream',
 };
 let current = read();
 const listeners = new Set<() => void>();
@@ -38,6 +41,9 @@ function read(): UiPreferences {
       busyTurnMode: value.busyTurnMode === 'queue' || value.busyTurnMode === 'interrupt' || value.busyTurnMode === 'steer'
         ? value.busyTurnMode
         : DEFAULTS.busyTurnMode,
+      activityDisplayMode: value.activityDisplayMode === 'compact_worklog' || value.activityDisplayMode === 'transparent_stream'
+        ? value.activityDisplayMode
+        : DEFAULTS.activityDisplayMode,
     };
   } catch {
     return DEFAULTS;

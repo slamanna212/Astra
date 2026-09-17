@@ -9,6 +9,7 @@ import type { ReasoningEffort } from '../../../api/chat';
 import { queryKeys } from '../../../api/queryKeys';
 import type { Message } from '../../../api/types';
 import { buildToolResultIndex } from '../../../lib/transcript';
+import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
 import { MessageRow } from './MessageRow';
 import classes from './Transcript.module.css';
 
@@ -34,6 +35,7 @@ export function Transcript({
   reasoningEffort,
   sessionTokens = 0,
   sessionCostUsd = null,
+  activityDisplayMode = 'transparent_stream',
 }: {
   sessionId: string;
   highlightMessageId?: number;
@@ -43,6 +45,7 @@ export function Transcript({
   reasoningEffort?: ReasoningEffort | null;
   sessionTokens?: number;
   sessionCostUsd?: number | null;
+  activityDisplayMode?: ActivityDisplayMode;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -233,6 +236,7 @@ export function Transcript({
                     reasoningEffort={reasoningEffort}
                     sessionTokens={sessionTokens}
                     sessionCostUsd={sessionCostUsd}
+                    activityDisplayMode={activityDisplayMode}
                   />
                 )}
               </div>

@@ -7,7 +7,7 @@ import { Link, useNavigate } from 'react-router';
 import { getChildSessions } from '../../api/messages';
 import { queryKeys } from '../../api/queryKeys';
 import { countArchivedSessions, createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
-import type { ChildSession, SessionSummary } from '../../api/types';
+import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
 import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
 import { formatCompactAge, formatCount, formatDateTime, sessionTitle } from '../../lib/format';
@@ -118,7 +118,7 @@ function rowKey(row: Row | undefined, index: number): string {
 export function SessionList({ selectedId }: { selectedId?: string }) {
   const [sources, setSources] = useState<string[]>([]);
   const [showArchived, setShowArchived] = useState(false);
-  const status = showArchived ? 'archived' : 'active';
+  const status: SessionStatus = showArchived ? 'archived' : 'active';
   const now = useNow();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

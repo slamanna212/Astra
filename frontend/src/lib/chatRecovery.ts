@@ -1,3 +1,5 @@
+import { isLiveActivityEvent, MAX_LIVE_ACTIVITY_EVENTS, type LiveActivityEvent } from './liveActivity';
+
 export const CHAT_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 export const CHAT_RECONNECT_DELAYS_MS = [1_500, 3_000, 5_000, 8_000, 12_000, 20_000] as const;
 
@@ -10,6 +12,7 @@ export interface ChatRecovery {
   streaming: string;
   reasoning: string;
   activity: string[];
+  events: LiveActivityEvent[];
 }
 
 type RecoveryMap = Record<string, ChatRecovery>;
@@ -61,6 +64,7 @@ export function loadChatRecovery(sessionId: string, now = Date.now()): ChatRecov
     streaming: typeof value.streaming === 'string' ? value.streaming : '',
     reasoning: typeof value.reasoning === 'string' ? value.reasoning : '',
     activity: Array.isArray(value.activity) ? value.activity.filter((item): item is string => typeof item === 'string').slice(-5) : [],
+    events: Array.isArray(value.events) ? value.events.filter(isLiveActivityEvent).slice(-MAX_LIVE_ACTIVITY_EVENTS) : [],
   };
 }
 
@@ -73,6 +77,7 @@ export function saveChatRecovery(sessionId: string, value: Omit<ChatRecovery, 'u
     streaming: value.streaming,
     reasoning: value.reasoning,
     activity: value.activity.slice(-5),
+    events: value.events.slice(-MAX_LIVE_ACTIVITY_EVENTS),
   };
   const trimmed = Object.fromEntries(
     Object.entries(all)

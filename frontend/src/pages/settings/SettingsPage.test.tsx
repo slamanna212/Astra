@@ -24,7 +24,7 @@ describe('SettingsPage', () => {
 
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock);
-    updateUiPreferences({ sidebarDesktopCollapsed: false });
+    updateUiPreferences({ sidebarDesktopCollapsed: false, activityDisplayMode: 'transparent_stream' });
   });
 
   afterEach(() => {
@@ -95,5 +95,14 @@ describe('SettingsPage', () => {
 
     await user.click(screen.getByText('Interrupt'));
     expect(screen.getByLabelText('Busy turn mode')).toBeInTheDocument();
+  });
+
+  it('changes the chat activity display mode', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(makeStatus()));
+    const user = userEvent.setup();
+    render(<SettingsPage />);
+
+    await user.click(screen.getByText('Compact worklog'));
+    expect(screen.getByLabelText('Chat activity display')).toBeInTheDocument();
   });
 });

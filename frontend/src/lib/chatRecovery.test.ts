@@ -16,6 +16,11 @@ describe('chat recovery', () => {
       streaming: 'partial answer',
       reasoning: 'working',
       activity: ['Tool: search'],
+      events: [
+        { kind: 'reasoning', text: 'working' },
+        { kind: 'tool', data: { name: 'search' } },
+        { kind: 'assistant', text: 'partial answer' },
+      ],
     }, 1_000);
 
     expect(loadChatRecovery('session-1', 1_001)).toEqual({
@@ -24,6 +29,11 @@ describe('chat recovery', () => {
       streaming: 'partial answer',
       reasoning: 'working',
       activity: ['Tool: search'],
+      events: [
+        { kind: 'reasoning', text: 'working' },
+        { kind: 'tool', data: { name: 'search' } },
+        { kind: 'assistant', text: 'partial answer' },
+      ],
     });
   });
 
@@ -33,13 +43,14 @@ describe('chat recovery', () => {
       streaming: 'old',
       reasoning: '',
       activity: [],
+      events: [],
     }, 1_000);
 
     expect(loadChatRecovery('session-1', 1_000 + CHAT_RECOVERY_MAX_AGE_MS + 1)).toBeNull();
   });
 
   it('clears only the selected session', () => {
-    const partial = { lastEventId: 1, streaming: 'x', reasoning: '', activity: [] };
+    const partial = { lastEventId: 1, streaming: 'x', reasoning: '', activity: [], events: [] };
     saveChatRecovery('one', partial, 1_000);
     saveChatRecovery('two', partial, 1_000);
     clearChatRecovery('one');
@@ -54,6 +65,7 @@ describe('chat recovery', () => {
         streaming: String(index),
         reasoning: '',
         activity: [],
+        events: [],
       }, 1_000 + index);
     }
 

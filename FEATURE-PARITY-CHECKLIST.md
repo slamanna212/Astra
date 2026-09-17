@@ -33,17 +33,15 @@ Legend:
 - [x] Reasoning-effort selector in chat
 - [x] Configurable busy-turn mode (queue / interrupt / steer), with per-session persisted follow-up queues and stop-then-send interrupt behavior
 - [x] Steer a running turn, including uploaded workspace-file references
-- [ ] Transparent chronological stream/worklog mode
+- [x] Transparent chronological stream/worklog mode
 - [x] Live tokens-per-second display
 
-Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`busyTurnQueue.ts`](frontend/src/lib/busyTurnQueue.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), [`routes/chat.py`](backend/src/astra/routes/chat.py), and [`routes/sessions.py`](backend/src/astra/routes/sessions.py).
+Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`LiveTurnActivity.tsx`](frontend/src/pages/chats/LiveTurnActivity.tsx), [`liveActivity.ts`](frontend/src/lib/liveActivity.ts), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`busyTurnQueue.ts`](frontend/src/lib/busyTurnQueue.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), [`routes/chat.py`](backend/src/astra/routes/chat.py), and [`routes/sessions.py`](backend/src/astra/routes/sessions.py).
 
 ## Conversation controls and rendering
 
 - [x] Copy an entire message to the clipboard
-- [ ] Edit a past/last user message and regenerate from that point
 - [x] Regenerate/retry the last assistant response
-- [ ] Clear/truncate a conversation
 - [x] Branch/fork a conversation from a selected message
 - [x] In-progress text, reasoning, and tool/subagent activity recover from bounded browser storage; canonical completed messages remain authoritative
 - [x] Render Markdown and GitHub-flavored tables
