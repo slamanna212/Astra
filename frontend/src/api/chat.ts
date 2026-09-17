@@ -22,17 +22,25 @@ export interface ChatOptions {
   providers: string[];
 }
 
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
+
+interface ChatModelSettings {
+  model?: string | null;
+  provider?: string | null;
+  reasoning_effort?: ReasoningEffort | null;
+}
+
 export function getChatOptions(sessionId: string, signal?: AbortSignal) {
   return apiFetch<ChatOptions>(`/chat/${encodeURIComponent(sessionId)}/options`, { signal });
 }
 
-export function sendChat(sessionId: string, body: { message: string; model?: string | null; provider?: string | null }) {
+export function sendChat(sessionId: string, body: { message: string } & ChatModelSettings) {
   return apiFetch<{ running: true }>(`/chat/${encodeURIComponent(sessionId)}/send`, { method: 'POST', body });
 }
 
 export function regenerateChat(
   sessionId: string,
-  body: { message_id: number; model?: string | null; provider?: string | null },
+  body: { message_id: number } & ChatModelSettings,
 ) {
   return apiFetch<{ running: true }>(`/chat/${encodeURIComponent(sessionId)}/regenerate`, {
     method: 'POST',

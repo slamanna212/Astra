@@ -191,8 +191,9 @@ async def test_commit_idle_is_a_non_request_thread_session_boundary(base_setting
     FakeAgent.release.set()
     approvals.resolved.set()
     # Use the normal builder to populate the identity-aware cache, without a provider call.
-    turn = chatmod.Turn("session-1", "go", None, None)
+    turn = chatmod.Turn("session-1", "go", None, None, reasoning_effort="high")
     agent = await asyncio.to_thread(manager._build_agent, turn)
+    assert agent.reasoning_config == {"enabled": True, "effort": "high"}
     assert not agent.commits
     await manager.commit_idle()
     assert agent.commits
@@ -296,18 +297,18 @@ def test_regenerate_rewinds_selected_response_and_starts_replacement(
     monkeypatch.setitem(sys.modules, "agent", agent_module)
     monkeypatch.setitem(sys.modules, "agent.context_compressor", compressor_module)
 
-    async def start_after_prepare(session_id, prepare, *, model, provider):
-        calls["start"] = (session_id, await asyncio.to_thread(prepare), model, provider)
+    async def start_after_prepare(session_id, prepare, *, model, provider, reasoning_effort):
+        calls["start"] = (session_id, await asyncio.to_thread(prepare), model, provider, reasoning_effort)
 
     monkeypatch.setattr(authed.app.state.ctx.chat, "start_after_prepare", start_after_prepare)
     response = authed.post(
         "/api/chat/session-1/regenerate",
-        json={"message_id": 11, "model": "test-model", "provider": "test-provider"},
+        json={"message_id": 11, "model": "test-model", "provider": "test-provider", "reasoning_effort": "high"},
         headers=CSRF,
     )
 
     assert response.status_code == 202, response.text
     assert response.json() == {"running": True}
-    assert calls["start"] == ("session-1", "Try this again", "test-model", "test-provider")
+    assert calls["start"] == ("session-1", "Try this again", "test-model", "test-provider", "high")
     assert calls["rewind"][0:2] == ("session-1", 10)
     assert calls["rewind"][2]["expected_active_ids"] == [10, 11]

@@ -1,6 +1,7 @@
 import { Group, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import type { Message } from '../../../api/types';
+import type { ReasoningEffort } from '../../../api/chat';
 import classes from './Transcript.module.css';
 import { ContentParts } from './ContentParts';
 import { MessageActions } from './MessageActions';
@@ -14,6 +15,7 @@ export function UserMessage({
   running,
   model,
   provider,
+  reasoningEffort,
 }: {
   sessionId: string;
   message: Message;
@@ -21,6 +23,7 @@ export function UserMessage({
   running: boolean;
   model?: string | null;
   provider?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
 }) {
   const [revealed, setRevealed] = useState(false);
   const text = typeof message.content === 'string' ? message.content : null;
@@ -55,7 +58,7 @@ export function UserMessage({
           )}
           {parts && <ContentParts parts={parts} />}
         </Stack>
-        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} align="right" />
+        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} align="right" />
       </Stack>
     </Group>
   );

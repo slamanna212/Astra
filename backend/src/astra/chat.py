@@ -75,6 +75,7 @@ class Turn:
     message: str
     model: str | None
     provider: str | None
+    reasoning_effort: str | None = None
     events: queue.SimpleQueue[ChatEvent] = field(default_factory=queue.SimpleQueue)
     recent: list[ChatEvent] = field(default_factory=list)
     cancel: threading.Event = field(default_factory=threading.Event)
@@ -188,7 +189,15 @@ class ChatManager:
             return_exceptions=True,
         )
 
-    async def start(self, session_id: str, message: str, *, model: str | None, provider: str | None) -> None:
+    async def start(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        model: str | None,
+        provider: str | None,
+        reasoning_effort: str | None = None,
+    ) -> None:
         if not message.strip():
             raise ChatError("message must not be empty")
         if self._closed:
@@ -196,7 +205,13 @@ class ChatManager:
         async with self._lock:
             if session_id in self._turns:
                 raise SessionBusy("a turn is already running for this session")
-            turn = Turn(session_id=session_id, message=message.strip(), model=model, provider=provider)
+            turn = Turn(
+                session_id=session_id,
+                message=message.strip(),
+                model=model,
+                provider=provider,
+                reasoning_effort=reasoning_effort,
+            )
             self._turns[session_id] = turn
             turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
             self._emit(turn, "started", {"running": True})
@@ -210,6 +225,7 @@ class ChatManager:
         *,
         model: str | None,
         provider: str | None,
+        reasoning_effort: str | None = None,
     ) -> None:
         """Reserve a session, mutate its transcript, then start the replacement turn.
 
@@ -226,7 +242,13 @@ class ChatManager:
             message = (await loop.run_in_executor(self._executor, prepare)).strip()
             if not message:
                 raise ChatError("message must not be empty")
-            turn = Turn(session_id=session_id, message=message, model=model, provider=provider)
+            turn = Turn(
+                session_id=session_id,
+                message=message,
+                model=model,
+                provider=provider,
+                reasoning_effort=reasoning_effort,
+            )
             self._turns[session_id] = turn
             turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
             self._emit(turn, "started", {"running": True})
@@ -400,7 +422,15 @@ class ChatManager:
         runtime = resolve_runtime_provider()(requested=provider, target_model=model)
         toolsets = _webui_toolsets(config)
         key_sig = hashlib.sha256(str(runtime.get("api_key") or "").encode()).hexdigest()
-        signature = json.dumps([model, runtime.get("provider"), runtime.get("base_url"), key_sig, toolsets], sort_keys=True)
+        reasoning_config = None
+        if turn.reasoning_effort == "none":
+            reasoning_config = {"enabled": False}
+        elif turn.reasoning_effort:
+            reasoning_config = {"enabled": True, "effort": turn.reasoning_effort}
+        signature = json.dumps(
+            [model, runtime.get("provider"), runtime.get("base_url"), key_sig, toolsets, reasoning_config],
+            sort_keys=True,
+        )
         with self._cache_lock:
             cached = self._agents.get(turn.session_id)
         if cached is not None and cached.signature == signature:
@@ -424,6 +454,7 @@ class ChatManager:
             "platform": "webui",
             "quiet_mode": True,
             "enabled_toolsets": toolsets,
+            "reasoning_config": reasoning_config,
             "session_id": turn.session_id,
             "session_db": session_db,
             "stream_delta_callback": lambda text: self._token_callback(turn, text),

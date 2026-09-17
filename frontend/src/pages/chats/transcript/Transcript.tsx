@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getChildSessions, listMessages, MESSAGE_PAGE_SIZE } from '../../../api/messages';
+import type { ReasoningEffort } from '../../../api/chat';
 import { queryKeys } from '../../../api/queryKeys';
 import type { Message } from '../../../api/types';
 import { buildToolResultIndex } from '../../../lib/transcript';
@@ -30,12 +31,14 @@ export function Transcript({
   running = false,
   model,
   provider,
+  reasoningEffort,
 }: {
   sessionId: string;
   highlightMessageId?: number;
   running?: boolean;
   model?: string | null;
   provider?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -223,6 +226,7 @@ export function Transcript({
                     running={running}
                     model={model}
                     provider={provider}
+                    reasoningEffort={reasoningEffort}
                   />
                 )}
               </div>

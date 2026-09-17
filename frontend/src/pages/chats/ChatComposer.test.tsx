@@ -9,6 +9,7 @@ function Harness({ onSend, onAttach }: { onSend: (text: string) => Promise<void>
   const [draft, setDraft] = useState('');
   const [model, setModel] = useState<string | null>('model-a');
   const [provider, setProvider] = useState<string | null>('acme');
+  const [reasoningEffort, setReasoningEffort] = useState<import('../../api/chat').ReasoningEffort | null>(null);
   return (
     <ChatComposer
       running={false}
@@ -25,6 +26,8 @@ function Harness({ onSend, onAttach }: { onSend: (text: string) => Promise<void>
       defaultModel="model-a"
       onModelChange={setModel}
       onProviderChange={setProvider}
+      reasoningEffort={reasoningEffort}
+      onReasoningEffortChange={setReasoningEffort}
       draft={draft}
       onDraftChange={setDraft}
       onAttach={onAttach}
@@ -50,5 +53,15 @@ describe('ChatComposer', () => {
 
     expect(onAttach).toHaveBeenCalledWith(file);
     expect(onSend).toHaveBeenCalledWith('[Attached workspace file: diagram.png]\n\nPlease inspect this');
+  });
+
+  it('selects a reasoning effort', async () => {
+    const user = userEvent.setup();
+    render(<Harness onSend={vi.fn(async () => undefined)} onAttach={vi.fn(async () => 'file')} />);
+
+    await user.click(screen.getByRole('button', { name: 'Reasoning effort' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'high' }));
+
+    expect(screen.getByRole('button', { name: 'Reasoning effort' })).toHaveTextContent('high');
   });
 });

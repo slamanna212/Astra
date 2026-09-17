@@ -1,7 +1,7 @@
 import { ActionIcon, Badge, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
-import { IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconX } from '@tabler/icons-react';
+import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
-import type { ChatModelOption } from '../../api/chat';
+import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
 import classes from './ChatComposer.module.css';
 
@@ -9,6 +9,8 @@ interface ModelGroup {
   provider: string | null; // null = models with no known provider ("other")
   models: ChatModelOption[];
 }
+
+const REASONING_EFFORTS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 
 function groupModels(models: ChatModelOption[], providerOrder: string[]): ModelGroup[] {
   const byProvider = new Map<string, ChatModelOption[]>();
@@ -46,6 +48,8 @@ export function ChatComposer({
   defaultModel,
   onModelChange,
   onProviderChange,
+  reasoningEffort,
+  onReasoningEffortChange,
   draft,
   onDraftChange,
   onAttach,
@@ -62,6 +66,8 @@ export function ChatComposer({
   defaultModel: string | null;
   onModelChange: (value: string | null) => void;
   onProviderChange: (value: string | null) => void;
+  reasoningEffort: ReasoningEffort | null;
+  onReasoningEffortChange: (value: ReasoningEffort | null) => void;
   draft: string;
   onDraftChange: (value: string) => void;
   onAttach: (file: File) => Promise<string>;
@@ -241,6 +247,29 @@ export function ChatComposer({
                 <span className={classes.footerLabel}>Session default</span>
                 <span className={classes.footerModel}>{defaultModel ?? '—'}</span>
               </button>
+            </Menu.Dropdown>
+          </Menu>
+
+          <Menu position="top-start" offset={8} radius="md">
+            <Menu.Target>
+              <button type="button" className={`${classes.pill} ${classes.effortPill}`} aria-label="Reasoning effort" disabled={running}>
+                <IconBrain size={14} className={classes.pillChevron} />
+                <span className={classes.pillModel}>{reasoningEffort ?? 'default'}</span>
+                <IconChevronDown size={13} className={classes.pillChevron} />
+              </button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Reasoning effort</Menu.Label>
+              <Menu.RadioGroup
+                value={reasoningEffort ?? 'default'}
+                onChange={(value) => onReasoningEffortChange(value === 'default' ? null : value as ReasoningEffort)}
+              >
+                <Menu.RadioItem value="default">Default</Menu.RadioItem>
+                <Menu.Divider />
+                {REASONING_EFFORTS.map((effort) => (
+                  <Menu.RadioItem key={effort} value={effort} tt="capitalize">{effort}</Menu.RadioItem>
+                ))}
+              </Menu.RadioGroup>
             </Menu.Dropdown>
           </Menu>
 

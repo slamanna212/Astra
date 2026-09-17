@@ -30,7 +30,7 @@ Legend:
 - [ ] One-click recovery from exhausted context compression
 - [x] `requestAnimationFrame`-throttled token/reasoning rendering
 - [x] Stop/cancel a running turn
-- [ ] Reasoning-effort selector in chat
+- [x] Reasoning-effort selector in chat
 - [ ] Configurable busy-turn mode (queue / interrupt / steer)
 - [x] Steer a running turn, including uploaded workspace-file references
 - [ ] Transparent chronological stream/worklog mode

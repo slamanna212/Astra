@@ -4,7 +4,7 @@ import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileTex
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { answerChat, approveChat, chatStreamUrl, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent } from '../../api/chat';
+import { answerChat, approveChat, chatStreamUrl, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
 import { uploadFile } from '../../api/files';
 import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
@@ -47,6 +47,7 @@ export default function SessionPane() {
   const [exportingFormat, setExportingFormat] = useState<ConversationExportFormat | null>(null);
   const [model, setModel] = useState<string | null | undefined>(undefined);
   const [provider, setProvider] = useState<string | null | undefined>(undefined);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const [activity, setActivity] = useState<string[]>([]);
   const raf = useRef<number | null>(null);
   const pendingText = useRef('');
@@ -294,7 +295,12 @@ export default function SessionPane() {
   const start = async (text: string) => {
     clearChatRecovery(sessionId);
     setShowRecoveryBanner(false);
-    await sendChat(sessionId, { message: text, model: selectedModel, provider: selectedProvider });
+    await sendChat(sessionId, {
+      message: text,
+      model: selectedModel,
+      provider: selectedProvider,
+      reasoning_effort: reasoningEffort,
+    });
     streamingRef.current = '';
     reasoningRef.current = '';
     activityRef.current = [];
@@ -490,6 +496,7 @@ export default function SessionPane() {
             running={running}
             model={selectedModel}
             provider={selectedProvider}
+            reasoningEffort={reasoningEffort}
           />
         </Box>
       </Box>
@@ -548,6 +555,8 @@ export default function SessionPane() {
         defaultModel={options.data?.default_model ?? null}
         onModelChange={setModel}
         onProviderChange={setProvider}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={setReasoningEffort}
         draft={draft}
         onDraftChange={setDraft}
         onAttach={async (file) => (await uploadFile({ directory: '', file })).path}

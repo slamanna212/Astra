@@ -1,5 +1,6 @@
 import { Badge, Box, Code, Group, Text } from '@mantine/core';
 import type { ChildSession, Message } from '../../../api/types';
+import type { ReasoningEffort } from '../../../api/chat';
 import { formatDateTime } from '../../../lib/format';
 import { AssistantMessage } from './AssistantMessage';
 import { DisplayKindNotice } from './DisplayKindNotice';
@@ -38,6 +39,7 @@ export function MessageRow({
   running,
   model,
   provider,
+  reasoningEffort,
 }: {
   message: Message;
   toolResults: Map<string, Message>;
@@ -48,6 +50,7 @@ export function MessageRow({
   running: boolean;
   model?: string | null;
   provider?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
 }) {
   if (message.display_kind) {
     return <DisplayKindNotice message={message} />;
@@ -57,7 +60,7 @@ export function MessageRow({
     return <OrphanToolResult message={message} />;
   }
   if (message.role === 'user') {
-    return <UserMessage sessionId={sessionId} message={message} highlighted={highlighted} running={running} model={model} provider={provider} />;
+    return <UserMessage sessionId={sessionId} message={message} highlighted={highlighted} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} />;
   }
   if (message.role === 'assistant') {
     return (
@@ -70,6 +73,7 @@ export function MessageRow({
         running={running}
         model={model}
         provider={provider}
+        reasoningEffort={reasoningEffort}
       />
     );
   }

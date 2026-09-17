@@ -129,7 +129,13 @@ async def send(session_id: str, body: ChatSendRequest, ctx: Ctx) -> ChatTurnStar
     if not exists:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
-        await ctx.chat.start(session_id, body.message, model=body.model, provider=body.provider)
+        await ctx.chat.start(
+            session_id,
+            body.message,
+            model=body.model,
+            provider=body.provider,
+            reasoning_effort=body.reasoning_effort,
+        )
     except SessionBusy as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
     except ChatError as exc:
@@ -195,6 +201,7 @@ async def regenerate(session_id: str, body: ChatRegenerateRequest, ctx: Ctx) -> 
             lambda: _with_session_db(ctx, _rewind),
             model=body.model,
             provider=body.provider,
+            reasoning_effort=body.reasoning_effort,
         )
     except SessionBusy as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None

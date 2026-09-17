@@ -371,6 +371,10 @@ class ChatSendRequest(BaseModel):
     message: str = Field(min_length=1, max_length=200_000)
     model: str | None = Field(default=None, max_length=512)
     provider: str | None = Field(default=None, max_length=128)
+    reasoning_effort: str | None = Field(
+        default=None,
+        pattern="^(none|minimal|low|medium|high|xhigh|max|ultra)$",
+    )
 
 
 class ChatRegenerateRequest(BaseModel):
@@ -379,6 +383,10 @@ class ChatRegenerateRequest(BaseModel):
     message_id: int = Field(ge=1)
     model: str | None = Field(default=None, max_length=512)
     provider: str | None = Field(default=None, max_length=128)
+    reasoning_effort: str | None = Field(
+        default=None,
+        pattern="^(none|minimal|low|medium|high|xhigh|max|ultra)$",
+    )
 
 
 class ChatSteerRequest(BaseModel):

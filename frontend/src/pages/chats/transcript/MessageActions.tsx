@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { IconCopy, IconGitBranch, IconRefresh } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { regenerateChat } from '../../../api/chat';
+import { regenerateChat, type ReasoningEffort } from '../../../api/chat';
 import { getMessage } from '../../../api/messages';
 import { forkSession } from '../../../api/sessions';
 import type { Message } from '../../../api/types';
@@ -45,6 +45,7 @@ export function MessageActions({
   running,
   model,
   provider,
+  reasoningEffort,
   align,
 }: {
   sessionId: string;
@@ -52,6 +53,7 @@ export function MessageActions({
   running: boolean;
   model?: string | null;
   provider?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
   align: 'left' | 'right';
 }) {
   const navigate = useNavigate();
@@ -92,7 +94,7 @@ export function MessageActions({
   const regenerate = async () => {
     setPending('regenerate');
     try {
-      await regenerateChat(sessionId, { message_id: message.id, model, provider });
+      await regenerateChat(sessionId, { message_id: message.id, model, provider, reasoning_effort: reasoningEffort });
     } catch (error) {
       notifications.show({
         color: 'red',

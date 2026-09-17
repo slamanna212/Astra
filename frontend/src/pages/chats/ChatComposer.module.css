@@ -84,6 +84,11 @@
   flex-shrink: 0;
 }
 
+.effortPill {
+  gap: 6px;
+  text-transform: capitalize;
+}
+
 /* ---- running readout ---- */
 
 .runningDot {

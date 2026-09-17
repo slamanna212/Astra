@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { BrandMark } from '../../../components/BrandMark';
 import { Markdown } from '../../../components/Markdown';
 import type { ChildSession, Message } from '../../../api/types';
+import type { ReasoningEffort } from '../../../api/chat';
 import { ReasoningBlock } from './ReasoningBlock';
 import { ToolCallCard } from './ToolCallCard';
 import classes from './Transcript.module.css';
@@ -18,6 +19,7 @@ export function AssistantMessage({
   running,
   model,
   provider,
+  reasoningEffort,
 }: {
   sessionId: string;
   message: Message;
@@ -27,6 +29,7 @@ export function AssistantMessage({
   running: boolean;
   model?: string | null;
   provider?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
 }) {
   const [revealed, setRevealed] = useState(false);
   const text = typeof message.content === 'string' ? message.content : null;
@@ -62,7 +65,7 @@ export function AssistantMessage({
             childSessions={childSessions}
           />
         ))}
-        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} align="left" />
+        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} align="left" />
       </Stack>
     </Group>
   );
