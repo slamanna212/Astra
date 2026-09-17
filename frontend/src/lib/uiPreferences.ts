@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
  * Astra-specific key, and has no API capable of accepting conversation content.
  */
 export type ChatFontSize = 'sm' | 'md' | 'lg' | 'xl';
+export type BusyTurnMode = 'queue' | 'interrupt' | 'steer';
 
 /** Point sizes the chat transcript/composer render at for each ChatFontSize setting. */
 export const CHAT_FONT_SIZES: Record<ChatFontSize, number> = { sm: 13, md: 14, lg: 16, xl: 18 };
@@ -13,10 +14,16 @@ export interface UiPreferences {
   sidebarDesktopCollapsed: boolean;
   cronAdvancedOpen: boolean;
   chatFontSize: ChatFontSize;
+  busyTurnMode: BusyTurnMode;
 }
 
 const KEY = 'astra.ui-preferences.v1';
-const DEFAULTS: UiPreferences = { sidebarDesktopCollapsed: false, cronAdvancedOpen: true, chatFontSize: 'md' };
+const DEFAULTS: UiPreferences = {
+  sidebarDesktopCollapsed: false,
+  cronAdvancedOpen: true,
+  chatFontSize: 'md',
+  busyTurnMode: 'steer',
+};
 let current = read();
 const listeners = new Set<() => void>();
 
@@ -28,6 +35,9 @@ function read(): UiPreferences {
       sidebarDesktopCollapsed: value.sidebarDesktopCollapsed === true,
       cronAdvancedOpen: value.cronAdvancedOpen !== false,
       chatFontSize: value.chatFontSize && value.chatFontSize in CHAT_FONT_SIZES ? value.chatFontSize : DEFAULTS.chatFontSize,
+      busyTurnMode: value.busyTurnMode === 'queue' || value.busyTurnMode === 'interrupt' || value.busyTurnMode === 'steer'
+        ? value.busyTurnMode
+        : DEFAULTS.busyTurnMode,
     };
   } catch {
     return DEFAULTS;

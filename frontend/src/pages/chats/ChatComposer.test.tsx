@@ -5,10 +5,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { render } from '../../test/render';
 import { ChatComposer } from './ChatComposer';
 
-function Harness({ onSend, onAttach, onCompact = vi.fn(async () => true) }: {
+function Harness({
+  onSend,
+  onAttach,
+  onCompact = vi.fn(async () => true),
+  running = false,
+  busyTurnMode = 'steer',
+  onQueue = vi.fn(async () => undefined),
+  onInterrupt = vi.fn(async () => undefined),
+  onSteer = vi.fn(async () => undefined),
+}: {
   onSend: (text: string) => Promise<void>;
   onAttach: (file: File) => Promise<string>;
   onCompact?: (focusTopic: string | null) => Promise<boolean>;
+  running?: boolean;
+  busyTurnMode?: import('../../lib/uiPreferences').BusyTurnMode;
+  onQueue?: (text: string) => Promise<void>;
+  onInterrupt?: (text: string) => Promise<void>;
+  onSteer?: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
   const [model, setModel] = useState<string | null>('model-a');
@@ -16,10 +30,12 @@ function Harness({ onSend, onAttach, onCompact = vi.fn(async () => true) }: {
   const [reasoningEffort, setReasoningEffort] = useState<import('../../api/chat').ReasoningEffort | null>(null);
   return (
     <ChatComposer
-      running={false}
+      running={running}
       onSend={onSend}
       onStop={vi.fn()}
-      onSteer={vi.fn()}
+      onSteer={onSteer}
+      onQueue={onQueue}
+      onInterrupt={onInterrupt}
       onCompact={onCompact}
       model={model}
       provider={provider}
@@ -37,6 +53,8 @@ function Harness({ onSend, onAttach, onCompact = vi.fn(async () => true) }: {
       onDraftChange={setDraft}
       onAttach={onAttach}
       liveTps={null}
+      busyTurnMode={busyTurnMode}
+      onBusyTurnModeChange={vi.fn()}
     />
   );
 }
@@ -92,5 +110,32 @@ describe('ChatComposer', () => {
     await user.click(screen.getByRole('button', { name: 'Compact context' }));
 
     expect(onCompact).toHaveBeenCalledWith(null);
+  });
+
+  it.each([
+    ['queue', 'Queue while Hermes is responding…', 'Queue message', 'onQueue'],
+    ['interrupt', 'Interrupt while Hermes is responding…', 'Interrupt message', 'onInterrupt'],
+    ['steer', 'Steer while Hermes is responding…', 'Steer message', 'onSteer'],
+  ] as const)('routes busy input through %s mode', async (mode, placeholder, buttonName, expectedHandler) => {
+    const user = userEvent.setup();
+    const handlers = {
+      onQueue: vi.fn(async () => undefined),
+      onInterrupt: vi.fn(async () => undefined),
+      onSteer: vi.fn(async () => undefined),
+    };
+    render(
+      <Harness
+        running
+        busyTurnMode={mode}
+        onSend={vi.fn(async () => undefined)}
+        onAttach={vi.fn(async () => 'file')}
+        {...handlers}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText(placeholder), 'change course');
+    await user.click(screen.getByLabelText(buttonName));
+
+    expect(handlers[expectedHandler]).toHaveBeenCalledWith('change course');
   });
 });

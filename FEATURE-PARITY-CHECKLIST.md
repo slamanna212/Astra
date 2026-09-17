@@ -31,12 +31,12 @@ Legend:
 - [x] `requestAnimationFrame`-throttled token/reasoning rendering
 - [x] Stop/cancel a running turn
 - [x] Reasoning-effort selector in chat
-- [ ] Configurable busy-turn mode (queue / interrupt / steer)
+- [x] Configurable busy-turn mode (queue / interrupt / steer), with per-session persisted follow-up queues and stop-then-send interrupt behavior
 - [x] Steer a running turn, including uploaded workspace-file references
 - [ ] Transparent chronological stream/worklog mode
 - [x] Live tokens-per-second display
 
-Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), [`routes/chat.py`](backend/src/astra/routes/chat.py), and [`routes/sessions.py`](backend/src/astra/routes/sessions.py).
+Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [`composerDrafts.ts`](frontend/src/lib/composerDrafts.ts), [`busyTurnQueue.ts`](frontend/src/lib/busyTurnQueue.ts), [`chatRecovery.ts`](frontend/src/lib/chatRecovery.ts), [`ChatComposer.tsx`](frontend/src/pages/chats/ChatComposer.tsx), [`chat.py`](backend/src/astra/chat.py), [`routes/chat.py`](backend/src/astra/routes/chat.py), and [`routes/sessions.py`](backend/src/astra/routes/sessions.py).
 
 ## Conversation controls and rendering
 

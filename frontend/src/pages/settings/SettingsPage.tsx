@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getStatus } from '../../api/auth';
 import { queryKeys } from '../../api/queryKeys';
 import { formatCount } from '../../lib/format';
-import { type ChatFontSize, updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
+import { type BusyTurnMode, type ChatFontSize, updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
 
 function StatusFact({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
@@ -71,6 +71,22 @@ export default function SettingsPage() {
               { label: 'Extra large', value: 'xl' },
             ]}
           />
+          <Text size="sm" c="dimmed" mt="sm">
+            While Hermes is responding
+          </Text>
+          <SegmentedControl
+            aria-label="Busy turn mode"
+            value={prefs.busyTurnMode}
+            onChange={(value) => updateUiPreferences({ busyTurnMode: value as BusyTurnMode })}
+            data={[
+              { label: 'Queue', value: 'queue' },
+              { label: 'Interrupt', value: 'interrupt' },
+              { label: 'Steer', value: 'steer' },
+            ]}
+          />
+          <Text size="xs" c="dimmed">
+            Queue waits for the current turn. Interrupt stops it and starts your message next. Steer applies your message to the running turn.
+          </Text>
         </Stack>
       </Card>
 

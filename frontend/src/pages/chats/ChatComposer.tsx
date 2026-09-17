@@ -3,6 +3,7 @@ import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip,
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
+import type { BusyTurnMode } from '../../lib/uiPreferences';
 import classes from './ChatComposer.module.css';
 
 interface ModelGroup {
@@ -11,6 +12,11 @@ interface ModelGroup {
 }
 
 const REASONING_EFFORTS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+const BUSY_MODE_LABELS: Record<BusyTurnMode, string> = {
+  queue: 'Queue',
+  interrupt: 'Interrupt',
+  steer: 'Steer',
+};
 
 function groupModels(models: ChatModelOption[], providerOrder: string[]): ModelGroup[] {
   const byProvider = new Map<string, ChatModelOption[]>();
@@ -41,6 +47,8 @@ export function ChatComposer({
   onSend,
   onStop,
   onSteer,
+  onQueue,
+  onInterrupt,
   onCompact,
   model,
   provider,
@@ -55,11 +63,15 @@ export function ChatComposer({
   onDraftChange,
   onAttach,
   liveTps,
+  busyTurnMode,
+  onBusyTurnModeChange,
 }: {
   running: boolean;
   onSend: (text: string) => Promise<void>;
   onStop: () => Promise<void>;
   onSteer: (text: string) => Promise<void>;
+  onQueue: (text: string) => Promise<void>;
+  onInterrupt: (text: string) => Promise<void>;
   onCompact: (focusTopic: string | null) => Promise<boolean>;
   model: string | null;
   provider: string | null;
@@ -74,6 +86,8 @@ export function ChatComposer({
   onDraftChange: (value: string) => void;
   onAttach: (file: File) => Promise<string>;
   liveTps: number | null;
+  busyTurnMode: BusyTurnMode;
+  onBusyTurnModeChange: (value: BusyTurnMode) => void;
 }) {
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -144,8 +158,10 @@ export function ChatComposer({
     const references = attachments.map((path) => `[Attached workspace file: ${path}]`).join('\n');
     const value = [references, draft.trim()].filter(Boolean).join('\n\n');
     if (!value) return;
-    if (running) await onSteer(value);
-    else await onSend(value);
+    if (!running) await onSend(value);
+    else if (busyTurnMode === 'queue') await onQueue(value);
+    else if (busyTurnMode === 'interrupt') await onInterrupt(value);
+    else await onSteer(value);
     onDraftChange('');
     setAttachments([]);
   };
@@ -160,7 +176,7 @@ export function ChatComposer({
           autosize
           minRows={2}
           maxRows={8}
-          placeholder={running ? 'Steer the running turn…' : 'Message Hermes…'}
+          placeholder={running ? `${BUSY_MODE_LABELS[busyTurnMode]} while Hermes is responding…` : 'Message Hermes…'}
           classNames={{ input: classes.textarea }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -281,12 +297,30 @@ export function ChatComposer({
           </Menu>
 
           {running && (
-            <Group gap={6} wrap="nowrap">
-              <span className={classes.runningDot} />
-              <Text component="span" ff="monospace" fz={11} c="var(--astra-accent)">
-                {formatTps(liveTps)}
-              </Text>
-            </Group>
+            <>
+              <Menu position="top-start" offset={8} radius="md">
+                <Menu.Target>
+                  <button type="button" className={`${classes.pill} ${classes.effortPill}`} aria-label="Busy turn mode">
+                    <span className={classes.pillModel}>{BUSY_MODE_LABELS[busyTurnMode]}</span>
+                    <IconChevronDown size={13} className={classes.pillChevron} />
+                  </button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Send while responding</Menu.Label>
+                  <Menu.RadioGroup value={busyTurnMode} onChange={(value) => onBusyTurnModeChange(value as BusyTurnMode)}>
+                    <Menu.RadioItem value="queue">Queue — send next</Menu.RadioItem>
+                    <Menu.RadioItem value="interrupt">Interrupt — stop and send</Menu.RadioItem>
+                    <Menu.RadioItem value="steer">Steer — guide this turn</Menu.RadioItem>
+                  </Menu.RadioGroup>
+                </Menu.Dropdown>
+              </Menu>
+              <Group gap={6} wrap="nowrap">
+                <span className={classes.runningDot} />
+                <Text component="span" ff="monospace" fz={11} c="var(--astra-accent)">
+                  {formatTps(liveTps)}
+                </Text>
+              </Group>
+            </>
           )}
 
           <Box style={{ flex: 1 }} />
@@ -312,8 +346,8 @@ export function ChatComposer({
               Stop
             </Button>
           )}
-          <Button h={30} onClick={() => void submit()} aria-label={running ? 'Send steer' : 'Send message'}>
-            {running ? 'Steer' : 'Send'}
+          <Button h={30} onClick={() => void submit()} aria-label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}>
+            {running ? BUSY_MODE_LABELS[busyTurnMode] : 'Send'}
           </Button>
         </Group>
       </Box>

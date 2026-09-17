@@ -87,4 +87,13 @@ describe('SettingsPage', () => {
     await user.click(screen.getByText('Large'));
     expect(screen.getByLabelText('Chat font size')).toBeInTheDocument();
   });
+
+  it('changes how messages submitted during a running turn are handled', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(makeStatus()));
+    const user = userEvent.setup();
+    render(<SettingsPage />);
+
+    await user.click(screen.getByText('Interrupt'));
+    expect(screen.getByLabelText('Busy turn mode')).toBeInTheDocument();
+  });
 });

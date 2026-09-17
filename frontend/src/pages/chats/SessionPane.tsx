@@ -2,7 +2,7 @@ import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Menu, P
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileText, IconGitBranch, IconRefresh } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { answerChat, approveChat, chatStreamUrl, compactChat, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
 import { uploadFile } from '../../api/files';
@@ -25,6 +25,8 @@ import {
   saveChatRecovery,
 } from '../../lib/chatRecovery';
 import { saveComposerDraft, useComposerDraft } from '../../lib/composerDrafts';
+import { clearBusyTurnQueue, enqueueBusyTurnMessage, loadBusyTurnQueue, removeBusyTurnMessage, type QueuedTurnMessage } from '../../lib/busyTurnQueue';
+import { updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 import { ContextRing } from './ContextRing';
@@ -35,6 +37,7 @@ export default function SessionPane() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
+  const [turnState, setTurnState] = useState<{ sessionId: string; known: boolean }>({ sessionId, known: false });
   const [streaming, setStreaming] = useState('');
   const [reasoning, setReasoning] = useState('');
   const [clarify, setClarify] = useState<{ id: number; question: string; choices: unknown[] | null } | null>(null);
@@ -50,6 +53,10 @@ export default function SessionPane() {
   const [model, setModel] = useState<string | null | undefined>(undefined);
   const [provider, setProvider] = useState<string | null | undefined>(undefined);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
+  const [queueState, setQueueState] = useState<{ sessionId: string; messages: QueuedTurnMessage[] }>(() => ({
+    sessionId,
+    messages: loadBusyTurnQueue(sessionId),
+  }));
   const [activity, setActivity] = useState<string[]>([]);
   const [compaction, setCompaction] = useState<{ phase: 'running' | 'done'; message: string } | null>(null);
   const [turnError, setTurnError] = useState<{ message: string; recoveryAvailable: boolean } | null>(null);
@@ -63,6 +70,10 @@ export default function SessionPane() {
   const runningRef = useRef(false);
   const lastEventIdRef = useRef(0);
   const retryNowRef = useRef<() => void>(() => {});
+  const drainingQueueRef = useRef<{ sessionId: string; messageId: string } | null>(null);
+  const prefs = useUiPreferences();
+  const queuedMessages = queueState.sessionId === sessionId ? queueState.messages : loadBusyTurnQueue(sessionId);
+  const turnStateKnown = turnState.sessionId === sessionId && turnState.known;
   const highlightParam = searchParams.get('m');
   const highlightMessageId = highlightParam && /^\d+$/.test(highlightParam) ? Number(highlightParam) : undefined;
 
@@ -121,6 +132,7 @@ export default function SessionPane() {
     setTurnError(null);
     setRecoveringContext(false);
     setConnection('connecting');
+    setTurnState({ sessionId, known: false });
     setReconnectAttempt(0);
 
     const persist = () => {
@@ -220,6 +232,7 @@ export default function SessionPane() {
       };
       currentSource.addEventListener('state', tracked((event) => {
         const state = JSON.parse((event as MessageEvent).data) as { running: boolean; recovery_available?: boolean };
+        setTurnState({ sessionId, known: true });
         runningRef.current = state.running;
         setRunning(state.running);
         if (state.recovery_available) {
@@ -235,6 +248,7 @@ export default function SessionPane() {
       currentSource.addEventListener('started', tracked((event) => {
         const payload = JSON.parse((event as MessageEvent).data) as { operation?: string };
         runningRef.current = true;
+        setTurnState({ sessionId, known: true });
         streamingRef.current = '';
         reasoningRef.current = '';
         activityRef.current = [];
@@ -333,7 +347,7 @@ export default function SessionPane() {
     };
   }, [sessionId, queryClient, setDraft]);
 
-  const start = async (text: string) => {
+  const start = useCallback(async (text: string) => {
     clearChatRecovery(sessionId);
     setShowRecoveryBanner(false);
     await sendChat(sessionId, {
@@ -346,13 +360,49 @@ export default function SessionPane() {
     reasoningRef.current = '';
     activityRef.current = [];
     runningRef.current = true;
+    setTurnState({ sessionId, known: true });
     setStreaming('');
     setReasoning('');
     setActivity([]);
     setTurnError(null);
     setCompaction(null);
     setRunning(true);
-  };
+  }, [reasoningEffort, selectedModel, selectedProvider, sessionId]);
+
+  useEffect(() => {
+    const next = queuedMessages[0];
+    if (!turnStateKnown || running || !next || drainingQueueRef.current?.sessionId === sessionId) return;
+    drainingQueueRef.current = { sessionId, messageId: next.id };
+    const sendWhenReleased = async () => {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          await start(next.text);
+          return;
+        } catch (error) {
+          // A terminal SSE frame can reach the browser just before the server releases its
+          // active-turn slot. Retry that narrow hand-off race without dropping the queue item.
+          if (!isApiError(error, 409) || attempt === 3) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+        }
+      }
+    };
+    void sendWhenReleased()
+      .then(() => {
+        setQueueState({ sessionId, messages: removeBusyTurnMessage(sessionId, next.id) });
+        notifications.show({ color: 'green', message: 'Queued message started' });
+      })
+      .catch((error: unknown) => {
+        notifications.show({
+          color: 'red',
+          message: error instanceof Error ? `Queued message could not start: ${error.message}` : 'Queued message could not start',
+        });
+      })
+      .finally(() => {
+        if (drainingQueueRef.current?.sessionId === sessionId && drainingQueueRef.current.messageId === next.id) {
+          drainingQueueRef.current = null;
+        }
+      });
+  }, [queuedMessages, running, sessionId, start, turnStateKnown]);
 
   const compact = async (focusTopic: string | null) => {
     clearChatRecovery(sessionId);
@@ -647,12 +697,45 @@ export default function SessionPane() {
           </Alert>
         )}
         {activity.length > 0 && <Paper mx="sm" p="xs" withBorder>{activity.map((item, index) => <Text size="xs" c="dimmed" key={`${index}-${item}`}>{item}</Text>)}</Paper>}
+        {queuedMessages.length > 0 && (
+          <Alert m="sm" color="blue" title={`${queuedMessages.length} message${queuedMessages.length === 1 ? '' : 's'} queued`} role="status">
+            <Group justify="space-between" align="center" wrap="wrap">
+              <Text size="sm">
+                {running ? 'The next message will start when this turn stops or finishes.' : 'Starting the next queued message…'}
+              </Text>
+              {running && (
+                <Button size="compact-xs" variant="subtle" color="red" onClick={() => {
+                  clearBusyTurnQueue(sessionId);
+                  setQueueState({ sessionId, messages: [] });
+                }}>Clear queue</Button>
+              )}
+            </Group>
+          </Alert>
+        )}
       </Box>
       <ChatComposer
         running={running}
         onSend={start}
         onStop={() => stopChat(sessionId)}
         onSteer={(text) => steerChat(sessionId, text)}
+        onQueue={async (text) => {
+          setQueueState({ sessionId, messages: enqueueBusyTurnMessage(sessionId, text) });
+          notifications.show({ color: 'blue', message: 'Message queued for the next turn' });
+        }}
+        onInterrupt={async (text) => {
+          setQueueState({ sessionId, messages: enqueueBusyTurnMessage(sessionId, text, { front: true }) });
+          notifications.show({ color: 'blue', message: 'Stopping this turn; your message will start next' });
+          try {
+            await stopChat(sessionId);
+          } catch (error) {
+            if (!isApiError(error, 409)) {
+              notifications.show({
+                color: 'yellow',
+                message: 'Could not stop the current turn; your message remains queued',
+              });
+            }
+          }
+        }}
         onCompact={compact}
         model={selectedModel}
         provider={selectedProvider}
@@ -667,6 +750,8 @@ export default function SessionPane() {
         onDraftChange={setDraft}
         onAttach={async (file) => (await uploadFile({ directory: '', file })).path}
         liveTps={liveTps}
+        busyTurnMode={prefs.busyTurnMode}
+        onBusyTurnModeChange={(busyTurnMode) => updateUiPreferences({ busyTurnMode })}
       />
     </Box>
   );
