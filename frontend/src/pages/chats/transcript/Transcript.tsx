@@ -32,6 +32,8 @@ export function Transcript({
   model,
   provider,
   reasoningEffort,
+  sessionTokens = 0,
+  sessionCostUsd = null,
 }: {
   sessionId: string;
   highlightMessageId?: number;
@@ -39,6 +41,8 @@ export function Transcript({
   model?: string | null;
   provider?: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  sessionTokens?: number;
+  sessionCostUsd?: number | null;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -227,6 +231,8 @@ export function Transcript({
                     model={model}
                     provider={provider}
                     reasoningEffort={reasoningEffort}
+                    sessionTokens={sessionTokens}
+                    sessionCostUsd={sessionCostUsd}
                   />
                 )}
               </div>

@@ -25,8 +25,13 @@ export interface SessionSummary {
   child_count: number;
 }
 
-/** Detail response: a SessionSummary plus backend-defined extra fields (typed loosely for now). */
-export type SessionDetail = SessionSummary & Record<string, unknown>;
+/** Detail response: a SessionSummary plus usage fields used by the conversation header. */
+export type SessionDetail = SessionSummary & {
+  context_length: number | null;
+  last_prompt_tokens: number | null;
+  context_tokens: number;
+  context_tokens_estimated: boolean;
+} & Record<string, unknown>;
 
 export interface Page<T> {
   items: T[];

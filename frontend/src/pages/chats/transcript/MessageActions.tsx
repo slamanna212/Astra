@@ -8,6 +8,7 @@ import { getMessage } from '../../../api/messages';
 import { forkSession } from '../../../api/sessions';
 import type { Message } from '../../../api/types';
 import { formatDateTime } from '../../../lib/format';
+import { formatMessageCost, messageUsage } from '../../../lib/messageUsage';
 import classes from './Transcript.module.css';
 
 function copyText(message: Message): string {
@@ -47,6 +48,8 @@ export function MessageActions({
   provider,
   reasoningEffort,
   align,
+  sessionTokens = 0,
+  sessionCostUsd = null,
 }: {
   sessionId: string;
   message: Message;
@@ -55,9 +58,12 @@ export function MessageActions({
   provider?: string | null;
   reasoningEffort?: ReasoningEffort | null;
   align: 'left' | 'right';
+  sessionTokens?: number;
+  sessionCostUsd?: number | null;
 }) {
   const navigate = useNavigate();
   const [pending, setPending] = useState<'fork' | 'regenerate' | null>(null);
+  const usage = messageUsage(message, sessionTokens, sessionCostUsd);
 
   const copy = async () => {
     try {
@@ -112,6 +118,8 @@ export function MessageActions({
         {formatDateTime(message.timestamp)}
         {message.truncated && ' · truncated'}
         {message.compacted && ' · from compaction summary'}
+        {' · '}{usage.estimatedTokens ? '~' : ''}{usage.tokens.toLocaleString()} tokens
+        {' · '}{formatMessageCost(usage.estimatedCostUsd)}
       </Text>
       <Tooltip label="Copy message">
         <ActionIcon

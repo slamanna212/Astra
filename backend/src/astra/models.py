@@ -80,6 +80,12 @@ class SessionDetail(SessionSummary):
     handoff_state: str | None = None
     handoff_platform: str | None = None
     rewind_count: int = 0
+    # Newer Hermes schemas persist the provider-reported prompt/context values.  Astra also
+    # supplies a transcript estimate for older schemas so the context meter remains useful.
+    context_length: int | None = None
+    last_prompt_tokens: int | None = None
+    context_tokens: int = 0
+    context_tokens_estimated: bool = True
 
 
 class SessionPage(BaseModel):

@@ -20,6 +20,8 @@ export function AssistantMessage({
   model,
   provider,
   reasoningEffort,
+  sessionTokens,
+  sessionCostUsd,
 }: {
   sessionId: string;
   message: Message;
@@ -30,6 +32,8 @@ export function AssistantMessage({
   model?: string | null;
   provider?: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  sessionTokens?: number;
+  sessionCostUsd?: number | null;
 }) {
   const [revealed, setRevealed] = useState(false);
   const text = typeof message.content === 'string' ? message.content : null;
@@ -65,7 +69,7 @@ export function AssistantMessage({
             childSessions={childSessions}
           />
         ))}
-        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} align="left" />
+        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} align="left" sessionTokens={sessionTokens} sessionCostUsd={sessionCostUsd} />
       </Stack>
     </Group>
   );

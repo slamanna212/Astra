@@ -27,6 +27,7 @@ import {
 import { saveComposerDraft, useComposerDraft } from '../../lib/composerDrafts';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
+import { ContextRing } from './ContextRing';
 
 export default function SessionPane() {
   const { sessionId = '' } = useParams();
@@ -517,6 +518,11 @@ export default function SessionPane() {
               {formatCount(s.message_count)} msgs · {formatCost(s.estimated_cost_usd)}
             </Text>
           </Tooltip>
+          <ContextRing
+            tokens={s.context_tokens}
+            contextLength={s.context_length}
+            estimated={s.context_tokens_estimated}
+          />
           {s.archived && (
             <Badge size="sm" variant="outline" color="gray">
               archived
@@ -574,6 +580,8 @@ export default function SessionPane() {
             model={selectedModel}
             provider={selectedProvider}
             reasoningEffort={reasoningEffort}
+            sessionTokens={s.input_tokens + s.output_tokens}
+            sessionCostUsd={s.estimated_cost_usd}
           />
         </Box>
       </Box>

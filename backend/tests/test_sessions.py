@@ -175,6 +175,9 @@ def test_detail_and_404(authed: TestClient, fixture_db_path: Path) -> None:
     for forbidden in ("system_prompt", "system_prompt_hash", "model_config", "origin_json", "session_key", "user_id", "chat_id", "billing_base_url"):
         assert forbidden not in body
     assert "cache_read_tokens" in body
+    assert body["context_tokens"] > 0
+    assert body["context_tokens_estimated"] is True
+    assert body["context_length"] is None
     assert authed.get("/api/sessions/does-not-exist").status_code == 404
 
 

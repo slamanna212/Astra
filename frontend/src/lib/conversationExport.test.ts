@@ -13,7 +13,8 @@ const session = {
   started_at: 1_700_000_000, last_activity_at: null, ended_at: null, message_count: 2,
   tool_call_count: 0, input_tokens: 4, output_tokens: 5, estimated_cost_usd: null,
   pinned: false, archived: false, hidden: false, parent_session_id: null,
-  last_activity_description: null, child_count: 0,
+  last_activity_description: null, child_count: 0, context_length: null,
+  last_prompt_tokens: null, context_tokens: 4, context_tokens_estimated: true,
 } satisfies SessionDetail;
 
 const message = {

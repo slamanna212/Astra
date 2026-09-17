@@ -41,6 +41,7 @@ _INT_DEFAULT_ZERO = {
     "api_call_count",
     "rewind_count",
     "child_count",
+    "context_tokens",
 }
 
 SUMMARY_FIELDS: tuple[str, ...] = tuple(SessionSummary.model_fields)
@@ -222,7 +223,57 @@ def get_session(conn: sqlite3.Connection, schema: Schema, session_id: str) -> Se
     ).fetchone()
     if row is None:
         return None
-    return SessionDetail(**_row_to_dict(row, DETAIL_FIELDS))
+    data = _row_to_dict(row, DETAIL_FIELDS)
+
+    # `last_prompt_tokens` is provider-reported context usage and is the authoritative value
+    # when a newer Hermes schema has persisted it.  Older databases have neither that field nor
+    # per-message counts, so estimate only the active model transcript (including the system
+    # prompt) from stored token counts where present and UTF-8-ish character length otherwise.
+    # This deliberately does not use sessions.input_tokens: that counter is cumulative across
+    # API calls and produces nonsensical context percentages in long conversations.
+    last_prompt = data.get("last_prompt_tokens")
+    if isinstance(last_prompt, int) and last_prompt > 0:
+        data["context_tokens"] = last_prompt
+        data["context_tokens_estimated"] = False
+    else:
+        message_cols = schema.table("messages")
+        text_terms = [
+            f"COALESCE(length({name}), 0)"
+            for name in ("content", "tool_calls")
+            if name in message_cols
+        ]
+        if "reasoning_content" in message_cols and "reasoning" in message_cols:
+            # These are alternate representations of the same reasoning payload.
+            text_terms.append("COALESCE(length(reasoning_content), length(reasoning), 0)")
+        elif "reasoning_content" in message_cols:
+            text_terms.append("COALESCE(length(reasoning_content), 0)")
+        elif "reasoning" in message_cols:
+            text_terms.append("COALESCE(length(reasoning), 0)")
+        if text_terms:
+            chars = " + ".join(text_terms)
+            token_expr = (
+                f"CASE WHEN token_count IS NOT NULL THEN MAX(token_count, 0) "
+                f"ELSE (({chars}) + 3) / 4 END"
+                if "token_count" in message_cols
+                else f"(({chars}) + 3) / 4"
+            )
+            visible = "COALESCE(active, 1) != 0" if "active" in message_cols else "1"
+            estimated = conn.execute(
+                f"SELECT COALESCE(SUM({token_expr}), 0) FROM messages "
+                f"WHERE session_id = ? AND {visible}",
+                (session_id,),
+            ).fetchone()[0]
+        else:
+            estimated = 0
+        if schema.has("sessions", "system_prompt"):
+            prompt_chars = conn.execute(
+                "SELECT COALESCE(length(system_prompt), 0) FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()[0]
+            estimated += (int(prompt_chars) + 3) // 4
+        data["context_tokens"] = max(0, int(estimated))
+        data["context_tokens_estimated"] = True
+    return SessionDetail(**data)
 
 
 def count_sessions(conn: sqlite3.Connection) -> int:

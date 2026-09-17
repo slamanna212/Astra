@@ -25,7 +25,7 @@ Legend:
 - [x] Server-side running turn survives navigation and supports multiple/reconnecting subscribers
 - [x] Persist and restore composer drafts in browser storage
 - [x] Reconnect banner, extended 1.5–20 second backoff ladder, canonical-history polling, replay cursors, and session-scoped local partial-response recovery
-- [ ] **Partial** — token count and estimated cost are shown per session, but not per message and there is no context-fill ring
+- [x] Token count and estimated cost per session and message, plus a context-fill ring (provider-reported usage when available; clearly marked transcript estimates for legacy sessions)
 - [x] Auto-compaction status UI plus streamed manual `/compact [focus]` (`/compress` alias and one-click composer control)
 - [x] One-click focused-continuation recovery from exhausted context compression
 - [x] `requestAnimationFrame`-throttled token/reasoning rendering

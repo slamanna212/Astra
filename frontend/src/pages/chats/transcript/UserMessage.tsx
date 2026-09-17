@@ -16,6 +16,8 @@ export function UserMessage({
   model,
   provider,
   reasoningEffort,
+  sessionTokens,
+  sessionCostUsd,
 }: {
   sessionId: string;
   message: Message;
@@ -24,6 +26,8 @@ export function UserMessage({
   model?: string | null;
   provider?: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  sessionTokens?: number;
+  sessionCostUsd?: number | null;
 }) {
   const [revealed, setRevealed] = useState(false);
   const text = typeof message.content === 'string' ? message.content : null;
@@ -58,7 +62,7 @@ export function UserMessage({
           )}
           {parts && <ContentParts parts={parts} />}
         </Stack>
-        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} align="right" />
+        <MessageActions sessionId={sessionId} message={message} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} align="right" sessionTokens={sessionTokens} sessionCostUsd={sessionCostUsd} />
       </Stack>
     </Group>
   );

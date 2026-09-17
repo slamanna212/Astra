@@ -40,6 +40,8 @@ export function MessageRow({
   model,
   provider,
   reasoningEffort,
+  sessionTokens,
+  sessionCostUsd,
 }: {
   message: Message;
   toolResults: Map<string, Message>;
@@ -51,6 +53,8 @@ export function MessageRow({
   model?: string | null;
   provider?: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  sessionTokens?: number;
+  sessionCostUsd?: number | null;
 }) {
   if (message.display_kind) {
     return <DisplayKindNotice message={message} />;
@@ -60,7 +64,7 @@ export function MessageRow({
     return <OrphanToolResult message={message} />;
   }
   if (message.role === 'user') {
-    return <UserMessage sessionId={sessionId} message={message} highlighted={highlighted} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} />;
+    return <UserMessage sessionId={sessionId} message={message} highlighted={highlighted} running={running} model={model} provider={provider} reasoningEffort={reasoningEffort} sessionTokens={sessionTokens} sessionCostUsd={sessionCostUsd} />;
   }
   if (message.role === 'assistant') {
     return (
@@ -74,6 +78,8 @@ export function MessageRow({
         model={model}
         provider={provider}
         reasoningEffort={reasoningEffort}
+        sessionTokens={sessionTokens}
+        sessionCostUsd={sessionCostUsd}
       />
     );
   }
