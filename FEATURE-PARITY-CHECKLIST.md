@@ -64,7 +64,7 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [x] Create and load sessions
 - [x] Delete sessions
 - [x] Rename sessions
-- [ ] **Partial** — Hermes may title canonical sessions during a turn, but Astra has no configurable adaptive auto-title cadence
+- [x] **Intentional low-cost equivalent** — Hermes titles the canonical session from its opening turn; periodic/adaptive re-titling is deliberately omitted to avoid additional model calls
 - [x] Search session titles and full message content
 - [x] Pin/star sessions to the top
 - [x] Archive/unarchive sessions

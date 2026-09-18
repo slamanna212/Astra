@@ -489,6 +489,9 @@ class ChatManager:
             "base_url": runtime.get("base_url"),
             "api_key": runtime.get("api_key"),
             "api_mode": runtime.get("api_mode"),
+            # Hermes owns opening-turn auto-titling in its shared turn prologue. Identifying
+            # Astra as a human-facing webui surface enables that canonical, one-time path;
+            # Astra intentionally does not add periodic/adaptive re-titling model calls.
             "platform": "webui",
             "quiet_mode": True,
             "enabled_toolsets": toolsets,

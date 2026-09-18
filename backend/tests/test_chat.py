@@ -196,6 +196,10 @@ async def test_commit_idle_is_a_non_request_thread_session_boundary(base_setting
     turn = chatmod.Turn("session-1", "go", None, None, reasoning_effort="high")
     agent = await asyncio.to_thread(manager._build_agent, turn)
     assert agent.reasoning_config == {"enabled": True, "effort": "high"}
+    # Hermes' shared turn prologue uses this surface identity to run its canonical
+    # opening-turn auto-title path. Astra deliberately adds no periodic title calls.
+    assert agent.platform == "webui"
+    assert isinstance(agent.session_db, FakeSessionDB)
     assert not agent.commits
     await manager.commit_idle()
     assert agent.commits
