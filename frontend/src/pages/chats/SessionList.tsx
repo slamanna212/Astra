@@ -172,11 +172,25 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     enabled: needsParentLookup,
     staleTime: 60_000,
   });
-  const activeParentId = useMemo(() => {
-    if (selfAsParent && selfAsParent.child_count > 0) return selfAsParent.id;
-    if (needsParentLookup) return selectedDetailQuery.data?.parent_session_id ?? null;
-    return null;
-  }, [selfAsParent, needsParentLookup, selectedDetailQuery.data]);
+  // Sticky rather than a plain derived memo: when selectedId switches to a different sub-agent
+  // child, selectedDetailQuery's key changes and its `data` goes briefly undefined while it
+  // refetches. Deriving activeParentId straight from that would collapse the group and re-expand
+  // it once the lookup resolves (a visible flash). Instead we only update it once we have a
+  // definitive answer, so the currently expanded group stays put while switching between siblings.
+  const [activeParentId, setActiveParentId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedId) {
+      setActiveParentId(null);
+      return;
+    }
+    if (selfAsParent) {
+      setActiveParentId(selfAsParent.child_count > 0 ? selfAsParent.id : null);
+      return;
+    }
+    if (!selectedDetailQuery.isFetching && selectedDetailQuery.data) {
+      setActiveParentId(selectedDetailQuery.data.parent_session_id ?? null);
+    }
+  }, [selectedId, selfAsParent, selectedDetailQuery.isFetching, selectedDetailQuery.data]);
 
   const activeChildrenQuery = useQuery({
     queryKey: queryKeys.messages.children(activeParentId ?? ''),
