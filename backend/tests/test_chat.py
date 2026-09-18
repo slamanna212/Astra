@@ -128,6 +128,70 @@ async def next_named(queue: asyncio.Queue, name: str):
 
 
 @pytest.mark.anyio
+async def test_event_batches_preserve_order_and_reconnect_replay(base_settings, monkeypatch):
+    manager = ChatManager(base_settings)
+    turn = chatmod.Turn("batch-session", "go", None, None)
+    manager._turns[turn.session_id] = turn
+    first, _ = await manager.subscribe(turn.session_id)
+    for index in range(350):
+        manager._emit(turn, "delta", {"text": str(index)})
+    manager._emit(turn, "done", {})
+    turn.done.set()
+
+    original = chatmod.anyio.to_thread.run_sync
+    release = asyncio.Event()
+    dispatches = 0
+
+    async def dispatch(fn, *args, **kwargs):
+        nonlocal dispatches
+        dispatches += 1
+        if dispatches == 2:
+            await release.wait()
+        return await original(fn, *args, **kwargs)
+
+    monkeypatch.setattr(chatmod.anyio.to_thread, "run_sync", dispatch)
+    pump = asyncio.create_task(manager._pump(turn))
+    try:
+        received = [await asyncio.wait_for(first.get(), 2)]
+        second, running = await manager.subscribe(turn.session_id, after_seq=received[0].seq)
+        assert running
+        release.set()
+        await asyncio.wait_for(pump, 2)
+        while not first.empty():
+            received.append(first.get_nowait())
+        replayed = []
+        while not second.empty():
+            replayed.append(second.get_nowait())
+        assert [event.seq for event in received] == list(range(1, 352))
+        assert replayed == received[1:]
+        assert received[-1].name == "done"
+        assert received[:-1] == turn.recent[:-1]
+        assert dispatches < 5
+    finally:
+        release.set()
+        await pump
+        await manager.close()
+
+
+@pytest.mark.anyio
+async def test_sparse_event_does_not_wait_for_a_full_batch(base_settings):
+    manager = ChatManager(base_settings)
+    turn = chatmod.Turn("sparse-session", "go", None, None)
+    manager._turns[turn.session_id] = turn
+    subscriber, _ = await manager.subscribe(turn.session_id)
+    pump = asyncio.create_task(manager._pump(turn))
+    try:
+        manager._emit(turn, "delta", {"text": "first token"})
+        event = await asyncio.wait_for(subscriber.get(), 2)
+        assert event.data == {"text": "first token"}
+        assert not turn.done.is_set()
+    finally:
+        turn.done.set()
+        await pump
+        await manager.close()
+
+
+@pytest.mark.anyio
 async def test_turn_fans_out_clarify_approval_late_steer_and_commits(base_settings, fake_hermes):
     manager = ChatManager(base_settings, max_workers=1)
     await manager.start("session-1", "go", model=None, provider=None)

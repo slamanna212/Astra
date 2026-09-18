@@ -2,7 +2,7 @@ import { ActionIcon, Alert, Center, Loader, Text, Tooltip } from '@mantine/core'
 import { IconArrowDown } from '@tabler/icons-react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getChildSessions, listMessages, MESSAGE_PAGE_SIZE } from '../../../api/messages';
 import type { ReasoningEffort } from '../../../api/chat';
@@ -28,8 +28,9 @@ type Row =
 
 const NEAR_EDGE_PX = 400;
 const NEAR_BOTTOM_PX = 200;
+const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
 
-export function Transcript({
+export const Transcript = memo(function Transcript({
   sessionId,
   highlightMessageId,
   running = false,
@@ -39,7 +40,7 @@ export function Transcript({
   sessionTokens = 0,
   sessionCostUsd = null,
   activityDisplayMode = 'transparent_stream',
-  skillCommands = [],
+  skillCommands = EMPTY_SKILL_COMMANDS,
 }: {
   sessionId: string;
   highlightMessageId?: number;
@@ -104,7 +105,6 @@ export function Transcript({
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -278,4 +278,4 @@ export function Transcript({
       )}
     </div>
   );
-}
+});

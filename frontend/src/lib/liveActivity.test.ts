@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { appendLiveActivity, MAX_LIVE_ACTIVITY_EVENTS, parseLiveActivityData } from './liveActivity';
+import { appendLiveActivity, MAX_LIVE_ACTIVITY_EVENTS, parseLiveActivityData, type LiveActivityEvent } from './liveActivity';
 
 describe('live activity timeline', () => {
+  it('preserves completed entries and never mutates the previous tail', () => {
+    const current: LiveActivityEvent[] = [
+      { kind: 'tool', data: { name: 'terminal' } },
+      { kind: 'assistant', text: 'Hello' },
+    ];
+    Object.freeze(current[1]);
+    const next = appendLiveActivity(current, [{ kind: 'assistant', text: ' there' }]);
+    expect(next[0]).toBe(current[0]);
+    expect(next[1]).not.toBe(current[1]);
+    expect(current[1]!.text).toBe('Hello');
+    expect(next[1]!.text).toBe('Hello there');
+    expect(appendLiveActivity(next, [])).toBe(next);
+  });
+
   it('coalesces only adjacent text of the same kind and preserves execution order', () => {
     const events = appendLiveActivity([], [
       { kind: 'reasoning', text: 'inspect ' },

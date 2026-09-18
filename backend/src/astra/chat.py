@@ -39,6 +39,7 @@ log = logging.getLogger(__name__)
 # Live tok/s is a sliding-window instantaneous rate, not a since-start average: it should
 # visibly speed up/slow down as generation does, not just settle toward one number.
 _LIVE_TPS_WINDOW_SECONDS = 2.0
+_EVENT_BATCH_SIZE = 128
 
 
 class ChatError(RuntimeError):
@@ -226,7 +227,7 @@ class ChatManager:
             )
             self._turns[session_id] = turn
             turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
-            self._emit(turn, "started", {"running": True})
+            self._emit(turn, "started", {"running": True, "operation": "chat"})
         loop = asyncio.get_running_loop()
         loop.run_in_executor(self._executor, self._run_turn, turn)
 
@@ -289,7 +290,7 @@ class ChatManager:
             )
             self._turns[session_id] = turn
             turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
-            self._emit(turn, "started", {"running": True})
+            self._emit(turn, "started", {"running": True, "operation": "regenerate"})
         loop.run_in_executor(self._executor, self._run_turn, turn)
 
     async def subscribe(self, session_id: str, *, after_seq: int = 0) -> tuple[asyncio.Queue[ChatEvent], bool]:
@@ -387,23 +388,37 @@ class ChatManager:
             question.answered.set()
         return True
 
+    @staticmethod
+    def _drain_events(turn: Turn) -> list[ChatEvent]:
+        # Wait only for the first event. Drain an available burst without adding latency to
+        # individual tokens, and bound each batch so subscribers and other turns get to run.
+        batch = [turn.events.get(True, 0.25)]
+        for _ in range(_EVENT_BATCH_SIZE - 1):
+            try:
+                batch.append(turn.events.get_nowait())
+            except queue.Empty:
+                break
+        return batch
+
     async def _pump(self, turn: Turn) -> None:
         """Drain the thread-only queue and fan out on the ASGI event loop."""
         while not turn.done.is_set() or not turn.events.empty():
             try:
-                event = await anyio.to_thread.run_sync(turn.events.get, True, 0.25)
+                batch = await anyio.to_thread.run_sync(self._drain_events, turn)
             except queue.Empty:
                 continue
-            turn.recent.append(event)
             async with self._lock:
+                # Publish replay and live delivery atomically with respect to subscribe().
+                turn.recent.extend(batch)
                 subscribers = tuple(self._subscribers.get(turn.session_id, ()))
-            for subscriber in subscribers:
-                try:
-                    subscriber.put_nowait(event)
-                except asyncio.QueueFull:
-                    # A reconnect fetches canonical history; never let one paused browser block a turn.
-                    async with self._lock:
-                        self._subscribers.get(turn.session_id, set()).discard(subscriber)
+                for subscriber in subscribers:
+                    for event in batch:
+                        try:
+                            subscriber.put_nowait(event)
+                        except asyncio.QueueFull:
+                            # A paused browser must never block a turn.
+                            self._subscribers.get(turn.session_id, set()).discard(subscriber)
+                            break
         async with self._lock:
             self._turns.pop(turn.session_id, None)
 

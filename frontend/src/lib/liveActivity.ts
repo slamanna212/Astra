@@ -16,7 +16,8 @@ export function appendLiveActivity(
   current: LiveActivityEvent[],
   additions: LiveActivityEvent[],
 ): LiveActivityEvent[] {
-  const next = current.map((event) => ({ ...event }));
+  if (additions.length === 0) return current;
+  const next = current.slice();
   for (const addition of additions) {
     const previous = next.at(-1);
     if (
@@ -24,7 +25,7 @@ export function appendLiveActivity(
       (addition.kind === 'reasoning' || addition.kind === 'assistant') &&
       previous.kind === addition.kind
     ) {
-      previous.text = `${previous.text ?? ''}${addition.text ?? ''}`;
+      next[next.length - 1] = { ...previous, text: `${previous.text ?? ''}${addition.text ?? ''}` };
     } else {
       next.push({ ...addition });
     }

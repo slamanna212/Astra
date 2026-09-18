@@ -1,7 +1,7 @@
 import { apiFetch, buildUrl } from './client';
 
 export type ChatStreamEvent =
-  | { type: 'state' | 'started'; running: boolean; recovery_available?: boolean; operation?: 'chat' | 'compact' }
+  | { type: 'state' | 'started'; running: boolean; recovery_available?: boolean; operation?: 'chat' | 'compact' | 'regenerate' }
   | { type: 'delta'; text: string; tps?: number }
   | { type: 'reasoning'; text: string }
   | { type: 'tool'; args: string[] }

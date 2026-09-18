@@ -30,9 +30,12 @@ import { clearBusyTurnQueue, enqueueBusyTurnMessage, loadBusyTurnQueue, removeBu
 import { updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
 import { appendLiveActivity, parseLiveActivityData, type LiveActivityEvent } from '../../lib/liveActivity';
 import { filterAndGroupSkills, type SkillCommandExchange } from '../../lib/skillSlashCommand';
+import { refreshMessages } from '../../lib/refreshMessages';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 import { LiveTurnActivity } from './LiveTurnActivity';
+
+const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
 
 export default function SessionPane() {
   const { sessionId = '' } = useParams();
@@ -70,6 +73,7 @@ export default function SessionPane() {
   const pendingText = useRef('');
   const pendingReasoning = useRef('');
   const pendingLiveEvents = useRef<LiveActivityEvent[]>([]);
+  const pendingTps = useRef<number | null>(null);
   const streamingRef = useRef('');
   const reasoningRef = useRef('');
   const liveEventsRef = useRef<LiveActivityEvent[]>([]);
@@ -81,7 +85,7 @@ export default function SessionPane() {
   const prefs = useUiPreferences();
   const queuedMessages = queueState.sessionId === sessionId ? queueState.messages : loadBusyTurnQueue(sessionId);
   const turnStateKnown = turnState.sessionId === sessionId && turnState.known;
-  const skillCommands = skillCommandState.sessionId === sessionId ? skillCommandState.items : [];
+  const skillCommands = skillCommandState.sessionId === sessionId ? skillCommandState.items : EMPTY_SKILL_COMMANDS;
   const highlightParam = searchParams.get('m');
   const highlightMessageId = highlightParam && /^\d+$/.test(highlightParam) ? Number(highlightParam) : undefined;
 
@@ -121,6 +125,12 @@ export default function SessionPane() {
     let persistTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
     let opened = false;
+    let reconcileTurn = true;
+    let observedIdle = false;
+    let reconnecting = false;
+    let turnVersion = 0;
+    let refreshQueue = Promise.resolve(true);
+    const refreshController = new AbortController();
 
     const recovered = loadChatRecovery(sessionId);
     streamingRef.current = recovered?.streaming ?? '';
@@ -137,6 +147,7 @@ export default function SessionPane() {
     pendingText.current = '';
     pendingReasoning.current = '';
     pendingLiveEvents.current = [];
+    pendingTps.current = null;
     // Synchronize React with session-scoped browser recovery state when the route changes.
     setLiveEvents(liveEventsRef.current);
     setRunning(runningRef.current);
@@ -147,6 +158,7 @@ export default function SessionPane() {
     setConnection('connecting');
     setTurnState({ sessionId, known: false });
     setReconnectAttempt(0);
+    setLiveTps(null);
 
     const persist = () => {
       if (persistTimer !== null) clearTimeout(persistTimer);
@@ -164,6 +176,7 @@ export default function SessionPane() {
       if (persistTimer === null) persistTimer = setTimeout(persist, 1_000);
     };
     const flush = () => {
+      if (raf.current !== null) cancelAnimationFrame(raf.current);
       raf.current = null;
       if (pendingText.current) {
         const next = pendingText.current;
@@ -181,25 +194,45 @@ export default function SessionPane() {
         liveEventsRef.current = appendLiveActivity(liveEventsRef.current, additions);
         setLiveEvents(liveEventsRef.current);
       }
+      if (pendingTps.current !== null) {
+        setLiveTps(pendingTps.current);
+        pendingTps.current = null;
+      }
       schedulePersist();
     };
     const schedule = () => {
       if (raf.current === null) raf.current = requestAnimationFrame(flush);
     };
-    const refreshCanonical = () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.all(sessionId) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all }),
-    ]);
-    const terminal = () => {
+    const refreshCanonical = (reconcile = false) => {
+      // A turn changes this session and the sidebar, but not unrelated details or archive counts.
+      // Sidebar requests must not delay replacing the live response with durable messages.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.detail(sessionId), exact: true });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.lists() });
+      refreshQueue = refreshQueue.then(async () => {
+        if (disposed) return false;
+        try {
+          await refreshMessages(queryClient, sessionId, { reconcile, signal: refreshController.signal });
+          return true;
+        } catch {
+          if (!disposed) notifications.show({ color: 'yellow', message: 'Could not refresh the conversation. Reload the page to retry.' });
+          return false;
+        }
+      });
+      return refreshQueue;
+    };
+    const terminal = (reconcile = reconcileTurn) => {
       flush();
+      setLiveTps(null);
       runningRef.current = false;
+      observedIdle = true;
       setRunning(false);
       setClarify(null);
       setApproval(null);
       clearChatRecovery(sessionId);
       setShowRecoveryBanner(false);
-      void refreshCanonical().then(() => {
-        if (disposed) return;
+      const finishedVersion = turnVersion;
+      void refreshCanonical(reconcile).then((refreshed) => {
+        if (!refreshed || disposed || runningRef.current || turnVersion !== finishedVersion) return;
         streamingRef.current = '';
         reasoningRef.current = '';
         liveEventsRef.current = [];
@@ -214,7 +247,6 @@ export default function SessionPane() {
           ? { tps: payload.tps, outputTokens: payload.output_tokens }
           : null);
       }
-      setLiveTps(null);
       terminal();
     };
 
@@ -235,16 +267,17 @@ export default function SessionPane() {
       source = currentSource;
       currentSource.onopen = () => {
         if (disposed || source !== currentSource) return;
-        const wasReconnect = opened || attempt > 0;
+        reconnecting = reconnecting || opened || attempt > 0;
         opened = true;
         attempt = 0;
         setReconnectAttempt(0);
         setConnection('live');
-        if (wasReconnect) void refreshCanonical();
       };
       currentSource.addEventListener('state', tracked((event) => {
         const state = JSON.parse((event as MessageEvent).data) as { running: boolean; recovery_available?: boolean };
         setTurnState({ sessionId, known: true });
+        const needsRecovery = reconnecting || recovered !== null || runningRef.current;
+        observedIdle = !state.running;
         runningRef.current = state.running;
         setRunning(state.running);
         if (state.recovery_available) {
@@ -254,11 +287,22 @@ export default function SessionPane() {
           });
         }
         // A missed terminal frame is recovered from durable canonical history.
-        if (!state.running) terminal();
-        else schedulePersist();
+        if (!state.running && needsRecovery) terminal(true);
+        else if (state.running) {
+          if (reconnecting || recovered !== null) {
+            reconcileTurn = true;
+            void refreshCanonical(true);
+          }
+          schedulePersist();
+        }
+        reconnecting = false;
       }));
       currentSource.addEventListener('started', tracked((event) => {
         const payload = JSON.parse((event as MessageEvent).data) as { operation?: string };
+        turnVersion += 1;
+        // A missing operation is compatible with older servers, whose turns may rewind history.
+        reconcileTurn = payload.operation !== 'chat' || !observedIdle;
+        observedIdle = false;
         runningRef.current = true;
         setTurnState({ sessionId, known: true });
         streamingRef.current = '';
@@ -267,6 +311,7 @@ export default function SessionPane() {
         pendingText.current = '';
         pendingReasoning.current = '';
         pendingLiveEvents.current = [];
+        pendingTps.current = null;
         setRunning(true);
         setLiveEvents([]);
         setShowRecoveryBanner(false);
@@ -282,7 +327,7 @@ export default function SessionPane() {
         const data = JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string; tps?: number };
         pendingText.current += data.text;
         pendingLiveEvents.current.push({ kind: 'assistant', text: data.text });
-        if (data.tps !== undefined) setLiveTps(data.tps);
+        if (data.tps !== undefined) pendingTps.current = data.tps;
         schedule();
       }));
       currentSource.addEventListener('reasoning', tracked((event) => {
@@ -305,12 +350,15 @@ export default function SessionPane() {
       currentSource.addEventListener('status', tracked((event) => {
         const payload = JSON.parse((event as MessageEvent).data) as { kind?: string; message?: string };
         if (payload.kind === 'compacting') {
+          reconcileTurn = true;
           setCompaction({ phase: 'running', message: payload.message || 'Compacting context…' });
         } else if (payload.kind === 'compacted') {
+          reconcileTurn = true;
           setCompaction({ phase: 'done', message: payload.message || 'Context compaction complete.' });
         }
       }));
       currentSource.addEventListener('compaction', tracked((event) => {
+        reconcileTurn = true;
         const payload = JSON.parse((event as MessageEvent).data) as { before_messages?: number; after_messages?: number };
         const counts = payload.before_messages !== undefined && payload.after_messages !== undefined
           ? ` (${payload.before_messages} → ${payload.after_messages} active messages)`
@@ -334,7 +382,8 @@ export default function SessionPane() {
         currentSource.close();
         if (disposed || source !== currentSource || retryTimer !== null) return;
         setConnection('reconnecting');
-        void refreshCanonical();
+        reconnecting = true;
+        reconcileTurn = true;
         const index = Math.min(attempt, CHAT_RECONNECT_DELAYS_MS.length - 1);
         const delay = CHAT_RECONNECT_DELAYS_MS[index];
         attempt += 1;
@@ -349,17 +398,19 @@ export default function SessionPane() {
     retryNowRef.current = () => {
       if (retryTimer !== null) clearTimeout(retryTimer);
       retryTimer = null;
+      reconnecting = true;
       connect();
-      void refreshCanonical();
     };
     connect();
     return () => {
       disposed = true;
+      refreshController.abort();
       source?.close();
       if (retryTimer !== null) clearTimeout(retryTimer);
       if (persistTimer !== null) clearTimeout(persistTimer);
       if (runningRef.current) persist();
       if (raf.current !== null) cancelAnimationFrame(raf.current);
+      raf.current = null;
     };
   }, [sessionId, queryClient, setDraft]);
 

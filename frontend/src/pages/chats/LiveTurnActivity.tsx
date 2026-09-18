@@ -1,6 +1,7 @@
 import { Alert, Badge, Code, Collapse, Group, Paper, Stack, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconChevronRight } from '@tabler/icons-react';
+import { memo, useMemo } from 'react';
 import type { LiveActivityEvent } from '../../lib/liveActivity';
 import type { ActivityDisplayMode } from '../../lib/uiPreferences';
 
@@ -22,9 +23,9 @@ function operationLabel(event: LiveActivityEvent): string {
   return event.kind === 'subagent' ? 'Subagent activity' : 'Tool activity';
 }
 
-function OperationEvent({ event }: { event: LiveActivityEvent }) {
+const OperationEvent = memo(function OperationEvent({ event }: { event: LiveActivityEvent }) {
   const [opened, { toggle }] = useDisclosure(false);
-  const detail = payloadText(event);
+  const detail = useMemo(() => payloadText(event), [event]);
   return (
     <Paper withBorder p="xs">
       <UnstyledButton onClick={toggle} style={{ width: '100%' }}>
@@ -48,7 +49,18 @@ function OperationEvent({ event }: { event: LiveActivityEvent }) {
       </Collapse>
     </Paper>
   );
-}
+});
+
+const TextEvent = memo(function TextEvent({ event }: { event: LiveActivityEvent }) {
+  return (
+    <Paper withBorder p="xs">
+      <Text size="xs" c="dimmed" fw={600} mb={4}>
+        {event.kind === 'reasoning' ? 'Thinking' : 'Assistant'}
+      </Text>
+      <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{event.text}</Text>
+    </Paper>
+  );
+});
 
 function TransparentStream({ events }: { events: LiveActivityEvent[] }) {
   return (
@@ -57,16 +69,7 @@ function TransparentStream({ events }: { events: LiveActivityEvent[] }) {
         if (event.kind === 'tool' || event.kind === 'subagent') {
           return <OperationEvent key={`${event.kind}-${index}`} event={event} />;
         }
-        return (
-          <Paper key={`${event.kind}-${index}`} withBorder p="xs">
-            <Text size="xs" c="dimmed" fw={600} mb={4}>
-              {event.kind === 'reasoning' ? 'Thinking' : 'Assistant'}
-            </Text>
-            <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-              {event.text}
-            </Text>
-          </Paper>
-        );
+        return <TextEvent key={`${event.kind}-${index}`} event={event} />;
       })}
     </Stack>
   );
@@ -106,9 +109,9 @@ function CompactWorklog({ events }: { events: LiveActivityEvent[] }) {
   );
 }
 
-export function LiveTurnActivity({ events, mode }: { events: LiveActivityEvent[]; mode: ActivityDisplayMode }) {
+export const LiveTurnActivity = memo(function LiveTurnActivity({ events, mode }: { events: LiveActivityEvent[]; mode: ActivityDisplayMode }) {
   if (events.length === 0) return null;
   return mode === 'transparent_stream'
     ? <TransparentStream events={events} />
     : <CompactWorklog events={events} />;
-}
+});

@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 
 const STORAGE_KEY = 'astra.chat.composer-drafts.v1';
 const MAX_DRAFTS = 50;
+const SAVE_DELAY_MS = 400;
+// Pending text is available across route changes before the debounced storage write.
+const pendingDrafts = new Map<string, { text: string; timer: ReturnType<typeof setTimeout> }>();
 
 interface StoredDraft {
   text: string;
@@ -41,11 +44,14 @@ function writeDrafts(drafts: DraftMap) {
 
 export function loadComposerDraft(sessionId: string): string {
   if (!sessionId) return '';
-  return readDrafts()[sessionId]?.text ?? '';
+  return pendingDrafts.get(sessionId)?.text ?? readDrafts()[sessionId]?.text ?? '';
 }
 
 export function saveComposerDraft(sessionId: string, text: string, now = Date.now()) {
   if (!sessionId) return;
+  const pending = pendingDrafts.get(sessionId);
+  if (pending) clearTimeout(pending.timer);
+  pendingDrafts.delete(sessionId);
   const drafts = readDrafts();
   if (text === '') {
     if (!(sessionId in drafts)) return;
@@ -62,16 +68,45 @@ export function saveComposerDraft(sessionId: string, text: string, now = Date.no
   ));
 }
 
+function flushDraft(sessionId: string) {
+  const pending = pendingDrafts.get(sessionId);
+  if (pending) saveComposerDraft(sessionId, pending.text);
+}
+
 /** Keeps composer text synchronized with the draft belonging to the active session. */
 export function useComposerDraft(sessionId: string): [string, Dispatch<SetStateAction<string>>] {
+  const storedDraft = useMemo(() => loadComposerDraft(sessionId), [sessionId]);
   const [drafts, setDrafts] = useState<Record<string, string>>(() => ({
-    [sessionId]: loadComposerDraft(sessionId),
+    [sessionId]: storedDraft,
   }));
-  const draft = drafts[sessionId] ?? loadComposerDraft(sessionId);
+  const draft = drafts[sessionId] ?? storedDraft;
 
   useEffect(() => {
-    saveComposerDraft(sessionId, draft);
+    if (!sessionId) return;
+    // Clearing after sending must be durable immediately, including when the page closes.
+    if (draft === '') {
+      saveComposerDraft(sessionId, draft);
+      return;
+    }
+    const pending = pendingDrafts.get(sessionId);
+    if (pending) clearTimeout(pending.timer);
+    pendingDrafts.set(sessionId, {
+      text: draft,
+      timer: setTimeout(() => flushDraft(sessionId), SAVE_DELAY_MS),
+    });
   }, [sessionId, draft]);
+
+  useEffect(() => {
+    const flush = () => flushDraft(sessionId);
+    const onVisibilityChange = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      flush();
+    };
+  }, [sessionId]);
 
   const setDraft = useCallback<Dispatch<SetStateAction<string>>>((next) => {
     setDrafts((previous) => {

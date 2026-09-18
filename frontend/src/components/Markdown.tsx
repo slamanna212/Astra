@@ -1,5 +1,5 @@
 import { Anchor, Code, Table, Text } from '@mantine/core';
-import { isValidElement, lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { isValidElement, lazy, memo, Suspense, useMemo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
@@ -134,7 +134,11 @@ const baseComponents: Components = {
   ),
 };
 
-export function Markdown({
+const plainComponents = { ...baseComponents, pre: MermaidPre };
+const highlightedComponents = { ...baseComponents, pre: RichPre };
+const rehypePlugins = [rehypeKatex];
+
+export const Markdown = memo(function Markdown({
   children,
   codeHighlight = false,
   sessionId,
@@ -146,17 +150,16 @@ export function Markdown({
   /** Session used to authorize absolute local paths emitted in Hermes MEDIA tokens. */
   sessionId?: string;
 }) {
-  const components = { ...baseComponents, pre: codeHighlight ? RichPre : MermaidPre };
-  const mediaPlugin = useMemo(() => remarkHermesMedia(sessionId), [sessionId]);
+  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath, remarkHermesMedia(sessionId)], [sessionId]);
   return (
     <div className={classes.root}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, mediaPlugin]}
-        rehypePlugins={[rehypeKatex]}
-        components={components}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={codeHighlight ? highlightedComponents : plainComponents}
       >
         {children}
       </ReactMarkdown>
     </div>
   );
-}
+});

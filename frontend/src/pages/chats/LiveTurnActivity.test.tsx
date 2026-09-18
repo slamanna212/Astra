@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { appendLiveActivity } from '../../lib/liveActivity';
 import { render } from '../../test/render';
 import { LiveTurnActivity } from './LiveTurnActivity';
 
@@ -12,6 +13,16 @@ const events = [
 ];
 
 describe('LiveTurnActivity', () => {
+  it('does not reserialize completed tool details when more text arrives', () => {
+    const toJSON = vi.fn(() => ({ name: 'terminal', command: 'git status' }));
+    const current = [{ kind: 'tool' as const, data: { name: 'terminal', toJSON } }];
+    const view = render(<LiveTurnActivity events={current} mode="transparent_stream" />);
+    expect(toJSON).toHaveBeenCalledTimes(1);
+    view.rerender(<LiveTurnActivity events={appendLiveActivity(current, [{ kind: 'assistant', text: 'Done' }])} mode="transparent_stream" />);
+    expect(screen.getByText('Done')).toBeInTheDocument();
+    expect(toJSON).toHaveBeenCalledTimes(1);
+  });
+
   it('renders concrete events in chronological order in transparent mode', async () => {
     const user = userEvent.setup();
     render(<LiveTurnActivity events={events} mode="transparent_stream" />);

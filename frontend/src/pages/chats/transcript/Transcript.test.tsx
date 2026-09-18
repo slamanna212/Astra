@@ -4,6 +4,15 @@ import type { Message } from '../../../api/types';
 import { jsonResponse, render } from '../../../test/render';
 import { Transcript } from './Transcript';
 
+const markdownRenders = vi.hoisted(() => vi.fn());
+vi.mock('react-markdown', async (importOriginal) => {
+  const original = await importOriginal<typeof import('react-markdown')>();
+  return { ...original, default: (props: Parameters<typeof original.default>[0]) => {
+    markdownRenders();
+    return <original.default {...props} />;
+  } };
+});
+
 function makeMessage(i: number): Message {
   return {
     id: i,
@@ -95,5 +104,15 @@ describe('Transcript', () => {
     });
     render(<Transcript sessionId="s1" />, { route: '/chats/s1' });
     expect(await screen.findByText('No messages in this conversation.')).toBeInTheDocument();
+  });
+
+  it('does not reparse historical Markdown on parent updates or running-state changes', async () => {
+    const view = render(<Transcript sessionId="s1" />, { route: '/chats/s1' });
+    await waitFor(() => expect(screen.queryAllByText(/message body/).length).toBeGreaterThan(0));
+    markdownRenders.mockClear();
+    for (let i = 0; i < 10; i++) view.rerender(<Transcript sessionId="s1" />);
+    view.rerender(<Transcript sessionId="s1" running />);
+    expect(markdownRenders).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: /Regenerate response|Retry from this message/ })[0]).toBeDisabled();
   });
 });

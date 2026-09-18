@@ -1,4 +1,5 @@
 import { Badge, Box, Code, Group, Text } from '@mantine/core';
+import { memo } from 'react';
 import type { ChildSession, Message } from '../../../api/types';
 import type { ReasoningEffort } from '../../../api/chat';
 import { formatDateTime } from '../../../lib/format';
@@ -30,7 +31,7 @@ function OrphanToolResult({ message }: { message: Message }) {
   );
 }
 
-export function MessageRow({
+export const MessageRow = memo(function MessageRow({
   message,
   toolResults,
   consumedToolCallIds,
@@ -103,4 +104,4 @@ export function MessageRow({
       )}
     </Box>
   );
-}
+});
