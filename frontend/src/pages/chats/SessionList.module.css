@@ -86,7 +86,7 @@
   padding-left: 8px;
   opacity: 0;
   transition: opacity var(--astra-transition);
-  background: linear-gradient(to right, transparent, var(--astra-bg) 40%);
+  background: linear-gradient(to right, transparent, var(--astra-surface) 40%);
 
   .row:hover &,
   .row[data-active] & {
