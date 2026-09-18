@@ -19,13 +19,17 @@ class SearchRequest(BaseModel):
     query_expansion: Literal["off", "auto"] = "off"
 
 def _uri(uri: str) -> str:
-    if not uri.startswith("viking://") or len(uri) > 2000: raise HTTPException(400, "Invalid OpenViking URI")
+    if not uri.startswith("viking://") or len(uri) > 2000:
+        raise HTTPException(400, "Invalid OpenViking URI")
     return uri
 
 async def _call(ctx: Ctx, method: str, path: str, **kwargs: Any) -> Any:
-    try: return await ctx.openviking.request(method, path, **kwargs)  # type: ignore[union-attr]
-    except OpenVikingUnavailable as exc: raise HTTPException(503, str(exc)) from None
-    except ValueError as exc: raise HTTPException(502, str(exc)) from None
+    try:
+        return await ctx.openviking.request(method, path, **kwargs)  # type: ignore[union-attr]
+    except OpenVikingUnavailable as exc:
+        raise HTTPException(503, str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(502, str(exc)) from None
 
 @router.get("/health")
 async def health(ctx: Ctx):
@@ -80,7 +84,8 @@ async def content(ctx: Ctx, uri: str, offset: int = Query(0, ge=0), limit: int =
 async def search(body: SearchRequest, ctx: Ctx):
     if body.mode == "fast":
         payload: dict[str, Any] = {"query": body.query, "limit": body.limit, "peer_scope": "actor"}
-        if body.target_uri: payload["target_uri"] = _uri(body.target_uri)
+        if body.target_uri:
+            payload["target_uri"] = _uri(body.target_uri)
         result = await _call(ctx, "POST", "/api/v1/search/find", body=payload)
     else:
         result = await _call(ctx, "POST", "/api/v1/search/search", body={"query": body.query, "mode": "context", "query_expansion": body.query_expansion, "max_tokens": 4000, "peer_scope": "actor"})

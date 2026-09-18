@@ -12,6 +12,7 @@ import pytest
 
 import astra.chat as chatmod
 from astra.chat import ChatManager
+
 from .conftest import CSRF
 
 
@@ -54,7 +55,7 @@ class FakeApprovals:
 
 
 class FakeAgent:
-    instances: list["FakeAgent"] = []
+    instances: list[FakeAgent] = []
     release = threading.Event()
     interrupted = threading.Event()
 
@@ -242,7 +243,7 @@ async def test_stop_interrupts_the_agent(base_settings, fake_hermes):
     manager = ChatManager(base_settings, max_workers=1)
     await manager.start("session-1", "go", model=None, provider=None)
     subscriber, _ = await manager.subscribe("session-1")
-    clarify = await next_named(subscriber, "clarify")
+    await next_named(subscriber, "clarify")
     # Stop also unblocks a pending clarify callback.
     assert await manager.stop("session-1")
     cancelled = await next_named(subscriber, "cancel")

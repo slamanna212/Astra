@@ -241,10 +241,7 @@ async def session_update(session_id: str, body: SessionUpdateRequest, ctx: Ctx) 
             "archived": db.set_session_archived,
             "hidden": db.set_session_hidden,
         }
-        for key, value in updates.items():
-            if not setters[key](session_id, value):
-                return False
-        return True
+        return all(setters[key](session_id, value) for key, value in updates.items())
 
     try:
         found = await anyio.to_thread.run_sync(_with_session_db, ctx, _update)

@@ -20,7 +20,6 @@ from astra.config import ConfigError, Settings
 
 from .conftest import CSRF, PASSWORD, SECRET, login
 
-
 # -- password hashing --------------------------------------------------------
 
 

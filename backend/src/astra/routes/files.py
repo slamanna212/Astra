@@ -140,7 +140,7 @@ async def upload_file(
     ctx: Ctx,
     directory: Annotated[str, Form()] = "",
     overwrite: Annotated[bool, Form()] = False,
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()] = ...,
 ) -> FileUploadResponse:
     root = ctx.settings.workspace_dir
     max_bytes = ctx.settings.upload_max_bytes

@@ -27,8 +27,8 @@ to whatever transient runtime environment this process happens to look like. Onl
 
 from __future__ import annotations
 
-import re
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass, field

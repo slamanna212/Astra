@@ -45,7 +45,7 @@ import os
 import stat as statmod
 import unicodedata
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -230,10 +230,8 @@ def anchored_dir_fd(root: Path, parts: list[str]) -> Iterator[int]:
             fd = nfd
         yield fd
     finally:
-        try:
+        with suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
 
 
 @contextmanager
@@ -253,10 +251,8 @@ def anchored_file_fd(root: Path, parts: list[str], *, flags: int, mode: int = 0o
         try:
             yield fd
         finally:
-            try:
+            with suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
 
 
 # ---------------------------------------------------------------------------
@@ -337,9 +333,7 @@ def is_previewable_text(name: str, mime: str | None) -> bool:
     ext = Path(name).suffix.lower()
     if ext in _EXTRA_TEXT_EXTENSIONS:
         return True
-    if Path(name).name.lower() in _TEXT_BASENAMES:
-        return True
-    return False
+    return Path(name).name.lower() in _TEXT_BASENAMES
 
 
 @dataclass(frozen=True, slots=True)
@@ -480,10 +474,8 @@ def iter_fd_chunks(fd: int, *, chunk_size: int = DOWNLOAD_CHUNK_SIZE) -> Iterato
                 break
             yield chunk
     finally:
-        try:
+        with suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -540,10 +532,8 @@ def save_upload_stream(
             try:
                 os.close(fd)
             finally:
-                try:
+                with suppress(OSError):
                     os.unlink(name, dir_fd=dir_fd)
-                except OSError:
-                    pass
             raise
         else:
             os.close(fd)

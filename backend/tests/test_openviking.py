@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from astra.openviking import OpenVikingClient, OpenVikingUnavailable
 
-from .conftest import CSRF, login
+from .conftest import CSRF
 
 
 def test_openviking_routes_require_login(client):

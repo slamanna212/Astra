@@ -6,7 +6,13 @@ from fastapi import APIRouter, HTTPException, Query
 
 from astra.deps import Ctx
 from astra.models import SearchPage
-from astra.search import DEFAULT_LIMIT, MAX_LIMIT, InvalidSearchCursor, SearchParams, search_messages
+from astra.search import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    InvalidSearchCursor,
+    SearchParams,
+    search_messages,
+)
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 

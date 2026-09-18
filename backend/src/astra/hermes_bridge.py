@@ -107,17 +107,17 @@ def agent_class():
     Importing ``run_agent`` is intentionally deferred until a chat is started: the read-only
     screens must remain usable if an optional Hermes provider dependency is unavailable.
     """
-    return getattr(_import("run_agent"), "AIAgent")
+    return _import("run_agent").AIAgent
 
 
 def session_db_class():
     """Return Hermes' canonical state writer, never a parallel persistence layer."""
-    return getattr(_import("hermes_state"), "SessionDB")
+    return _import("hermes_state").SessionDB
 
 
 def resolve_runtime_provider():
     """Return Hermes' provider resolver, which keeps credentials server-side."""
-    return getattr(_import("hermes_cli.runtime_provider"), "resolve_runtime_provider")
+    return _import("hermes_cli.runtime_provider").resolve_runtime_provider
 
 
 def approval_module() -> ModuleType:
@@ -128,7 +128,7 @@ def approval_module() -> ModuleType:
 def redact_approval_command(command: object) -> str | None:
     """Use Hermes' own transport-safe approval redactor; fail closed."""
     try:
-        redactor = getattr(_import("gateway.run"), "_redact_approval_command")
+        redactor = _import("gateway.run")._redact_approval_command
         return str(redactor(command))
     except Exception:
         return None

@@ -11,13 +11,19 @@ which the server answers with a plain 403.
 from __future__ import annotations
 
 from http.cookies import CookieError, SimpleCookie
-
 from urllib.parse import urlsplit
 
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from astra.auth import COOKIE_NAME, CSRF_HEADER, CSRF_VALUE, RevokedNonces, SessionToken, verify_token
+from astra.auth import (
+    COOKIE_NAME,
+    CSRF_HEADER,
+    CSRF_VALUE,
+    RevokedNonces,
+    SessionToken,
+    verify_token,
+)
 
 # Reachable without a session. Logout is included so an expired cookie can still be cleared;
 # it only ever removes the cookie.

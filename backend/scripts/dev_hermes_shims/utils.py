@@ -9,6 +9,7 @@ save, config write) — they're defined only so importing those modules doesn't 
 
 from __future__ import annotations
 
+import contextlib
 import os
 import tempfile
 from pathlib import Path
@@ -29,10 +30,8 @@ def atomic_write_text(path: str | Path, text: str, encoding: str = "utf-8") -> N
             os.fsync(f.fileno())
         atomic_replace(tmp, path)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
 
 

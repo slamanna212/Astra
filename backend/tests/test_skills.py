@@ -4,8 +4,13 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from tests.test_cron import cron_client, cron_home, cron_password_hash, cron_settings  # noqa: F401
 from tests.conftest import CSRF
+from tests.test_cron import (  # noqa: F401, F811
+    cron_client,
+    cron_home,
+    cron_password_hash,
+    cron_settings,
+)
 
 
 def test_list_skills_matches_config_yaml_disabled_set(cron_client: TestClient) -> None:

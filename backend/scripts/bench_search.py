@@ -11,7 +11,6 @@ non-selective FTS5 MATCH. Acceptance: p95 well under 1000 ms for every query (§
 from __future__ import annotations
 
 import argparse
-import statistics
 import sys
 import time
 from pathlib import Path

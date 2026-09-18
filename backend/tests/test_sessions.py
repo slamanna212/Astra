@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import sqlite3
 import shutil
+import sqlite3
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from astra.db import Schema, StateDB
 from astra.sessions import ListParams, build_list_query, list_sessions
+
 from .conftest import CSRF
 
 
@@ -209,9 +210,8 @@ def test_query_adapts_to_missing_columns(fixture_db_path: Path) -> None:
 
 def test_connection_is_read_only(fixture_db_path: Path) -> None:
     db = StateDB(fixture_db_path)
-    with db.connection() as conn:
-        with pytest.raises(sqlite3.OperationalError):
-            conn.execute("UPDATE sessions SET title = 'x' WHERE 0")
+    with db.connection() as conn, pytest.raises(sqlite3.OperationalError):
+        conn.execute("UPDATE sessions SET title = 'x' WHERE 0")
     db.close()
 
 

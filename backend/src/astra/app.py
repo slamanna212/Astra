@@ -25,8 +25,8 @@ from astra.routes import insights as insights_routes
 from astra.routes import logs as logs_routes
 from astra.routes import media as media_routes
 from astra.routes import memory as memory_routes
-from astra.routes import openviking as openviking_routes
 from astra.routes import messages as message_routes
+from astra.routes import openviking as openviking_routes
 from astra.routes import search as search_routes
 from astra.routes import sessions as session_routes
 from astra.routes import skills as skills_routes

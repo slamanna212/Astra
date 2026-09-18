@@ -147,7 +147,6 @@ def test_full_message_fetch_and_404(authed: TestClient) -> None:
 
 def test_truncation_and_full_fetch_are_consistent(authed: TestClient, fixture_db_path: Path) -> None:
     db = StateDB(fixture_db_path)
-    schema = db.introspect()
     with db.connection() as conn:
         row = conn.execute(
             "SELECT session_id, id, length(content) AS len FROM messages "
@@ -175,7 +174,6 @@ def test_truncation_and_full_fetch_are_consistent(authed: TestClient, fixture_db
 
 def test_tool_call_pairing_ids_present(authed: TestClient, fixture_db_path: Path) -> None:
     db = StateDB(fixture_db_path)
-    schema = db.introspect()
     with db.connection() as conn:
         row = conn.execute(
             "SELECT session_id, id FROM messages WHERE tool_calls IS NOT NULL LIMIT 1"
@@ -193,7 +191,6 @@ def test_tool_call_pairing_ids_present(authed: TestClient, fixture_db_path: Path
 
 def test_include_inactive_returns_at_least_as_many_rows(authed: TestClient, fixture_db_path: Path) -> None:
     db = StateDB(fixture_db_path)
-    schema = db.introspect()
     with db.connection() as conn:
         total = conn.execute(
             "SELECT COUNT(*) FROM messages WHERE session_id = ?", (BIG_SESSION,)

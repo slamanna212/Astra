@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import pytest
 from fastapi.testclient import TestClient
@@ -62,25 +62,31 @@ def test_info_reports_disabled_by_default(make_client: Callable[..., TestClient]
 def test_disabled_socket_closes(make_client: Callable[..., TestClient]) -> None:
     client = make_client()
     login(client)
-    with client.websocket_connect("/api/terminal/ws", headers=ORIGIN) as ws:
-        with pytest.raises(WebSocketDisconnect) as exc:
-            ws.receive_bytes()
+    with (
+        client.websocket_connect("/api/terminal/ws", headers=ORIGIN) as ws,
+        pytest.raises(WebSocketDisconnect) as exc,
+    ):
+        ws.receive_bytes()
     assert exc.value.code == 4403
 
 
 def test_socket_requires_login(make_client: Callable[..., TestClient], workspace: Path) -> None:
     client = make_client(workspace_dir=workspace, terminal_enabled=True)
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/api/terminal/ws", headers=ORIGIN):
-            pass
+    with (
+        pytest.raises(WebSocketDisconnect) as exc,
+        client.websocket_connect("/api/terminal/ws", headers=ORIGIN),
+    ):
+        pass
     assert exc.value.code == 1008
 
 
 @pytest.mark.parametrize("headers", [{}, {"origin": "http://evil.example"}, {"origin": "null"}])
 def test_socket_requires_same_origin(term_client: TestClient, headers: dict[str, str]) -> None:
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with term_client.websocket_connect("/api/terminal/ws", headers=headers):
-            pass
+    with (
+        pytest.raises(WebSocketDisconnect) as exc,
+        term_client.websocket_connect("/api/terminal/ws", headers=headers),
+    ):
+        pass
     assert exc.value.code == 1008
 
 

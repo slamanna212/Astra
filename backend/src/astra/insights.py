@@ -134,7 +134,8 @@ def _select(schema: Schema, table: str, cols: tuple[str, ...]) -> str:
 
 
 def _num(row: sqlite3.Row | dict[str, Any], key: str, default: float = 0.0) -> float:
-    value = row[key] if key in row.keys() else None
+    # sqlite3.Row's `in` checks values, not keys, so `.keys()` is required here.
+    value = row[key] if key in row.keys() else None  # noqa: SIM118
     return value if value is not None else default
 
 
@@ -315,10 +316,11 @@ def _model_provider_breakdown(
         # sessions.billing_provider columns (loses per-model-switch attribution, but nothing
         # is lost for the (very common) case of one model per session).
         for row in _fetch_session_rows(conn, schema, cutoff):
-            model = row["model"] if "model" in row.keys() and row["model"] else "unknown"
+            # sqlite3.Row's `in` checks values, not keys, so `.keys()` is required here.
+            model = row["model"] if "model" in row.keys() and row["model"] else "unknown"  # noqa: SIM118
             provider = (
                 row["billing_provider"]
-                if "billing_provider" in row.keys() and row["billing_provider"]
+                if "billing_provider" in row.keys() and row["billing_provider"]  # noqa: SIM118
                 else "unknown"
             )
             for bucket_map, key in ((models, model), (providers, provider)):
@@ -404,7 +406,8 @@ def _auxiliary_breakdown(
 def _source_breakdown(rows: list[sqlite3.Row]) -> list[InsightsSourceUsage]:
     sources: dict[str, _GroupTotals] = defaultdict(_GroupTotals)
     for row in rows:
-        source = row["source"] if "source" in row.keys() and row["source"] else "unknown"
+        # sqlite3.Row's `in` checks values, not keys, so `.keys()` is required here.
+        source = row["source"] if "source" in row.keys() and row["source"] else "unknown"  # noqa: SIM118
         g = sources[source]
         g.sessions.add(row["id"])
         g.messages += int(_num(row, "message_count"))

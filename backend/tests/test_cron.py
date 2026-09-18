@@ -5,7 +5,6 @@ import contextlib
 import hashlib
 import json
 import shutil
-import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -271,7 +270,7 @@ def test_output_job_id_traversal_rejected(cron_client: TestClient) -> None:
 def test_skills_list_has_categories_and_disabled_flags(cron_client: TestClient) -> None:
     body = cron_client.get("/api/skills").json()
     assert len(body["items"]) > 100
-    assert ".archive" not in [c for c in body["categories"]]
+    assert ".archive" not in body["categories"]
     disabled_names = {s["name"] for s in body["items"] if not s["enabled"]}
     assert "gif-search" in disabled_names  # from config.yaml's skills.disabled
 

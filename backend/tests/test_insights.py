@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -107,7 +106,7 @@ def test_daily_bucket_hand_computed(authed: TestClient, fixture_db_path: Path) -
     by_day_sessions: Counter[str] = Counter()
     by_day_input: Counter[str] = Counter()
     for r in rows:
-        day = datetime.fromtimestamp(r["started_at"], tz=timezone.utc).strftime("%Y-%m-%d")
+        day = datetime.fromtimestamp(r["started_at"], tz=UTC).strftime("%Y-%m-%d")
         by_day_sessions[day] += 1
         by_day_input[day] += r["input_tokens"] or 0
 
@@ -132,7 +131,7 @@ def test_tz_bucketing_moves_a_session_across_midnight(authed: TestClient, fixtur
     row = conn.execute("SELECT id, started_at FROM sessions WHERE id = ?", ("0048ab216122",)).fetchone()
     conn.close()
     assert row is not None, "fixture DB layout changed; pick another boundary session"
-    utc_day = datetime.fromtimestamp(row["started_at"], tz=timezone.utc).strftime("%Y-%m-%d")
+    utc_day = datetime.fromtimestamp(row["started_at"], tz=UTC).strftime("%Y-%m-%d")
     tokyo_day = datetime.fromtimestamp(row["started_at"], tz=resolve_zone("Asia/Tokyo")).strftime("%Y-%m-%d")
     assert utc_day == "2026-05-19"
     assert tokyo_day == "2026-05-20"
