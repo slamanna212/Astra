@@ -313,12 +313,17 @@ def get_message(
 
 
 def list_child_sessions(conn: sqlite3.Connection, schema: Schema, session_id: str) -> list[ChildSession]:
-    """Sessions delegated *from* this one (``sessions.parent_session_id``), for surfacing subagent
-    links next to a ``delegate_task`` tool call. Best-effort: a delegation can dispatch several
-    subagents at once (verified in the real DB — one ``delegate_task`` call, ``count: 3`` in its
-    result, three children with ``started_at`` within ~70 ms of each other), so the frontend
-    matches by proximity to the tool call's timestamp rather than a 1:1 id reference — Hermes does
-    not record one in ``messages`` or in the tool result.
+    """Sub-agent sessions delegated *from* this one (``sessions.parent_session_id`` +
+    ``source = 'subagent'``), for surfacing subagent links next to a ``delegate_task`` tool call.
+    Best-effort: a delegation can dispatch several subagents at once (verified in the real DB —
+    one ``delegate_task`` call, ``count: 3`` in its result, three children with ``started_at``
+    within ~70 ms of each other), so the frontend matches by proximity to the tool call's
+    timestamp rather than a 1:1 id reference — Hermes does not record one in ``messages`` or in
+    the tool result.
+
+    Scoped to ``source = 'subagent'``: ``parent_session_id`` is also set on forked and
+    context-compression child sessions, which already appear as their own top-level rows in the
+    session list, so including them here would duplicate them into the sub-agent nesting.
     """
     if not schema.has("sessions", "parent_session_id"):
         return []
@@ -326,8 +331,10 @@ def list_child_sessions(conn: sqlite3.Connection, schema: Schema, session_id: st
     fields = [c for c in all_fields if schema.has("sessions", c)]
     if "id" not in fields:
         return []
+    source_filter = " AND source = 'subagent'" if schema.has("sessions", "source") else ""
     rows = conn.execute(
-        f"SELECT {', '.join(fields)} FROM sessions WHERE parent_session_id = ? ORDER BY started_at",
+        f"SELECT {', '.join(fields)} FROM sessions WHERE parent_session_id = ?{source_filter} "
+        "ORDER BY started_at",
         (session_id,),
     ).fetchall()
     present = set(fields)

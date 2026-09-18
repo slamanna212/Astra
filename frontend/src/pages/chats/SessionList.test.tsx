@@ -1,9 +1,14 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChildSession, SessionSummary } from '../../api/types';
+import type { ChildSession, SessionDetail, SessionSummary } from '../../api/types';
 import { jsonResponse, render } from '../../test/render';
 import { SESSION_CHILD_ROW_HEIGHT, SESSION_ROW_HEIGHT, SessionList } from './SessionList';
+
+/** Path (no query string) a mocked fetch call was made against, e.g. "/api/sessions/child-a". */
+function pathOf(input: Parameters<typeof fetch>[0]): string {
+  return new URL(String(input), 'http://localhost').pathname;
+}
 
 function makeSession(i: number, overrides: Partial<SessionSummary> = {}): SessionSummary {
   const now = Date.now() / 1000;
@@ -39,6 +44,18 @@ function makeChildSession(id: string, startedAt: number, messageCount = 3): Chil
     started_at: startedAt,
     source: 'subagent',
     message_count: messageCount,
+  };
+}
+
+/** A SessionDetail for a sub-agent child, as returned by GET /sessions/{childId} when the
+ * sidebar resolves which parent group to expand for a selected child not in the top-level list. */
+function makeChildSessionDetail(id: string, parentSessionId: string): SessionDetail {
+  return {
+    ...makeSession(0, { id, source: 'subagent', child_count: 0, parent_session_id: parentSessionId }),
+    context_length: null,
+    last_prompt_tokens: null,
+    context_tokens: 0,
+    context_tokens_estimated: true,
   };
 }
 
@@ -110,24 +127,50 @@ describe('SessionList', () => {
     expect(await screen.findByText('No sessions.')).toBeInTheDocument();
   });
 
-  it('nests sub-agent children under their parent, always expanded', async () => {
+  describe('sub-agent children', () => {
     const parent = makeSession(0, { child_count: 2 });
     const children = [makeChildSession('child-a', Date.now() / 1000 - 10), makeChildSession('child-b', Date.now() / 1000 - 5)];
-    fetchMock.mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes('/children')) return jsonResponse({ items: children });
-      return jsonResponse({ items: [parent], next_cursor: null });
+
+    function mockFetch() {
+      fetchMock.mockImplementation(async (input) => {
+        const path = pathOf(input);
+        if (path === '/api/sessions/count') return jsonResponse({ count: 0 });
+        if (path === '/api/sessions/s-0/children') return jsonResponse({ items: children });
+        if (path === '/api/sessions/child-a') return jsonResponse(makeChildSessionDetail('child-a', 's-0'));
+        if (path === '/api/sessions') return jsonResponse({ items: [parent], next_cursor: null });
+        throw new Error(`unexpected fetch: ${path}`);
+      });
+    }
+
+    it('shows a count badge and keeps children collapsed by default', async () => {
+      mockFetch();
+      render(<SessionList />, { route: '/chats' });
+
+      expect(await screen.findAllByTestId('session-row')).toHaveLength(1);
+      expect(screen.getByText('2')).toBeInTheDocument();
+      expect(screen.queryAllByTestId('session-child-row')).toHaveLength(0);
+      expect(fetchMock.mock.calls.some((c) => pathOf(c[0]).endsWith('/children'))).toBe(false);
     });
 
-    render(<SessionList />, { route: '/chats' });
+    it('expands children when the parent session is selected', async () => {
+      mockFetch();
+      render(<SessionList selectedId="s-0" />, { route: '/chats/s-0' });
 
-    expect(await screen.findAllByTestId('session-row')).toHaveLength(1);
+      const childRows = await screen.findAllByTestId('session-child-row');
+      expect(childRows).toHaveLength(2);
+      expect(childRows[0]).toHaveAttribute('href', '/chats/child-a');
+      expect(childRows[0]).toHaveStyle({ height: `${SESSION_CHILD_ROW_HEIGHT}px` });
+      expect(screen.getByText('Sub-agent child-a')).toBeInTheDocument();
+    });
 
-    const childRows = await screen.findAllByTestId('session-child-row');
-    expect(childRows).toHaveLength(2);
-    expect(childRows[0]).toHaveAttribute('href', '/chats/child-a');
-    expect(childRows[0]).toHaveStyle({ height: `${SESSION_CHILD_ROW_HEIGHT}px` });
-    expect(screen.getByText('Sub-agent child-a')).toBeInTheDocument();
+    it('expands the group when a sub-agent child itself is selected', async () => {
+      mockFetch();
+      render(<SessionList selectedId="child-a" />, { route: '/chats/child-a' });
+
+      const childRows = await screen.findAllByTestId('session-child-row');
+      expect(childRows).toHaveLength(2);
+      expect(childRows[0]).toHaveAttribute('aria-current', 'page');
+    });
   });
 
   it('shows an archived-count toggle that switches the list to archived sessions', async () => {

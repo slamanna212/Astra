@@ -1,12 +1,12 @@
-import { Button, Center, Group, Loader, MultiSelect, Stack, Text, UnstyledButton } from '@mantine/core';
+import { Badge, Button, Center, Group, Loader, MultiSelect, Stack, Text, UnstyledButton } from '@mantine/core';
 import { IconArchive, IconArrowLeft, IconEyeOff, IconPlus, IconStarFilled } from '@tabler/icons-react';
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { getChildSessions } from '../../api/messages';
 import { queryKeys } from '../../api/queryKeys';
-import { countArchivedSessions, createSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
+import { countArchivedSessions, createSession, getSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
 import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
 import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
@@ -47,6 +47,11 @@ const SessionRow = memo(function SessionRow({ session, active, now }: { session:
       >
         {sessionTitle(session)}
       </Text>
+      {session.child_count > 0 && (
+        <Badge size="xs" variant="light" color="grape" title={`${session.child_count} sub-agent session(s)`}>
+          {session.child_count}
+        </Badge>
+      )}
       <Text component="span" className={classes.age} title={formatDateTime(lastActivity)}>
         {formatCompactAge(lastActivity, now)}
       </Text>
@@ -150,35 +155,45 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   const sessions = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
 
-  // Sub-agent groups are always expanded (option 1c has no manual disclosure control);
-  // fetch children for every parent that has them.
-  const expandedIds = useMemo(() => sessions.filter((s) => s.child_count > 0).map((s) => s.id), [sessions]);
-  const childQueries = useQueries({
-    queries: expandedIds.map((id) => ({
-      queryKey: queryKeys.messages.children(id),
-      queryFn: ({ signal }: { signal: AbortSignal }) => getChildSessions(id, signal),
-      staleTime: 60_000,
-    })),
+  // Sub-agent groups are collapsed by default (the badge on the parent row shows the count) and
+  // expand only for the group containing the currently selected session — its parent if a
+  // sub-agent child is open, or itself if the parent is open. At most one group is ever fetched.
+  const selfAsParent = useMemo(
+    () => (selectedId ? sessions.find((s) => s.id === selectedId) : undefined),
+    [sessions, selectedId],
+  );
+  // Not found among the loaded top-level sessions: selectedId may be a sub-agent child, which is
+  // excluded from that list, so resolve its parent via the session detail endpoint. Shares its
+  // query key/cache with SessionPane's own session-detail fetch, so this is usually free.
+  const needsParentLookup = Boolean(selectedId) && !selfAsParent;
+  const selectedDetailQuery = useQuery({
+    queryKey: queryKeys.sessions.detail(selectedId ?? ''),
+    queryFn: ({ signal }) => getSession(selectedId!, signal),
+    enabled: needsParentLookup,
+    staleTime: 60_000,
   });
-  const childrenById = useMemo(() => {
-    const map = new Map<string, { items: ChildSession[]; isLoading: boolean }>();
-    expandedIds.forEach((id, i) => {
-      const q = childQueries[i];
-      map.set(id, { items: q?.data?.items ?? [], isLoading: q?.isLoading ?? true });
-    });
-    return map;
-  }, [expandedIds, childQueries]);
+  const activeParentId = useMemo(() => {
+    if (selfAsParent && selfAsParent.child_count > 0) return selfAsParent.id;
+    if (needsParentLookup) return selectedDetailQuery.data?.parent_session_id ?? null;
+    return null;
+  }, [selfAsParent, needsParentLookup, selectedDetailQuery.data]);
+
+  const activeChildrenQuery = useQuery({
+    queryKey: queryKeys.messages.children(activeParentId ?? ''),
+    queryFn: ({ signal }) => getChildSessions(activeParentId!, signal),
+    enabled: Boolean(activeParentId),
+    staleTime: 60_000,
+  });
 
   const rows = useMemo(() => {
     const out: Row[] = [];
     const pushSession = (session: SessionSummary, topIndex: number) => {
       out.push({ kind: 'parent', session, topIndex });
-      if (session.child_count > 0) {
-        const entry = childrenById.get(session.id);
-        if (!entry || entry.isLoading) {
+      if (session.child_count > 0 && session.id === activeParentId) {
+        if (activeChildrenQuery.isLoading) {
           out.push({ kind: 'child-loading', parentId: session.id, topIndex });
         } else {
-          entry.items.forEach((child) => {
+          (activeChildrenQuery.data?.items ?? []).forEach((child) => {
             out.push({ kind: 'child', session: child, parentId: session.id, topIndex });
           });
         }
@@ -208,7 +223,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     });
     if (hasNextPage) out.push({ kind: 'loader', topIndex: sessions.length });
     return out;
-  }, [sessions, childrenById, hasNextPage, now]);
+  }, [sessions, activeParentId, activeChildrenQuery.isLoading, activeChildrenQuery.data, hasNextPage, now]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 

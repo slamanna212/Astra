@@ -216,24 +216,39 @@ def test_connection_is_read_only(fixture_db_path: Path) -> None:
 
 
 def test_child_count(make_client: Any, fixture_db_path: Path, tmp_path: Path) -> None:
-    """child_count reflects the number of sessions with parent_session_id pointing at this row,
-    regardless of the children's own archived/hidden status (the fixture DB has zero
-    parent/child links by default, so this seeds some directly)."""
+    """child_count reflects the number of source='subagent' sessions with parent_session_id
+    pointing at this row (the fixture DB has zero parent/child links by default, so this seeds
+    some directly). A non-subagent row pointing at the same parent (e.g. a fork) must not count."""
     home = tmp_path / "home"
     home.mkdir()
     shutil.copy2(fixture_db_path, home / "state.db")
     # Non-subagent rows only, so the parents are guaranteed visible in the default listing.
     rows = [r for r in _all_rows(fixture_db_path) if r["source"] != "subagent"]
-    parent_with_children, parent_with_one, parent_with_none, child_a, child_b, child_c = (
-        r["id"] for r in rows[:6]
-    )
+    (
+        parent_with_children,
+        parent_with_one,
+        parent_with_none,
+        child_a,
+        child_b,
+        child_c,
+        non_subagent_child,
+    ) = (r["id"] for r in rows[:7])
 
     conn = sqlite3.connect(home / "state.db")
     conn.execute(
-        "UPDATE sessions SET parent_session_id = ? WHERE id IN (?, ?)",
+        "UPDATE sessions SET parent_session_id = ?, source = 'subagent' WHERE id IN (?, ?)",
         (parent_with_children, child_a, child_b),
     )
-    conn.execute("UPDATE sessions SET parent_session_id = ? WHERE id = ?", (parent_with_one, child_c))
+    conn.execute(
+        "UPDATE sessions SET parent_session_id = ?, source = 'subagent' WHERE id = ?",
+        (parent_with_one, child_c),
+    )
+    # Points at parent_with_children too, but keeps its original (non-subagent) source — e.g. a
+    # forked session. Must not inflate parent_with_children's count past 2.
+    conn.execute(
+        "UPDATE sessions SET parent_session_id = ? WHERE id = ?",
+        (parent_with_children, non_subagent_child),
+    )
     conn.commit()
     conn.close()
 

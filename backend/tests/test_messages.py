@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -225,19 +227,38 @@ def test_include_inactive_returns_at_least_as_many_rows(authed: TestClient, fixt
     assert inactive_count >= default_count
 
 
-def test_children_endpoint_returns_subagent_sessions(authed: TestClient, fixture_db_path: Path) -> None:
+def test_children_endpoint_returns_subagent_sessions(make_client: Any, fixture_db_path: Path, tmp_path: Path) -> None:
+    """The /children endpoint returns only source='subagent' rows pointing at the parent — a
+    non-subagent row (e.g. a fork) with the same parent_session_id must not appear (it's already
+    shown as its own top-level session)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    shutil.copy2(fixture_db_path, home / "state.db")
+
     db = StateDB(fixture_db_path)
     with db.connection() as conn:
-        row = conn.execute(
-            "SELECT parent_session_id FROM sessions WHERE parent_session_id IS NOT NULL LIMIT 1"
-        ).fetchone()
+        rows = conn.execute("SELECT id, source FROM sessions LIMIT 3").fetchall()
     db.close()
-    if row is None:
-        pytest.skip("fixture has no subagent sessions")
-    parent_id = row["parent_session_id"]
-    body = authed.get(f"/api/sessions/{parent_id}/children").json()
-    assert len(body["items"]) >= 1
-    assert all(isinstance(c["id"], str) for c in body["items"])
+    parent_id, subagent_child, non_subagent_child = (r["id"] for r in rows)
+
+    conn = sqlite3.connect(home / "state.db")
+    conn.execute(
+        "UPDATE sessions SET parent_session_id = ?, source = 'subagent' WHERE id = ?",
+        (parent_id, subagent_child),
+    )
+    conn.execute(
+        "UPDATE sessions SET parent_session_id = ? WHERE id = ?",
+        (parent_id, non_subagent_child),
+    )
+    conn.commit()
+    conn.close()
+
+    from .conftest import login
+
+    client = make_client(hermes_home=home)
+    login(client)
+    body = client.get(f"/api/sessions/{parent_id}/children").json()
+    assert [c["id"] for c in body["items"]] == [subagent_child]
 
 
 def test_children_endpoint_unknown_session_returns_empty(authed: TestClient) -> None:

@@ -178,13 +178,19 @@ def _child_counts(conn: sqlite3.Connection, schema: Schema, ids: Sequence[str]) 
 
     Kept separate from ``build_list_query`` (rather than a correlated subquery there) so the
     main list query's plan stays a single scan (see ``test_query_plan_is_single_scan``).
+
+    Scoped to ``source = 'subagent'`` rows only: ``parent_session_id`` is also set on forked and
+    context-compression child sessions, but those already appear as their own top-level rows
+    (only subagent sessions are excluded from the default listing, see ``build_list_query``), so
+    counting them here would double them into the sidebar's sub-agent badge/nesting.
     """
     if not ids or not schema.has("sessions", "parent_session_id"):
         return {}
     placeholders = ", ".join("?" for _ in ids)
+    source_filter = " AND source = 'subagent'" if schema.has("sessions", "source") else ""
     rows = conn.execute(
         f"SELECT parent_session_id, COUNT(*) AS n FROM sessions "
-        f"WHERE parent_session_id IN ({placeholders}) GROUP BY parent_session_id",
+        f"WHERE parent_session_id IN ({placeholders}){source_filter} GROUP BY parent_session_id",
         list(ids),
     ).fetchall()
     return {str(row["parent_session_id"]): int(row["n"]) for row in rows}
