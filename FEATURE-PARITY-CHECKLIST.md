@@ -75,7 +75,7 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [x] Download a PDF transcript
 - [ ] Session tags and tag filtering
 - [ ] Session projects/folders and project filtering
-- [ ] Today / Yesterday / Earlier collapsible date groups
+- [x] Today / Yesterday / Earlier collapsible date groups
 - [ ] Batch selection and bulk delete/move/archive
 - [ ] Browser-tab title follows active session
 - [ ] Public, sanitized, read-only conversation share links
