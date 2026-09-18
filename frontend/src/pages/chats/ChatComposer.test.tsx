@@ -9,6 +9,7 @@ function Harness({
   onSend,
   onAttach,
   onCompact = vi.fn(async () => true),
+  onSkills = vi.fn(async () => true),
   running = false,
   busyTurnMode = 'steer',
   onQueue = vi.fn(async () => undefined),
@@ -18,6 +19,7 @@ function Harness({
   onSend: (text: string) => Promise<void>;
   onAttach: (file: File) => Promise<string>;
   onCompact?: (focusTopic: string | null) => Promise<boolean>;
+  onSkills?: (query: string | null) => Promise<boolean>;
   running?: boolean;
   busyTurnMode?: import('../../lib/uiPreferences').BusyTurnMode;
   onQueue?: (text: string) => Promise<void>;
@@ -37,6 +39,7 @@ function Harness({
       onQueue={onQueue}
       onInterrupt={onInterrupt}
       onCompact={onCompact}
+      onSkills={onSkills}
       model={model}
       provider={provider}
       models={[
@@ -55,6 +58,9 @@ function Harness({
       liveTps={null}
       busyTurnMode={busyTurnMode}
       onBusyTurnModeChange={vi.fn()}
+      contextTokens={0}
+      contextLength={null}
+      contextEstimated={false}
     />
   );
 }
@@ -110,6 +116,20 @@ describe('ChatComposer', () => {
     await user.click(screen.getByRole('button', { name: 'Compact context' }));
 
     expect(onCompact).toHaveBeenCalledWith(null);
+  });
+
+  it('runs /skills locally with an optional filter', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn(async () => undefined);
+    const onSkills = vi.fn(async () => true);
+    render(<Harness onSend={onSend} onAttach={vi.fn(async () => 'file')} onSkills={onSkills} />);
+
+    await user.type(screen.getByPlaceholderText('Message Hermes…'), '/skills development');
+    await user.click(screen.getByLabelText('Send message'));
+
+    expect(onSkills).toHaveBeenCalledWith('development');
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('Message Hermes…')).toHaveValue('');
   });
 
   it.each([

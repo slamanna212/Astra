@@ -52,6 +52,8 @@ export const queryKeys = {
     all: ['skills'] as const,
     list: () => [...queryKeys.skills.all, 'list'] as const,
     detail: (category: string | null, name: string) => [...queryKeys.skills.all, 'detail', category, name] as const,
+    file: (category: string | null, name: string, path: string) =>
+      [...queryKeys.skills.all, 'file', category, name, path] as const,
   },
   openviking: {
     all: ['openviking'] as const,

@@ -375,16 +375,24 @@ def _stat_regular_file(root: Path, parts: list[str]) -> tuple[os.stat_result, st
         return st, _guess_mime(leaf)
 
 
-def get_file_meta(root: Path, raw_path: str) -> FileMeta:
+def get_file_meta(root: Path, raw_path: str, *, enforce_deny_wall: bool = True) -> FileMeta:
     parts = split_relative_path(raw_path)
-    check_deny_wall(parts)
+    if enforce_deny_wall:
+        check_deny_wall(parts)
     st, mime = _stat_regular_file(root, parts)
     return FileMeta(path="/".join(parts), name=parts[-1], size=int(st.st_size), mtime=float(st.st_mtime), mime=mime)
 
 
-def read_text_preview(root: Path, raw_path: str, *, max_bytes: int = MAX_CONTENT_BYTES) -> TextContent:
+def read_text_preview(
+    root: Path,
+    raw_path: str,
+    *,
+    max_bytes: int = MAX_CONTENT_BYTES,
+    enforce_deny_wall: bool = True,
+) -> TextContent:
     parts = split_relative_path(raw_path)
-    check_deny_wall(parts)
+    if enforce_deny_wall:
+        check_deny_wall(parts)
     st, mime = _stat_regular_file(root, parts)
     meta = FileMeta(path="/".join(parts), name=parts[-1], size=int(st.st_size), mtime=float(st.st_mtime), mime=mime)
     if not is_previewable_text(parts[-1], mime):
@@ -430,7 +438,9 @@ def resolve_download(root: Path, raw_path: str) -> DownloadTarget:
     return _classify_download(meta)
 
 
-def open_for_download(root: Path, raw_path: str) -> tuple[int, DownloadTarget]:
+def open_for_download(
+    root: Path, raw_path: str, *, enforce_deny_wall: bool = True
+) -> tuple[int, DownloadTarget]:
     """Open ``raw_path`` for streaming download: one anchored, symlink-refusing, TOCTOU-safe open.
 
     Returns an **owned** fd (the caller must close it, e.g. after streaming) plus the classified
@@ -439,7 +449,8 @@ def open_for_download(root: Path, raw_path: str) -> tuple[int, DownloadTarget]:
     handed back already points at the exact inode that was validated.
     """
     parts = split_relative_path(raw_path)
-    check_deny_wall(parts)
+    if enforce_deny_wall:
+        check_deny_wall(parts)
     if not parts:
         raise InvalidPath("path is required")
     with anchored_dir_fd(root, parts[:-1]) as dir_fd:

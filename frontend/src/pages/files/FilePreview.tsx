@@ -73,14 +73,22 @@ function FilePreviewContent({ path, onClose }: { path: string; onClose: () => vo
             </Button>
           </Stack>
         ) : (
-          <PreviewBody path={path} data={query.data} />
+          <FilePreviewBody path={path} data={query.data} />
         )}
       </div>
     </div>
   );
 }
 
-function PreviewBody({ path, data }: { path: string; data: FileContent }) {
+export function FilePreviewBody({
+  path,
+  data,
+  fileUrl = fileDownloadUrl(path),
+}: {
+  path: string;
+  data: FileContent;
+  fileUrl?: string;
+}) {
   const name = data.meta.name;
   const kind = fileKind(name, data.meta.mime, false);
 
@@ -116,7 +124,7 @@ function PreviewBody({ path, data }: { path: string; data: FileContent }) {
   if (kind === 'image') {
     return (
       <Stack align="center" gap="xs">
-        <Image maw="100%" src={fileDownloadUrl(path)} alt={name} />
+        <Image maw="100%" src={fileUrl} alt={name} />
         <Text size="xs" c="dimmed">
           {formatBytes(data.meta.size)}
         </Text>
@@ -143,7 +151,7 @@ function PreviewBody({ path, data }: { path: string; data: FileContent }) {
           {formatDateTime(data.meta.mtime)}
         </Text>
       </Group>
-      <Anchor component="a" href={fileDownloadUrl(path)} size="sm">
+      <Anchor component="a" href={fileUrl} size="sm">
         Download
       </Anchor>
     </Stack>

@@ -39,6 +39,12 @@
   flex: 1;
 }
 
+.localCommandResult {
+  max-width: 78%;
+  min-width: 0;
+  padding: 10px 0;
+}
+
 .timestamp {
   font-family: var(--astra-font-mono);
   font-size: 11px;

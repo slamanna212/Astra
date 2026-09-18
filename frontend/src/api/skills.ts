@@ -1,5 +1,5 @@
-import { apiFetch } from './client';
-import type { SkillDetail, SkillListResponse } from './types';
+import { apiFetch, buildUrl } from './client';
+import type { FileContent, SkillDetail, SkillListResponse } from './types';
 
 export function listSkills(signal?: AbortSignal): Promise<SkillListResponse> {
   return apiFetch<SkillListResponse>('/skills', { signal });
@@ -28,4 +28,20 @@ export function setSkillEnabled(category: string | null, name: string, enabled: 
 
 export function deleteSkill(category: string | null, name: string): Promise<void> {
   return apiFetch<void>(skillPath(category, name), { method: 'DELETE' });
+}
+
+export function getSkillFileContent(
+  category: string | null,
+  name: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<FileContent> {
+  return apiFetch<FileContent>(`${skillPath(category, name)}/files/content`, {
+    query: { path },
+    signal,
+  });
+}
+
+export function skillFileOpenUrl(category: string | null, name: string, path: string): string {
+  return buildUrl(`${skillPath(category, name)}/files/open`, { path });
 }

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { answerChat, approveChat, chatStreamUrl, compactChat, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
 import { uploadFile } from '../../api/files';
+import { listSkills } from '../../api/skills';
 import { isApiError } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { deleteSession, getSession, recoverSessionContext, updateSession } from '../../api/sessions';
@@ -28,9 +29,9 @@ import { saveComposerDraft, useComposerDraft } from '../../lib/composerDrafts';
 import { clearBusyTurnQueue, enqueueBusyTurnMessage, loadBusyTurnQueue, removeBusyTurnMessage, type QueuedTurnMessage } from '../../lib/busyTurnQueue';
 import { updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
 import { appendLiveActivity, parseLiveActivityData, type LiveActivityEvent } from '../../lib/liveActivity';
+import { filterAndGroupSkills, type SkillCommandExchange } from '../../lib/skillSlashCommand';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
-import { ContextRing } from './ContextRing';
 import { LiveTurnActivity } from './LiveTurnActivity';
 
 export default function SessionPane() {
@@ -60,6 +61,10 @@ export default function SessionPane() {
   const [liveEvents, setLiveEvents] = useState<LiveActivityEvent[]>([]);
   const [compaction, setCompaction] = useState<{ phase: 'running' | 'done'; message: string } | null>(null);
   const [turnError, setTurnError] = useState<{ message: string; recoveryAvailable: boolean } | null>(null);
+  const [skillCommandState, setSkillCommandState] = useState<{ sessionId: string; items: SkillCommandExchange[] }>({
+    sessionId,
+    items: [],
+  });
   const [recoveringContext, setRecoveringContext] = useState(false);
   const raf = useRef<number | null>(null);
   const pendingText = useRef('');
@@ -72,9 +77,11 @@ export default function SessionPane() {
   const lastEventIdRef = useRef(0);
   const retryNowRef = useRef<() => void>(() => {});
   const drainingQueueRef = useRef<{ sessionId: string; messageId: string } | null>(null);
+  const skillCommandIdRef = useRef(0);
   const prefs = useUiPreferences();
   const queuedMessages = queueState.sessionId === sessionId ? queueState.messages : loadBusyTurnQueue(sessionId);
   const turnStateKnown = turnState.sessionId === sessionId && turnState.known;
+  const skillCommands = skillCommandState.sessionId === sessionId ? skillCommandState.items : [];
   const highlightParam = searchParams.get('m');
   const highlightMessageId = highlightParam && /^\d+$/.test(highlightParam) ? Number(highlightParam) : undefined;
 
@@ -436,6 +443,38 @@ export default function SessionPane() {
     }
   };
 
+  const showSkills = async (filter: string | null) => {
+    const command = filter ? `/skills ${filter}` : '/skills';
+    const id = ++skillCommandIdRef.current;
+    let exchange: SkillCommandExchange;
+    try {
+      const response = await listSkills();
+      const groups = filterAndGroupSkills(response.items, filter);
+      exchange = {
+        id,
+        command,
+        query: filter,
+        groups,
+        matchCount: groups.reduce((count, group) => count + group.skills.length, 0),
+        error: null,
+      };
+    } catch (error) {
+      exchange = {
+        id,
+        command,
+        query: filter,
+        groups: [],
+        matchCount: 0,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+    setSkillCommandState((current) => ({
+      sessionId,
+      items: [...(current.sessionId === sessionId ? current.items : []), exchange],
+    }));
+    return true;
+  };
+
   const recoverContext = async () => {
     setRecoveringContext(true);
     try {
@@ -638,6 +677,7 @@ export default function SessionPane() {
             sessionTokens={s.input_tokens + s.output_tokens}
             sessionCostUsd={s.estimated_cost_usd}
             activityDisplayMode={prefs.activityDisplayMode}
+            skillCommands={skillCommands}
           />
         </Box>
       </Box>
@@ -737,6 +777,7 @@ export default function SessionPane() {
           }
         }}
         onCompact={compact}
+        onSkills={showSkills}
         model={selectedModel}
         provider={selectedProvider}
         models={options.data?.models ?? (s.model ? [{ name: s.model, provider: null }] : [])}

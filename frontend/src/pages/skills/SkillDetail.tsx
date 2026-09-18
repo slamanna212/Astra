@@ -8,6 +8,7 @@ import { deleteSkill, getSkill, saveSkill, setSkillEnabled } from '../../api/ski
 import { queryKeys } from '../../api/queryKeys';
 import { Markdown } from '../../components/Markdown';
 import classes from './SkillDetail.module.css';
+import { SkillFiles } from './SkillFiles';
 
 export default function SkillDetail() {
   const { category, name } = useParams();
@@ -105,7 +106,11 @@ export default function SkillDetail() {
       )}
 
       <Tabs defaultValue="preview">
-        <Tabs.List><Tabs.Tab value="preview">Preview</Tabs.Tab><Tabs.Tab value="edit">Edit SKILL.md</Tabs.Tab></Tabs.List>
+        <Tabs.List>
+          <Tabs.Tab value="preview">Preview</Tabs.Tab>
+          <Tabs.Tab value="edit">Edit SKILL.md</Tabs.Tab>
+          <Tabs.Tab value="files">Files ({skill.files.length})</Tabs.Tab>
+        </Tabs.List>
         <Tabs.Panel value="preview" pt="md">
           <Paper p="md" className={classes.content}><Markdown>{draft ?? skill.content}</Markdown></Paper>
         </Tabs.Panel>
@@ -115,6 +120,9 @@ export default function SkillDetail() {
             <Button variant="default" disabled={draft === null} onClick={() => setDraftState(null)}>Discard</Button>
             <Button disabled={draft === null || !draft.trim()} loading={save.isPending} onClick={() => save.mutate(draft ?? skill.content)}>Save SKILL.md</Button>
           </Group>
+        </Tabs.Panel>
+        <Tabs.Panel value="files" pt="md">
+          <SkillFiles category={selectedCategory} name={name ?? ''} files={skill.files} />
         </Tabs.Panel>
       </Tabs>
     </Stack>

@@ -1,4 +1,76 @@
 .root {
   padding: 1rem 1.5rem 3rem;
-  max-width: 50rem;
+  max-width: 72rem;
+}
+
+.filesGrid {
+  display: grid;
+  grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
+  gap: var(--mantine-spacing-md);
+  min-height: 28rem;
+}
+
+.fileList {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.fileRow {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--astra-text-body);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px var(--mantine-spacing-sm);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--mantine-font-size-xs);
+}
+
+.fileRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileRow:hover,
+.fileRow[data-active] {
+  background: var(--astra-hover);
+}
+
+.fileRow[data-active] {
+  color: var(--astra-accent);
+}
+
+.filePreview {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.filePreviewHeader {
+  min-height: 42px;
+  padding: 6px var(--mantine-spacing-sm);
+  border-bottom: 1px solid var(--astra-border);
+  background: var(--astra-bg-chrome);
+}
+
+.filePreviewBody {
+  padding: var(--mantine-spacing-md);
+  max-height: 65vh;
+  overflow: auto;
+}
+
+@mixin smaller-than $mantine-breakpoint-sm {
+  .filesGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fileList {
+    max-height: 14rem;
+  }
 }

@@ -51,6 +51,7 @@ export function ChatComposer({
   onQueue,
   onInterrupt,
   onCompact,
+  onSkills,
   model,
   provider,
   models,
@@ -77,6 +78,7 @@ export function ChatComposer({
   onQueue: (text: string) => Promise<void>;
   onInterrupt: (text: string) => Promise<void>;
   onCompact: (focusTopic: string | null) => Promise<boolean>;
+  onSkills: (query: string | null) => Promise<boolean>;
   model: string | null;
   provider: string | null;
   models: ChatModelOption[];
@@ -157,6 +159,11 @@ export function ChatComposer({
       .finally(() => setUploading(false));
   };
   const submit = async () => {
+    const skillsMatch = attachments.length === 0 && draft.trim().match(/^\/skills(?:\s+([\s\S]*))?$/i);
+    if (!running && skillsMatch) {
+      if (await onSkills(skillsMatch[1]?.trim() || null)) onDraftChange('');
+      return;
+    }
     const compactMatch = attachments.length === 0 && draft.trim().match(/^\/(?:compact|compress)(?:\s+([\s\S]*))?$/i);
     if (!running && compactMatch) {
       if (await onCompact(compactMatch[1]?.trim() || null)) onDraftChange('');

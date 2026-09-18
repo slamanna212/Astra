@@ -3,14 +3,148 @@ are Phase 3. See astra/skills_data.py for the guards reproduced from the legacy 
 
 from __future__ import annotations
 
-import anyio.to_thread
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
 
+import anyio.to_thread
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+
+from astra import files as filesmod
 from astra import skills_data
 from astra.deps import Ctx
-from astra.models import SkillDetailModel, SkillListResponse, SkillSummaryModel, SkillToggleRequest, SkillWriteRequest
+from astra.models import (
+    FileContent,
+    FileMetaModel,
+    SkillDetailModel,
+    SkillListResponse,
+    SkillSummaryModel,
+    SkillToggleRequest,
+    SkillWriteRequest,
+)
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
+
+
+def _raise_file_http(exc: Exception) -> None:
+    if isinstance(exc, filesmod.NotFound):
+        raise HTTPException(status_code=404, detail="Supporting file not found") from exc
+    if isinstance(exc, filesmod.FilesError):
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raise exc
+
+
+def _supporting_file_path(category: str | None, name: str, raw_path: str) -> str:
+    safe_name = skills_data.validate_segment(name)
+    safe_category = skills_data.validate_segment(category) if category else None
+    parts = filesmod.split_relative_path(raw_path)
+    if not parts:
+        raise filesmod.InvalidPath("path is required")
+    if len(parts) == 1 and parts[0].casefold() == "skill.md":
+        raise filesmod.InvalidPath("SKILL.md is available from the skill detail endpoint")
+    return "/".join([*([safe_category] if safe_category else []), safe_name, *parts])
+
+
+async def _ensure_skill(ctx: Ctx, category: str | None, name: str) -> None:
+    try:
+        detail = await anyio.to_thread.run_sync(
+            skills_data.get_skill,
+            ctx.settings.paths.skills_dir,
+            ctx.settings.paths.config_yaml,
+            category,
+            name,
+        )
+    except skills_data.InvalidSkillRef:
+        raise HTTPException(status_code=400, detail="Invalid skill reference") from None
+    except skills_data.SymlinkedSkillFile:
+        raise HTTPException(status_code=403, detail="Refusing a symlinked SKILL.md") from None
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+
+async def _supporting_file_content(
+    ctx: Ctx, category: str | None, name: str, path: str
+) -> FileContent:
+    await _ensure_skill(ctx, category, name)
+    try:
+        relative = _supporting_file_path(category, name, path)
+        meta = await anyio.to_thread.run_sync(
+            lambda: filesmod.get_file_meta(
+                ctx.settings.paths.skills_dir, relative, enforce_deny_wall=False
+            )
+        )
+    except (skills_data.InvalidSkillRef, filesmod.FilesError) as exc:
+        if isinstance(exc, skills_data.InvalidSkillRef):
+            raise HTTPException(status_code=400, detail="Invalid skill reference") from None
+        _raise_file_http(exc)
+        raise  # pragma: no cover
+
+    display_meta = FileMetaModel(
+        path="/".join(filesmod.split_relative_path(path)),
+        name=meta.name,
+        size=meta.size,
+        mtime=meta.mtime,
+        mime=meta.mime,
+    )
+    if not filesmod.is_previewable_text(meta.name, meta.mime):
+        return FileContent(
+            meta=display_meta,
+            content=None,
+            truncated=False,
+            previewable=False,
+            reason=f"not previewable (mime={meta.mime or 'unknown'}, {meta.size} bytes)",
+        )
+    try:
+        result = await anyio.to_thread.run_sync(
+            lambda: filesmod.read_text_preview(
+                ctx.settings.paths.skills_dir, relative, enforce_deny_wall=False
+            )
+        )
+    except filesmod.FilesError as exc:
+        _raise_file_http(exc)
+        raise  # pragma: no cover
+    return FileContent(
+        meta=display_meta,
+        content=result.content,
+        truncated=result.truncated,
+        previewable=True,
+        reason=None,
+    )
+
+
+async def _open_supporting_file(
+    ctx: Ctx, category: str | None, name: str, path: str
+) -> StreamingResponse:
+    await _ensure_skill(ctx, category, name)
+    try:
+        relative = _supporting_file_path(category, name, path)
+        fd, target = await anyio.to_thread.run_sync(
+            lambda: filesmod.open_for_download(
+                ctx.settings.paths.skills_dir, relative, enforce_deny_wall=False
+            )
+        )
+    except (skills_data.InvalidSkillRef, filesmod.FilesError) as exc:
+        if isinstance(exc, skills_data.InvalidSkillRef):
+            raise HTTPException(status_code=400, detail="Invalid skill reference") from None
+        _raise_file_http(exc)
+        raise  # pragma: no cover
+
+    filename = target.meta.name.replace("\\", "_").replace('"', "_")
+    dangerous_mime = target.meta.mime in {"text/html", "application/xhtml+xml", "image/svg+xml"}
+    inline_text = filesmod.is_previewable_text(target.meta.name, target.meta.mime) and not dangerous_mime
+    disposition = "inline" if inline_text else target.disposition
+    headers = {
+        "Content-Length": str(target.meta.size),
+        "Content-Disposition": f'{disposition}; filename="{filename}"',
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",
+    }
+    if target.csp_sandbox or inline_text:
+        headers["Content-Security-Policy"] = "sandbox"
+    return StreamingResponse(
+        filesmod.iter_fd_chunks(fd),
+        media_type=target.meta.mime or "application/octet-stream",
+        headers=headers,
+    )
 
 
 @router.get("", response_model=SkillListResponse)
@@ -31,6 +165,34 @@ async def list_skills(ctx: Ctx) -> SkillListResponse:
     ]
     categories = sorted({s.category for s in skills if s.category})
     return SkillListResponse(items=items, categories=categories)
+
+
+@router.get("/{category}/{name}/files/content", response_model=FileContent)
+async def supporting_file_content_by_category(
+    category: str, name: str, ctx: Ctx, path: Annotated[str, Query()]
+) -> FileContent:
+    return await _supporting_file_content(ctx, category, name, path)
+
+
+@router.get("/{name}/files/content", response_model=FileContent)
+async def supporting_file_content_flat(
+    name: str, ctx: Ctx, path: Annotated[str, Query()]
+) -> FileContent:
+    return await _supporting_file_content(ctx, None, name, path)
+
+
+@router.get("/{category}/{name}/files/open")
+async def open_supporting_file_by_category(
+    category: str, name: str, ctx: Ctx, path: Annotated[str, Query()]
+) -> StreamingResponse:
+    return await _open_supporting_file(ctx, category, name, path)
+
+
+@router.get("/{name}/files/open")
+async def open_supporting_file_flat(
+    name: str, ctx: Ctx, path: Annotated[str, Query()]
+) -> StreamingResponse:
+    return await _open_supporting_file(ctx, None, name, path)
 
 
 @router.put("/{category}/{name}", status_code=204)

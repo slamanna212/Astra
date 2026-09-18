@@ -137,11 +137,11 @@ Local evidence: [`CronForm.tsx`](frontend/src/pages/cron/CronForm.tsx), [`CronDe
 
 - [x] List skills grouped by category
 - [x] Search/filter skills by name, description, and category
-- [x] View rendered and raw `SKILL.md
-- [ ] **Partial** — the API returns supporting-file names, but the skill detail UI does not display/open them
+- [x] View rendered and raw `SKILL.md`
+- [x] Display and open supporting files from the skill detail UI
 - [x] Create, edit, and delete skills
 - [x] Enable/disable skills
-- [ ] `/skills` slash command
+- [x] `/skills` slash command
 
 Local evidence: [`SkillList.tsx`](frontend/src/pages/skills/SkillList.tsx), [`SkillDetail.tsx`](frontend/src/pages/skills/SkillDetail.tsx), and [`skills_data.py`](backend/src/astra/skills_data.py).
 
@@ -183,7 +183,7 @@ Local evidence: [`SettingsPage.tsx`](frontend/src/pages/settings/SettingsPage.ts
 - [x] Approval-pending card in the active chat
 - [ ] Provider/model mismatch warning
 - [ ] Slash-command registry and autocomplete
-- [ ] **Partial** — `/compact [focus]` and its `/compress` alias run locally; the other WebUI-local commands (`/help`, `/clear`, `/model`, `/workspace`, `/new`, `/usage`, `/theme`, `/queue`, `/interrupt`, `/steer`, `/goal`, `/btw`, `/reasoning`, `/skills`, and `/toolsets`) remain unimplemented
+- [ ] **Partial** — `/compact [focus]`, its `/compress` alias, and `/skills [query]` run locally; the other WebUI-local commands (`/help`, `/clear`, `/model`, `/workspace`, `/new`, `/usage`, `/theme`, `/queue`, `/interrupt`, `/steer`, `/goal`, `/btw`, `/reasoning`, and `/toolsets`) remain unimplemented
 - [x] Usage/cost insights dashboard by date, model, provider, source, auxiliary task, and top session
 - [x] Searchable/tailable agent, error, and gateway logs
 
