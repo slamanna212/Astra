@@ -297,6 +297,27 @@ export interface FileUploadResponse {
   size: number;
 }
 
+/** Branch/dirty status of the repo containing a workspace directory; `repo` false outside any repo. */
+export interface GitStatus {
+  repo: boolean;
+  /** null when HEAD is detached. */
+  branch: string | null;
+  /** Short commit id; null on an unborn branch. */
+  head: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  conflicted: number;
+  dirty: boolean;
+}
+
+export interface TerminalInfo {
+  enabled: boolean;
+}
+
 // -- OpenViking memory inspector ------------------------------------------
 export interface OpenVikingNode { name: string; uri: string; isDir?: boolean; is_dir?: boolean; type?: string; size?: number; modTime?: string; [key: string]: unknown }
 export interface OpenVikingTree { uri: string; items: OpenVikingNode[] }

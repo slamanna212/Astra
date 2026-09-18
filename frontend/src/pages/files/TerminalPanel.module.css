@@ -1,0 +1,35 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: #0e1013;
+}
+
+.header {
+  flex-shrink: 0;
+  padding: 4px var(--mantine-spacing-sm);
+  background: var(--astra-bg-chrome);
+  border-bottom: 1px solid var(--astra-border);
+}
+
+.meta {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-text-dim);
+
+  &[data-status='connected'] {
+    color: var(--astra-ok);
+  }
+
+  &[data-status='disconnected'] {
+    color: var(--astra-danger);
+  }
+}
+
+.host {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 0 8px;
+  overflow: hidden;
+}

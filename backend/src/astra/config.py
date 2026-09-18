@@ -113,6 +113,9 @@ class Settings:
     openviking_api_key: str | None = None
     openviking_account: str = "default"
     openviking_user: str = "default"
+    # Embedded workspace shell (astra/terminal.py). Off by default: it is arbitrary command
+    # execution as the Astra user for anyone past the login.
+    terminal_enabled: bool = False
 
     @property
     def paths(self) -> HermesPaths:
@@ -123,7 +126,7 @@ class Settings:
             f"Settings(hermes_home={str(self.hermes_home)!r}, hermes_src={self.hermes_src!r}, "
             f"data_dir={str(self.data_dir)!r}, static_dir={str(self.static_dir)!r}, "
             f"workspace_dir={str(self.workspace_dir)!r}, upload_max_bytes={self.upload_max_bytes}, "
-            f"cookie_secure={self.cookie_secure}, password_hash=<redacted>, session_secret=<redacted>)"
+            f"cookie_secure={self.cookie_secure}, terminal_enabled={self.terminal_enabled}, password_hash=<redacted>, session_secret=<redacted>)"
         )
 
     @classmethod
@@ -188,6 +191,8 @@ class Settings:
             Path(raw_workspace).expanduser().resolve() if raw_workspace else Path(DEFAULT_WORKSPACE_DIR)
         )
 
+        terminal_enabled = _parse_bool("ASTRA_TERMINAL_ENABLED", env.get("ASTRA_TERMINAL_ENABLED"), False)
+
         raw_upload_max = (env.get("ASTRA_UPLOAD_MAX_BYTES") or "").strip()
         if raw_upload_max:
             try:
@@ -233,6 +238,7 @@ class Settings:
             openviking_api_key=ov("OPENVIKING_API_KEY"),
             openviking_account=ov("OPENVIKING_ACCOUNT", "default") or "default",
             openviking_user=ov("OPENVIKING_USER", "default") or "default",
+            terminal_enabled=terminal_enabled,
         )
 
 

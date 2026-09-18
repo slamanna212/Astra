@@ -30,7 +30,7 @@ export default defineConfig({
       '/api': {
         target: BACKEND,
         changeOrigin: false,
-        ws: false,
+        ws: true, // the workspace terminal is a WebSocket
         configure: (proxy) => {
           // SSE-safe: disable any response buffering/compression on event streams.
           proxy.on('proxyReq', (proxyReq, req) => {

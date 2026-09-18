@@ -13,6 +13,7 @@ from astra.config import Settings
 from astra.cron_events import CronEventBroadcaster
 from astra.db import StateDB
 from astra.openviking import OpenVikingClient
+from astra.terminal import TerminalManager
 
 
 @dataclass
@@ -24,6 +25,7 @@ class AppContext:
     cron_events: CronEventBroadcaster | None = None
     chat: ChatManager | None = None
     openviking: OpenVikingClient | None = None
+    terminal: TerminalManager | None = None
 
     def __post_init__(self) -> None:
         if self.cron_events is None:
@@ -34,6 +36,8 @@ class AppContext:
             self.chat = ChatManager(self.settings)
         if self.openviking is None:
             self.openviking = OpenVikingClient(self.settings)
+        if self.terminal is None:
+            self.terminal = TerminalManager(self.settings.workspace_dir)
 
 
 def get_ctx(request: Request) -> AppContext:

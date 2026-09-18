@@ -1,16 +1,33 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--app-shell-header-offset, 0rem));
+  min-height: 0;
+
+  /* While dragging a divider, keep the cursor and stop text selection / iframe-like targets
+     (the preview, xterm) from swallowing pointer events. */
+  &[data-dragging] {
+    user-select: none;
+
+    .preview,
+    .terminal {
+      pointer-events: none;
+    }
+  }
+}
+
 .root {
   display: flex;
-  height: calc(100dvh - var(--app-shell-header-offset, 0rem));
+  flex: 1;
   min-height: 0;
 }
 
 .browser {
   display: flex;
   flex-direction: column;
-  width: 26rem;
   flex-shrink: 0;
   min-height: 0;
-  border-right: 1px solid var(--astra-border);
+  min-width: 0;
 }
 
 .preview {
@@ -20,10 +37,19 @@
   overflow-y: auto;
 }
 
+.terminal {
+  flex-shrink: 0;
+  min-height: 0;
+}
+
 @mixin smaller-than $mantine-breakpoint-sm {
   .browser {
-    width: 100%;
-    border-right: 0;
+    /* Beats the inline drag width: phones get the one-pane-at-a-time layout. */
+    width: 100% !important;
+  }
+
+  .splitHandle {
+    display: none;
   }
 
   .root[data-has-selection] .browser {

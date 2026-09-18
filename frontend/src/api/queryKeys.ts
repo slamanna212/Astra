@@ -22,7 +22,9 @@ export const queryKeys = {
     all: ['files'] as const,
     listing: (path: string) => [...queryKeys.files.all, 'listing', path] as const,
     content: (path: string) => [...queryKeys.files.all, 'content', path] as const,
+    git: (path: string) => [...queryKeys.files.all, 'git', path] as const,
   },
+  terminal: ['terminal'] as const,
   logs: {
     all: ['logs'] as const,
     tail: (file: string, params: { lines: number; level: string | null; search: string | null }) =>

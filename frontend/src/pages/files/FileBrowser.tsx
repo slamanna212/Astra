@@ -1,11 +1,11 @@
 import { ActionIcon, Anchor, Breadcrumbs, Button, Center, Group, Loader, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { notifications } from '@mantine/notifications';
-import { IconLink, IconRefresh, IconUpload } from '@tabler/icons-react';
+import { IconLink, IconRefresh, IconTerminal2, IconUpload } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef, useState } from 'react';
-import { listFiles, uploadFile } from '../../api/files';
+import { getGitStatus, listFiles, uploadFile } from '../../api/files';
 import { queryKeys } from '../../api/queryKeys';
 import type { FileEntry } from '../../api/types';
 import { formatBytes, formatDateTime, formatRelativeTime } from '../../lib/format';
@@ -13,6 +13,7 @@ import { fileKind, iconForKind } from '../../lib/mime';
 import { breadcrumbs } from '../../lib/paths';
 import { useNow } from '../../hooks/useNow';
 import classes from './FileBrowser.module.css';
+import { GitBadge } from './GitBadge';
 
 export const FILE_ROW_HEIGHT = 44;
 
@@ -68,16 +69,27 @@ function FileRow({ entry, active, now, onOpenDirectory, onSelectFile }: FileRowP
   );
 }
 
+/** Git status is ambient; poll gently so edits made by the agent or the terminal show up. */
+const GIT_POLL_MS = 15_000;
+
+export interface TerminalToggle {
+  open: boolean;
+  onToggle: () => void;
+}
+
 export function FileBrowser({
   dir,
   selected,
   onOpenDirectory,
   onSelectFile,
+  terminal,
 }: {
   dir: string;
   selected: string | null;
   onOpenDirectory: (path: string) => void;
   onSelectFile: (path: string) => void;
+  /** Present only when the workspace terminal is enabled on the server. */
+  terminal?: TerminalToggle;
 }) {
   const now = useNow();
   const queryClient = useQueryClient();
@@ -87,6 +99,13 @@ export function FileBrowser({
   const query = useQuery({
     queryKey: queryKeys.files.listing(dir),
     queryFn: ({ signal }) => listFiles(dir, signal),
+  });
+
+  const gitQuery = useQuery({
+    queryKey: queryKeys.files.git(dir),
+    queryFn: ({ signal }) => getGitStatus(dir, signal),
+    refetchInterval: GIT_POLL_MS,
+    retry: false,
   });
 
   const entries = query.data?.entries ?? [];
@@ -102,7 +121,10 @@ export function FileBrowser({
 
   const crumbs = breadcrumbs(dir);
 
-  const refresh = () => void query.refetch();
+  const refresh = () => {
+    void query.refetch();
+    void gitQuery.refetch();
+  };
 
   const handleDrop = async (files: File[]) => {
     setUploading(true);
@@ -147,6 +169,20 @@ export function FileBrowser({
             </Anchor>
           ))}
         </Breadcrumbs>
+        <GitBadge query={gitQuery} />
+        {terminal && (
+          <Tooltip label={terminal.open ? 'Hide terminal' : 'Show terminal'}>
+            <ActionIcon
+              variant={terminal.open ? 'light' : 'subtle'}
+              size="sm"
+              aria-label={terminal.open ? 'Hide terminal' : 'Show terminal'}
+              aria-pressed={terminal.open}
+              onClick={terminal.onToggle}
+            >
+              <IconTerminal2 size={16} stroke={1.5} />
+            </ActionIcon>
+          </Tooltip>
+        )}
         <Tooltip label="Refresh">
           <ActionIcon variant="subtle" size="sm" aria-label="Refresh" onClick={refresh} loading={query.isFetching}>
             <IconRefresh size={16} stroke={1.5} />

@@ -294,6 +294,10 @@ class GitStatusModel(BaseModel):
     dirty: bool = False
 
 
+class TerminalInfo(BaseModel):
+    enabled: bool
+
+
 # -- Logs ------------------------------------------------------------------
 # See astra/logs.py: exactly 3 allowlisted files, tail-only, byte-capped.
 

@@ -108,13 +108,13 @@ Local evidence: [`SessionList.tsx`](frontend/src/pages/chats/SessionList.tsx), [
 - [ ] Extract uploaded zip/tar archives
 - [ ] Copy absolute/relative file paths
 - [x] Close the active preview when navigating to another directory
-- [ ] Resizable workspace preview panel
-- [ ] Embedded workspace terminal
-- [ ] Git branch and dirty-status badge
+- [x] Resizable workspace preview panel
+- [x] Embedded workspace terminal
+- [x] Git branch and dirty-status badge
 - [x] Download/open a workspace file
 - [x] Refuse symlinks and guard workspace path traversal
 
-Local evidence: [`FilesPage.tsx`](frontend/src/pages/files/FilesPage.tsx), [`FileBrowser.tsx`](frontend/src/pages/files/FileBrowser.tsx), [`FilePreview.tsx`](frontend/src/pages/files/FilePreview.tsx), and [`files.py`](backend/src/astra/files.py).
+Local evidence: [`FilesPage.tsx`](frontend/src/pages/files/FilesPage.tsx), [`FileBrowser.tsx`](frontend/src/pages/files/FileBrowser.tsx), [`FilePreview.tsx`](frontend/src/pages/files/FilePreview.tsx), [`GitBadge.tsx`](frontend/src/pages/files/GitBadge.tsx), [`TerminalPanel.tsx`](frontend/src/pages/files/TerminalPanel.tsx), [`useResizable.ts`](frontend/src/hooks/useResizable.ts), [`files.py`](backend/src/astra/files.py), [`workspace_git.py`](backend/src/astra/workspace_git.py), and [`terminal.py`](backend/src/astra/terminal.py). The terminal is off unless `ASTRA_TERMINAL_ENABLED` is set.
 
 ## Scheduled tasks / cron
 

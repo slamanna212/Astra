@@ -1,5 +1,5 @@
 import { API_BASE, apiFetch, buildUrl } from './client';
-import type { FileContent, FileListing, FileUploadResponse } from './types';
+import type { FileContent, FileListing, FileUploadResponse, GitStatus } from './types';
 
 export function listFiles(path: string, signal?: AbortSignal): Promise<FileListing> {
   return apiFetch<FileListing>('/files', { query: { path }, signal });
@@ -7,6 +7,10 @@ export function listFiles(path: string, signal?: AbortSignal): Promise<FileListi
 
 export function getFileContent(path: string, signal?: AbortSignal): Promise<FileContent> {
   return apiFetch<FileContent>('/files/content', { query: { path }, signal });
+}
+
+export function getGitStatus(path: string, signal?: AbortSignal): Promise<GitStatus> {
+  return apiFetch<GitStatus>('/files/git', { query: { path }, signal });
 }
 
 /** URL for the download/inline endpoint — used directly in `<a href>` / "open in new tab", not fetched via apiFetch. */

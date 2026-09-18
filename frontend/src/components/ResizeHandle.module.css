@@ -1,0 +1,39 @@
+.handle {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 1;
+  background: var(--astra-border);
+  touch-action: none;
+  transition: background-color var(--astra-transition);
+
+  /* A wider invisible hit area than the 1px line. */
+  &::after {
+    content: '';
+    position: absolute;
+  }
+
+  &[data-axis='x'] {
+    width: 1px;
+    cursor: col-resize;
+
+    &::after {
+      inset: 0 -4px;
+    }
+  }
+
+  &[data-axis='y'] {
+    height: 1px;
+    cursor: row-resize;
+
+    &::after {
+      inset: -4px 0;
+    }
+  }
+
+  &:hover,
+  &[data-dragging],
+  &:focus-visible {
+    background: var(--astra-primary);
+    outline: none;
+  }
+}

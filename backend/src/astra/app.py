@@ -30,6 +30,7 @@ from astra.routes import messages as message_routes
 from astra.routes import search as search_routes
 from astra.routes import sessions as session_routes
 from astra.routes import skills as skills_routes
+from astra.routes import terminal as terminal_routes
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ def create_app(settings: Settings) -> FastAPI:
         try:
             yield
         finally:
+            await ctx.terminal.close()
             await ctx.cron_events.stop()
             await ctx.chat.close()
             ctx.db.close()
@@ -84,6 +86,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(openviking_routes.router)
     app.include_router(cron_routes.router)
     app.include_router(skills_routes.router)
+    app.include_router(terminal_routes.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:
