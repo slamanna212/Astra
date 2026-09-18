@@ -40,6 +40,26 @@ export function formatCompactAge(epochSeconds: number | null | undefined, nowMs:
   return formatRelativeTime(epochSeconds, nowMs);
 }
 
+/**
+ * Group label for a session-list date header: "Today", "Yesterday", or a short date
+ * ("Sep 15", "Sep 15, 2025" if not the current year) — bucketed by local calendar day,
+ * not a rolling 24h window.
+ */
+export function formatGroupDate(epochSeconds: number, nowMs: number = Date.now()): string {
+  const date = new Date(epochSeconds * 1000);
+  const now = new Date(nowMs);
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / (DAY * 1000));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+}
+
 /** Absolute local date-time for tooltips/detail views. */
 export function formatDateTime(epochSeconds: number | null | undefined): string {
   if (epochSeconds === null || epochSeconds === undefined || !Number.isFinite(epochSeconds)) return '—';

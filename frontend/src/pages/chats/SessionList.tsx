@@ -10,12 +10,14 @@ import { countArchivedSessions, createSession, listSessions, SESSION_PAGE_SIZE }
 import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
 import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
-import { formatCompactAge, formatCount, formatDateTime, sessionTitle } from '../../lib/format';
+import { formatCompactAge, formatCount, formatDateTime, formatGroupDate, sessionTitle } from '../../lib/format';
 import classes from './SessionList.module.css';
 
 export const SESSION_ROW_HEIGHT = 44;
-/** Nested sub-agent row: title + message count only, no age/type dot. */
+/** Nested sub-agent row: title only, no age/type dot. */
 export const SESSION_CHILD_ROW_HEIGHT = 30;
+/** Date/"Pinned" section header row. */
+export const SESSION_GROUP_HEADER_HEIGHT = 28;
 /** Start fetching the next page when the last rendered row is within this many rows of the end. */
 const LOAD_MORE_THRESHOLD = 10;
 
@@ -44,9 +46,6 @@ const SessionRow = memo(function SessionRow({ session, active, now }: { session:
         c={active ? 'var(--astra-text)' : 'var(--astra-text-body)'}
       >
         {sessionTitle(session)}
-      </Text>
-      <Text component="span" className={classes.meta} aria-label={`${session.message_count} messages`}>
-        {formatCount(session.message_count)}
       </Text>
       <Text component="span" className={classes.age} title={formatDateTime(lastActivity)}>
         {formatCompactAge(lastActivity, now)}
@@ -88,14 +87,12 @@ const SessionChildRow = memo(function SessionChildRow({ session, active }: { ses
       <Text size="sm" truncate="end" className={classes.childTitle}>
         {sessionTitle(session)}
       </Text>
-      <Text component="span" className={classes.childMeta} aria-label={`${session.message_count ?? 0} messages`}>
-        {formatCount(session.message_count)}
-      </Text>
     </UnstyledButton>
   );
 });
 
 type Row =
+  | { kind: 'group-header'; label: string; topIndex: number }
   | { kind: 'parent'; session: SessionSummary; topIndex: number }
   | { kind: 'child'; session: ChildSession; parentId: string; topIndex: number }
   | { kind: 'child-loading'; parentId: string; topIndex: number }
@@ -104,6 +101,8 @@ type Row =
 function rowKey(row: Row | undefined, index: number): string {
   if (!row) return `loader-${index}`;
   switch (row.kind) {
+    case 'group-header':
+      return `group-${row.label}`;
     case 'parent':
       return row.session.id;
     case 'child':
@@ -172,7 +171,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
 
   const rows = useMemo(() => {
     const out: Row[] = [];
-    sessions.forEach((session, topIndex) => {
+    const pushSession = (session: SessionSummary, topIndex: number) => {
       out.push({ kind: 'parent', session, topIndex });
       if (session.child_count > 0) {
         const entry = childrenById.get(session.id);
@@ -184,10 +183,32 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
           });
         }
       }
+    };
+
+    // Pinned sessions always sort first (regardless of activity date) — group them under
+    // their own header instead of folding them into the date buckets below, where they'd
+    // make the date headers appear out of chronological order.
+    let sawPinnedHeader = false;
+    let lastDateLabel: string | null = null;
+    sessions.forEach((session, topIndex) => {
+      if (session.pinned) {
+        if (!sawPinnedHeader) {
+          out.push({ kind: 'group-header', label: 'Pinned', topIndex });
+          sawPinnedHeader = true;
+        }
+      } else {
+        const lastActivity = session.last_activity_at ?? session.started_at;
+        const label = formatGroupDate(lastActivity, now);
+        if (label !== lastDateLabel) {
+          out.push({ kind: 'group-header', label, topIndex });
+          lastDateLabel = label;
+        }
+      }
+      pushSession(session, topIndex);
     });
     if (hasNextPage) out.push({ kind: 'loader', topIndex: sessions.length });
     return out;
-  }, [sessions, childrenById, hasNextPage]);
+  }, [sessions, childrenById, hasNextPage, now]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -196,7 +217,12 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index]?.kind === 'child' ? SESSION_CHILD_ROW_HEIGHT : SESSION_ROW_HEIGHT),
+    estimateSize: (index) => {
+      const kind = rows[index]?.kind;
+      if (kind === 'child') return SESSION_CHILD_ROW_HEIGHT;
+      if (kind === 'group-header') return SESSION_GROUP_HEADER_HEIGHT;
+      return SESSION_ROW_HEIGHT;
+    },
     overscan: 8,
     getItemKey: (index) => rowKey(rows[index], index),
   });
@@ -290,7 +316,9 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
                     transform: `translateY(${item.start}px)`,
                   }}
                 >
-                  {!row ? null : row.kind === 'parent' ? (
+                  {!row ? null : row.kind === 'group-header' ? (
+                    <div className={classes.groupHeader}>{row.label}</div>
+                  ) : row.kind === 'parent' ? (
                     <SessionRow session={row.session} active={row.session.id === selectedId} now={now} />
                   ) : row.kind === 'child' ? (
                     <SessionChildRow session={row.session} active={row.session.id === selectedId} />
