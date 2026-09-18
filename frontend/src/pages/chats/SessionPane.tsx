@@ -578,11 +578,6 @@ export default function SessionPane() {
               {formatCount(s.message_count)} msgs · {formatCost(s.estimated_cost_usd)}
             </Text>
           </Tooltip>
-          <ContextRing
-            tokens={s.context_tokens}
-            contextLength={s.context_length}
-            estimated={s.context_tokens_estimated}
-          />
           {s.archived && (
             <Badge size="sm" variant="outline" color="gray">
               archived
@@ -757,6 +752,9 @@ export default function SessionPane() {
         liveTps={liveTps}
         busyTurnMode={prefs.busyTurnMode}
         onBusyTurnModeChange={(busyTurnMode) => updateUiPreferences({ busyTurnMode })}
+        contextTokens={s.context_tokens}
+        contextLength={s.context_length}
+        contextEstimated={s.context_tokens_estimated}
       />
     </Box>
   );

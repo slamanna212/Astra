@@ -1,5 +1,6 @@
-import { RingProgress, Text, Tooltip } from '@mantine/core';
+import { Group, RingProgress, Text, Tooltip } from '@mantine/core';
 import { formatTokens } from '../../lib/format';
+import classes from './ContextRing.module.css';
 
 const FALLBACK_CONTEXT_LENGTH = 128 * 1024;
 
@@ -22,19 +23,18 @@ export function ContextRing({
 
   return (
     <Tooltip label={label} multiline maw={340}>
-      <RingProgress
-        size={38}
-        thickness={4}
-        roundCaps
-        sections={[{ value: percent, color }]}
-        rootColor="var(--astra-surface-sunk)"
-        aria-label={label}
-        label={
-          <Text ta="center" fz={9} ff="monospace" fw={600}>
-            {percent}%
-          </Text>
-        }
-      />
+      <Group gap={6} wrap="nowrap" align="center" className={classes.pill} aria-label={label}>
+        <RingProgress
+          size={16}
+          thickness={3}
+          roundCaps
+          sections={[{ value: percent, color }]}
+          rootColor="var(--astra-surface-sunk)"
+        />
+        <Text ff="monospace" fz={11} fw={600} c="var(--astra-text)">
+          {percent}%
+        </Text>
+      </Group>
     </Tooltip>
   );
 }

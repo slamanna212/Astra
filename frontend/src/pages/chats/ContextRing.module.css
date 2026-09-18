@@ -1,0 +1,8 @@
+.pill {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--astra-radius-pill);
+  background: var(--astra-bg-chrome);
+  border: 1px solid var(--astra-border-strong);
+  flex-shrink: 0;
+}

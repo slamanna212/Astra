@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
 import type { BusyTurnMode } from '../../lib/uiPreferences';
+import { ContextRing } from './ContextRing';
 import classes from './ChatComposer.module.css';
 
 interface ModelGroup {
@@ -65,6 +66,9 @@ export function ChatComposer({
   liveTps,
   busyTurnMode,
   onBusyTurnModeChange,
+  contextTokens,
+  contextLength,
+  contextEstimated,
 }: {
   running: boolean;
   onSend: (text: string) => Promise<void>;
@@ -88,6 +92,9 @@ export function ChatComposer({
   liveTps: number | null;
   busyTurnMode: BusyTurnMode;
   onBusyTurnModeChange: (value: BusyTurnMode) => void;
+  contextTokens: number;
+  contextLength: number | null;
+  contextEstimated: boolean;
 }) {
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -337,15 +344,12 @@ export function ChatComposer({
               </ActionIcon>
             </Tooltip>
           )}
-          <Text ff="monospace" fz={11} c="var(--astra-text-dim)">
-            ⇧⏎ newline
-          </Text>
-
           {running && (
             <Button size="xs" h={30} color="red" variant="light" leftSection={<IconPlayerStop size={14} />} onClick={() => void onStop()}>
               Stop
             </Button>
           )}
+          <ContextRing tokens={contextTokens} contextLength={contextLength} estimated={contextEstimated} />
           <Button h={30} onClick={() => void submit()} aria-label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}>
             {running ? BUSY_MODE_LABELS[busyTurnMode] : 'Send'}
           </Button>
