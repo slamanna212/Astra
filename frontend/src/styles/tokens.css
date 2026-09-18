@@ -48,7 +48,7 @@
   --astra-radius-tight: 3px;   /* inline code, source tags */
   --astra-radius-pill: 999px;  /* status badges, filter chips */
 
-  --astra-header-h: 56px;
+  --astra-header-h: 48px;
   --astra-navbar-w: 240px;
   --astra-sessionlist-w: 352px;
   --astra-session-row-h: 44px;
@@ -66,6 +66,17 @@
   --astra-label-tracking: 0.1em;
 
   --astra-transition: 120ms cubic-bezier(.2,.6,.3,1);
+
+  /* ---- app shell chrome: fixed teal regardless of color scheme (header + navbar only) ---- */
+  --astra-chrome-bg:          var(--astra-teal-8);   /* #0F7885 */
+  --astra-chrome-text:        #FFFFFF;
+  --astra-chrome-text-dim:    rgba(255, 255, 255, .72);
+  --astra-chrome-hover:       rgba(255, 255, 255, .12);
+  --astra-chrome-active-bg:   rgba(255, 255, 255, .95);
+  --astra-chrome-active-text: var(--astra-teal-8);
+  --astra-chrome-border:      rgba(255, 255, 255, .18);
+  --astra-chrome-search-bg:   rgba(255, 255, 255, .13);
+  --astra-chrome-dot:         var(--astra-sand-3);    /* accent dot on status card */
 }
 
 /* ---- semantic roles: dark ---- */

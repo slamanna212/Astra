@@ -24,7 +24,7 @@ describe('SettingsPage', () => {
 
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock);
-    updateUiPreferences({ sidebarDesktopCollapsed: false, activityDisplayMode: 'transparent_stream' });
+    updateUiPreferences({ activityDisplayMode: 'transparent_stream' });
   });
 
   afterEach(() => {
@@ -56,17 +56,6 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText('Failed to load system status')).toBeInTheDocument();
-  });
-
-  it('toggles the sidebar-collapsed preference', async () => {
-    fetchMock.mockImplementation(async () => jsonResponse(makeStatus()));
-    const user = userEvent.setup();
-    render(<SettingsPage />);
-
-    const toggle = screen.getByRole('switch', { name: /Collapse sidebar by default/ });
-    expect(toggle).not.toBeChecked();
-    await user.click(toggle);
-    expect(toggle).toBeChecked();
   });
 
   it('changes the color scheme', async () => {

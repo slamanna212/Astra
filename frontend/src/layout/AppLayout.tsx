@@ -2,7 +2,7 @@ import { ActionIcon, AppShell, Burger, Center, Group, Loader, NavLink, Tooltip, 
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { spotlight } from '@mantine/spotlight';
-import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconSearch } from '@tabler/icons-react';
+import { IconLogout, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
@@ -11,12 +11,11 @@ import { queryKeys } from '../api/queryKeys';
 import { markSignedOut } from '../auth/session';
 import { BrandMark } from '../components/BrandMark';
 import { SearchSpotlight } from '../components/SearchSpotlight';
-import { CHAT_FONT_SIZES, updateUiPreferences, useUiPreferences } from '../lib/uiPreferences';
+import { CHAT_FONT_SIZES, useUiPreferences } from '../lib/uiPreferences';
 import classes from './AppLayout.module.css';
-import { ColorSchemeToggle } from './ColorSchemeToggle';
 import { NAV_ITEMS } from './navItems';
 
-export const HEADER_HEIGHT = 56;
+export const HEADER_HEIGHT = 48;
 
 export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure(false);
@@ -35,6 +34,10 @@ export function AppLayout() {
     staleTime: Infinity,
   });
 
+  const activeNavItem = NAV_ITEMS.find(
+    (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
+  );
+
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSettled: (_data, error) => {
@@ -51,54 +54,51 @@ export function AppLayout() {
     <AppShell
       header={{ height: HEADER_HEIGHT }}
       navbar={{
-        width: { base: 240, sm: 72 },
+        width: { base: 240, sm: 60 },
         breakpoint: 'sm',
-        collapsed: { mobile: !opened, desktop: prefs.sidebarDesktopCollapsed },
+        collapsed: { mobile: !opened },
       }}
       padding={0}
     >
       <SearchSpotlight />
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+      <AppShell.Header withBorder={false} className={classes.shellChrome}>
+        <div className={`${classes.headerInner} ${classes.headerGrid}`}>
           <Group gap="sm" wrap="nowrap">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
             <BrandMark size={24} />
             <span className={classes.brandTitle}>Astra</span>
+            {activeNavItem && (
+              <>
+                <span className={classes.brandDivider}>/</span>
+                <span className={classes.brandSection}>{activeNavItem.label}</span>
+              </>
+            )}
           </Group>
-          <Group gap="xs" wrap="nowrap">
-            <Tooltip label={prefs.sidebarDesktopCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
-              <ActionIcon
-                visibleFrom="sm"
-                aria-label={prefs.sidebarDesktopCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-                onClick={() => updateUiPreferences({ sidebarDesktopCollapsed: !prefs.sidebarDesktopCollapsed })}
-              >
-                {prefs.sidebarDesktopCollapsed ? (
-                  <IconLayoutSidebarLeftExpand size={18} stroke={1.5} />
-                ) : (
-                  <IconLayoutSidebarLeftCollapse size={18} stroke={1.5} />
-                )}
-              </ActionIcon>
-            </Tooltip>
-            <UnstyledButton
-              className={classes.searchTrigger}
-              onClick={() => spotlight.open()}
-              aria-label="Search (Ctrl/Cmd+K)"
-            >
-              <IconSearch size={15} stroke={1.5} />
-              <span>Search</span>
-              <span className={classes.searchShortcut}>⌘K</span>
-            </UnstyledButton>
-            <ColorSchemeToggle />
+          <UnstyledButton
+            className={classes.searchTrigger}
+            onClick={() => spotlight.open()}
+            aria-label="Search (Ctrl/Cmd+K)"
+          >
+            <IconSearch size={15} stroke={1.5} />
+            <span className={classes.searchLabel}>Search</span>
+            <span className={classes.searchShortcut}>⌘K</span>
+          </UnstyledButton>
+          <Group gap="xs" wrap="nowrap" justify="flex-end">
             <Tooltip label="Log out">
-              <ActionIcon aria-label="Log out" loading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()}>
+              <ActionIcon
+                aria-label="Log out"
+                loading={logoutMutation.isPending}
+                onClick={() => logoutMutation.mutate()}
+                classNames={{ root: classes.headerIconBtn }}
+              >
                 <IconLogout size={18} stroke={1.5} />
               </ActionIcon>
             </Tooltip>
           </Group>
-        </Group>
+        </div>
       </AppShell.Header>
 
-      <AppShell.Navbar p="xs">
+      <AppShell.Navbar p="xs" withBorder={false} className={classes.shellChrome} zIndex={opened ? 103 : undefined}>
         <AppShell.Section grow>
           {NAV_ITEMS.map((item) => {
             const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
@@ -125,25 +125,29 @@ export function AppLayout() {
               {health.data ? (health.data.state_db.ok ? 'agent online' : 'agent offline') : ' '}
             </div>
             <Group gap={6} wrap="nowrap">
-              <span
-                className={`${classes.statusDot} ${health.data?.state_db.ok ? classes.statusDotOk : classes.statusDotDown}`}
-              />
+              <span className={classes.statusDotWrap}>
+                <span
+                  className={`${classes.statusDot} ${health.data?.state_db.ok ? classes.statusDotOk : classes.statusDotDown}`}
+                />
+              </span>
               <span className={classes.statusMeta}>{health.data ? `v${health.data.version}` : ' '}</span>
             </Group>
           </div>
         </AppShell.Section>
       </AppShell.Navbar>
 
-      <AppShell.Main h="100dvh">
-        <Suspense
-          fallback={
-            <Center h={`calc(100dvh - ${HEADER_HEIGHT}px)`}>
-              <Loader />
-            </Center>
-          }
-        >
-          <Outlet />
-        </Suspense>
+      <AppShell.Main h="100dvh" className={classes.shellChrome}>
+        <div className={classes.contentShell}>
+          <Suspense
+            fallback={
+              <Center h={`calc(100dvh - ${HEADER_HEIGHT}px)`}>
+                <Loader />
+              </Center>
+            }
+          >
+            <Outlet />
+          </Suspense>
+        </div>
       </AppShell.Main>
     </AppShell>
   );

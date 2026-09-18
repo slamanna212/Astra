@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, Group, Loader, SegmentedControl, SimpleGrid, Stack, Switch, Text, Title, useMantineColorScheme } from '@mantine/core';
+import { Alert, Badge, Card, Group, Loader, SegmentedControl, SimpleGrid, Stack, Text, Title, useMantineColorScheme } from '@mantine/core';
 import { IconAlertCircle, IconMoon, IconSun, IconDeviceDesktop } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { getStatus } from '../../api/auth';
@@ -103,18 +103,6 @@ export default function SettingsPage() {
             Queue waits for the current turn. Interrupt stops it and starts your message next. Steer applies your message to the running turn.
           </Text>
         </Stack>
-      </Card>
-
-      <Card withBorder p="md">
-        <Title order={3} mb="sm">
-          Sidebar
-        </Title>
-        <Switch
-          label="Collapse sidebar by default"
-          description="Applies on desktop widths; the mobile sidebar is always collapsed until opened."
-          checked={prefs.sidebarDesktopCollapsed}
-          onChange={(e) => updateUiPreferences({ sidebarDesktopCollapsed: e.currentTarget.checked })}
-        />
       </Card>
 
       <Card withBorder p="md">

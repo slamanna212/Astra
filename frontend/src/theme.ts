@@ -174,7 +174,7 @@ export const theme = createTheme({
 
   other: {
     /** Layout constants the app relies on — read these, don't re-type the numbers. */
-    headerHeight: 56,
+    headerHeight: 48,
     navbarWidth: 240,
     sessionListWidth: 352,
     sessionRowHeight: 44,

@@ -137,7 +137,7 @@ Local evidence: [`CronForm.tsx`](frontend/src/pages/cron/CronForm.tsx), [`CronDe
 
 - [x] List skills grouped by category
 - [x] Search/filter skills by name, description, and category
-- [x] View rendered and raw `SKILL.md`
+- [x] View rendered and raw `SKILL.md
 - [ ] **Partial** — the API returns supporting-file names, but the skill detail UI does not display/open them
 - [x] Create, edit, and delete skills
 - [x] Enable/disable skills
