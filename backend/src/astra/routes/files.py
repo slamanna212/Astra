@@ -16,8 +16,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from astra import files as filesmod
+from astra import workspace_git
 from astra.deps import Ctx
-from astra.models import FileContent, FileListing, FileMetaModel, FileUploadResponse
+from astra.models import FileContent, FileListing, FileMetaModel, FileUploadResponse, GitStatusModel
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 log = logging.getLogger(__name__)
@@ -56,6 +57,20 @@ async def list_files(ctx: Ctx, path: Annotated[str, Query()] = "") -> FileListin
         entries=[asdict(e) for e in listing.entries],  # dataclasses -> plain dicts for pydantic
         truncated=listing.truncated,
     )
+
+
+@router.get("/git", response_model=GitStatusModel)
+async def git_status(ctx: Ctx, path: Annotated[str, Query()] = "") -> GitStatusModel:
+    """Read-only branch/dirty status of the repo containing ``path`` (see astra/workspace_git.py)."""
+    root = ctx.settings.workspace_dir
+    try:
+        status = await anyio.to_thread.run_sync(workspace_git.git_status, root, path)
+    except filesmod.FilesError as exc:
+        _raise_http(exc)
+        raise  # pragma: no cover
+    if status is None:
+        return GitStatusModel(repo=False)
+    return GitStatusModel(repo=True, dirty=status.dirty, **asdict(status))
 
 
 @router.get("/content", response_model=FileContent)

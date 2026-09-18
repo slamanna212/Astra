@@ -278,6 +278,22 @@ class FileUploadResponse(BaseModel):
     size: int
 
 
+class GitStatusModel(BaseModel):
+    """Branch/dirty badge for the Files header. ``repo`` is false outside any git repository."""
+
+    repo: bool
+    branch: str | None = None
+    head: str | None = None
+    upstream: str | None = None
+    ahead: int = 0
+    behind: int = 0
+    staged: int = 0
+    unstaged: int = 0
+    untracked: int = 0
+    conflicted: int = 0
+    dirty: bool = False
+
+
 # -- Logs ------------------------------------------------------------------
 # See astra/logs.py: exactly 3 allowlisted files, tail-only, byte-capped.
 
