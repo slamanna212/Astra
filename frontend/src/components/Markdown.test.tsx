@@ -93,4 +93,34 @@ describe('Markdown', () => {
     expect(anchor).toHaveAttribute('target', '_blank');
     expect(anchor.getAttribute('rel')).toContain('noopener');
   });
+
+  it('renders Markdown image syntax inline with safe browser attributes', () => {
+    render(<Markdown>{'Before ![A chart](https://example.com/chart.png) after'}</Markdown>);
+    const image = screen.getByRole('img', { name: 'A chart' });
+    expect(image).toHaveAttribute('src', 'https://example.com/chart.png');
+    expect(image).toHaveAttribute('loading', 'lazy');
+    expect(image).toHaveAttribute('referrerpolicy', 'no-referrer');
+  });
+
+  it('renders remote and local Hermes MEDIA tokens as inline images', () => {
+    render(
+      <Markdown sessionId="session one">
+        {'Remote MEDIA:https://example.com/generated.png\n\nMEDIA:/tmp/local.png'}
+      </Markdown>,
+    );
+    expect(screen.getByRole('img', { name: 'generated.png' })).toHaveAttribute(
+      'src',
+      'https://example.com/generated.png',
+    );
+    expect(screen.getByRole('img', { name: 'local.png' })).toHaveAttribute(
+      'src',
+      '/api/media?path=%2Ftmp%2Flocal.png&session_id=session+one',
+    );
+  });
+
+  it('does not interpret MEDIA tokens inside fenced code blocks', () => {
+    const { container } = render(<Markdown>{'```text\nMEDIA:/tmp/not-an-image.png\n```'}</Markdown>);
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('MEDIA:/tmp/not-an-image.png')).toBeInTheDocument();
+  });
 });

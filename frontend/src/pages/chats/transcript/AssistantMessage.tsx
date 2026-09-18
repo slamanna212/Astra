@@ -74,7 +74,7 @@ export function AssistantMessage({
       <Stack gap={8} className={classes.assistantContent}>
         {message.reasoning && <ReasoningBlock reasoning={message.reasoning} />}
         {activityDisplayMode === 'transparent_stream' && toolCards}
-        {text && <Markdown codeHighlight>{text}</Markdown>}
+        {text && <Markdown codeHighlight sessionId={sessionId}>{text}</Markdown>}
         {parts && <ContentParts parts={parts} />}
         {activityDisplayMode === 'compact_worklog' && message.tool_calls && message.tool_calls.length > 0 && (
           <Box className={classes.toolCard} p={6}>

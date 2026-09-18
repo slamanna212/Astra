@@ -49,7 +49,7 @@ Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [
 - [x] Code-block copy button with “Copied” feedback
 - [x] Mermaid diagram rendering
 - [x] KaTeX math rendering
-- [ ] Render Markdown image syntax and Hermes `MEDIA:` tokens inline
+- [x] Render Markdown image syntax and Hermes `MEDIA:` tokens inline
 - [x] Safe rendering that does not execute raw response HTML
 - [x] Collapsible reasoning/thinking blocks
 - [x] Collapsible tool cards with arguments, result, and status
@@ -57,7 +57,7 @@ Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [
 - [x] Message timestamps
 - [x] Preserve/display truncation and compaction-summary markers
 
-Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcript.tsx), [`ToolCallCard.tsx`](frontend/src/pages/chats/transcript/ToolCallCard.tsx), and [`Markdown.tsx`](frontend/src/components/Markdown.tsx).
+Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcript.tsx), [`ToolCallCard.tsx`](frontend/src/pages/chats/transcript/ToolCallCard.tsx), [`Markdown.tsx`](frontend/src/components/Markdown.tsx), and [`routes/media.py`](backend/src/astra/routes/media.py).
 
 ## Sessions and search
 

@@ -34,7 +34,12 @@
 }
 
 .root :global(img) {
+  display: block;
   max-width: 100%;
+  max-height: 32rem;
+  margin-block: var(--mantine-spacing-xs);
+  border-radius: var(--astra-radius);
+  object-fit: contain;
 }
 
 .root :global(.katex-display) {

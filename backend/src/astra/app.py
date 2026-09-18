@@ -23,6 +23,7 @@ from astra.routes import files as files_routes
 from astra.routes import health as health_routes
 from astra.routes import insights as insights_routes
 from astra.routes import logs as logs_routes
+from astra.routes import media as media_routes
 from astra.routes import memory as memory_routes
 from astra.routes import openviking as openviking_routes
 from astra.routes import messages as message_routes
@@ -77,6 +78,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(search_routes.router)
     app.include_router(insights_routes.router)
     app.include_router(files_routes.router)
+    app.include_router(media_routes.router)
     app.include_router(logs_routes.router)
     app.include_router(memory_routes.router)
     app.include_router(openviking_routes.router)
