@@ -53,7 +53,6 @@ Local evidence: [`SessionPane.tsx`](frontend/src/pages/chats/SessionPane.tsx), [
 - [x] Safe rendering that does not execute raw response HTML
 - [x] Collapsible reasoning/thinking blocks
 - [x] Collapsible tool cards with arguments, result, and status
-- [ ] Expand/collapse all tool cards at once
 - [x] Message timestamps
 - [x] Preserve/display truncation and compaction-summary markers
 
@@ -78,7 +77,6 @@ Local evidence: [`Transcript.tsx`](frontend/src/pages/chats/transcript/Transcrip
 - [x] Today / Yesterday / Earlier collapsible date groups
 - [ ] Batch selection and bulk delete/move/archive
 - [ ] Browser-tab title follows active session
-- [ ] Public, sanitized, read-only conversation share links
 - [x] **Equivalent/superior path** — CLI, gateway, cron, and other canonical Hermes sessions are read directly from `state.db`; no duplicate WebUI import is needed
 - [x] Filter sessions by source and active/archived/hidden status
 - [x] Show source badges and cross-channel sessions
