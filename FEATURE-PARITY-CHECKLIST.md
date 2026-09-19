@@ -199,8 +199,6 @@ Local evidence: [`InsightsPage.tsx`](frontend/src/pages/insights/InsightsPage.ts
 - [x] CSRF guard on mutating API calls
 - [x] Open-redirect guard on post-login redirect
 - [ ] Optional authentication/off-by-default localhost mode
-- [ ] Passkeys/WebAuthn and passwordless sign-in
-- [ ] Native OIDC/PKCE login
 - [ ] **Partial** — file responses set `nosniff` and unsafe HTML is not rendered, but global X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and a full CSP were not found
 - [ ] Explicit global 20 MB request-body cap (file upload has its own size cap)
 - [x] Session/path validation and sanitized client errors
