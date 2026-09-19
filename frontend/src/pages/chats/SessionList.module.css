@@ -32,12 +32,14 @@
   transition: background-color var(--astra-transition);
 
   @mixin hover {
+    --row-tint: var(--astra-hover);
     background-color: var(--astra-hover);
     /* Beats the global `a:hover { text-decoration: underline }` on specificity ties. */
     text-decoration: none;
   }
 
   &[data-active] {
+    --row-tint: var(--astra-selected);
     background: var(--astra-selected);
     box-shadow: inset 2px 0 0 var(--astra-primary);
   }
@@ -86,7 +88,11 @@
   padding-left: 8px;
   opacity: 0;
   transition: opacity var(--astra-transition);
-  background: linear-gradient(to right, transparent, var(--astra-surface) 40%);
+  /* The row tints (hover/selected) are translucent, so layer the row's tint over the list
+     surface — a plain surface fill shows up as a mismatched block around the icons. */
+  background:
+    linear-gradient(to right, transparent, var(--row-tint, transparent) 40%),
+    linear-gradient(to right, transparent, var(--astra-surface) 40%);
 
   .row:hover &,
   .row[data-active] & {
