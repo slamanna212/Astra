@@ -4,7 +4,7 @@
   color: var(--astra-text-body);
 }
 
-.root :global(pre) {
+.root > :global(pre) {
   overflow-x: auto;
   padding: var(--mantine-spacing-sm);
   background-color: var(--astra-surface-sunk);
@@ -24,6 +24,45 @@
   background: none;
   padding: 0;
   border-radius: 0;
+}
+
+.tableFrame {
+  overflow-x: auto;
+  margin-block: var(--mantine-spacing-sm);
+  border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
+  background: var(--astra-surface);
+}
+
+.table {
+  min-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :global(thead th) {
+  background: var(--astra-surface-sunk);
+  color: var(--astra-text-dim);
+  border-bottom: 1px solid var(--astra-border);
+  white-space: nowrap;
+}
+
+.table :global(tbody td) {
+  color: var(--astra-text-body);
+  vertical-align: top;
+}
+
+.table :global(tbody tr + tr td) {
+  border-top: 1px solid var(--astra-divider);
+}
+
+/* First column usually names the row — give it a touch more weight than the data beside it. */
+.table :global(tbody td:first-child) {
+  color: var(--astra-text);
+  font-weight: 500;
+}
+
+.table :global(tbody tr:hover td) {
+  background: var(--astra-hover);
 }
 
 .root :global(blockquote) {
@@ -48,10 +87,48 @@
   padding-block: 2px;
 }
 
+.mermaidTrigger {
+  display: block;
+  width: 100%;
+  margin-block: var(--mantine-spacing-xs);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--astra-radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: zoom-in;
+  transition: border-color var(--astra-transition);
+}
+
+.mermaidTrigger:hover {
+  border-color: var(--astra-border);
+}
+
+.mermaidTrigger:focus-visible {
+  outline: none;
+  border-color: var(--astra-primary);
+  box-shadow: var(--astra-focus-ring);
+}
+
 .mermaid {
+  display: block;
   overflow-x: auto;
   padding: var(--mantine-spacing-sm);
   text-align: center;
+}
+
+/* Mermaid pins an inline max-width on its SVG at natural size; the lightbox scales past it. */
+.mermaidLightbox {
+  display: flex;
+  justify-content: center;
+}
+
+.mermaidLightbox :global(svg) {
+  width: 100%;
+  max-width: 100% !important;
+  height: auto;
+  max-height: calc(100dvh - 160px);
 }
 
 .mermaid :global(svg) {

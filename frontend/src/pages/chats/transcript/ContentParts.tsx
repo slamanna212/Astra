@@ -25,7 +25,7 @@ export function ContentParts({ parts }: { parts: MessageContentPart[] }) {
           stringValue(part, 'url') ??
           (typeof nestedImage === 'string' ? nestedImage : nestedImage && typeof nestedImage === 'object' && 'url' in nestedImage && typeof nestedImage.url === 'string' ? nestedImage.url : null);
         if ((type.includes('image') || imageUrl) && imageUrl) {
-          return <Image key={index} src={imageUrl} alt={stringValue(part, 'name') ?? 'Attached image'} radius="sm" mah={420} fit="contain" referrerPolicy="no-referrer" />;
+          return <Image key={index} src={imageUrl} alt={stringValue(part, 'name') ?? 'Attached image'} radius="sm" w="auto" maw="100%" mah={420} fit="contain" style={{ alignSelf: 'flex-start' }} referrerPolicy="no-referrer" />;
         }
         const path = stringValue(part, 'path') ?? stringValue(part, 'file_path');
         if (type.includes('file') && path) {

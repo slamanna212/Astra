@@ -102,7 +102,7 @@ export function FilePreviewBody({
                 Showing the first {formatBytes(data.content.length)} of this file.
               </Text>
             )}
-            <Markdown codeHighlight>{data.content}</Markdown>
+            <Markdown>{data.content}</Markdown>
           </Stack>
         </Suspense>
       );

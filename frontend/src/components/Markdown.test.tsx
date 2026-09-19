@@ -48,13 +48,13 @@ describe('Markdown', () => {
     ['without a language', '```\nplain text\n```'],
     ['with an unknown language', '```not-a-real-language\nplain text\n```'],
   ])('highlights fenced code %s without crashing', async (_description, markdown) => {
-    render(<Markdown codeHighlight>{markdown}</Markdown>);
+    render(<Markdown>{markdown}</Markdown>);
     expect(await screen.findByText('plain text')).toBeInTheDocument();
   });
 
   it('copies fenced code and reports Copied feedback', async () => {
     const user = userEvent.setup();
-    render(<Markdown codeHighlight>{'```js\nconsole.log(1)\n```'}</Markdown>);
+    render(<Markdown>{'```js\nconsole.log(1)\n```'}</Markdown>);
 
     const copyButton = await screen.findByRole('button', { name: 'Copy code' });
     await user.click(copyButton);
@@ -74,7 +74,7 @@ describe('Markdown', () => {
 
   it('shows the source when a Mermaid diagram is invalid', async () => {
     renderMermaid.mockRejectedValueOnce(new Error('Parse error'));
-    render(<Markdown codeHighlight>{'```mermaid\nnot a diagram\n```'}</Markdown>);
+    render(<Markdown>{'```mermaid\nnot a diagram\n```'}</Markdown>);
 
     expect(await screen.findByText('Invalid Mermaid diagram')).toBeInTheDocument();
     expect(screen.getByText('not a diagram')).toBeInTheDocument();

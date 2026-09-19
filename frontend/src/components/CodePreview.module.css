@@ -1,0 +1,147 @@
+/* Block frame. Mantine's CodeHighlight root is made position:static so its copy control anchors
+ * to this frame — which puts it in the language header when one is shown. */
+.frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
+  background: var(--code-frame-bg);
+  margin-block: var(--mantine-spacing-xs);
+  --code-frame-bg: var(--astra-code-bg);
+}
+
+/* Light mode: code blocks are cards, so they take the card surface (white), not the sunk grey. */
+:global([data-mantine-color-scheme='light']) .frame {
+  --code-frame-bg: var(--astra-surface);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding-inline: 12px 40px;
+  border-bottom: 1px solid var(--astra-border);
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-text-dim);
+  user-select: none;
+}
+
+.frame .codeHighlight {
+  position: static;
+  --ch-background: var(--code-frame-bg);
+}
+
+.frame .controls {
+  top: 6px;
+  right: 6px;
+  background: transparent;
+}
+
+.frame[data-labelled] .controls {
+  top: 3px;
+}
+
+.frame .code {
+  font-family: var(--astra-font-mono);
+  font-size: calc(var(--astra-chat-font-size, 14px) * 0.89);
+  padding: 10px 14px;
+}
+
+/* ---- highlight.js tokens → Graphite syntax palette (tokens.css) ---- */
+.frame :global(.hljs) {
+  color: var(--astra-syntax-text);
+}
+
+.frame :global(.hljs-comment),
+.frame :global(.hljs-quote) {
+  color: var(--astra-syntax-comment);
+  font-style: italic;
+}
+
+.frame :global(.hljs-keyword),
+.frame :global(.hljs-selector-tag),
+.frame :global(.hljs-name),
+.frame :global(.hljs-section),
+.frame :global(.hljs-doctag) {
+  color: var(--astra-syntax-keyword);
+}
+
+.frame :global(.hljs-string),
+.frame :global(.hljs-regexp),
+.frame :global(.hljs-char\.escape),
+.frame :global(.hljs-template-tag),
+.frame :global(.hljs-link) {
+  color: var(--astra-syntax-string);
+}
+
+.frame :global(.hljs-number),
+.frame :global(.hljs-literal),
+.frame :global(.hljs-symbol),
+.frame :global(.hljs-bullet),
+.frame :global(.hljs-variable\.constant_) {
+  color: var(--astra-syntax-number);
+}
+
+.frame :global(.hljs-title),
+.frame :global(.hljs-title\.function_),
+.frame :global(.hljs-title\.class_) {
+  color: var(--astra-syntax-function);
+}
+
+.frame :global(.hljs-attr),
+.frame :global(.hljs-attribute),
+.frame :global(.hljs-property),
+.frame :global(.hljs-params),
+.frame :global(.hljs-variable),
+.frame :global(.hljs-template-variable),
+.frame :global(.hljs-selector-class),
+.frame :global(.hljs-selector-id),
+.frame :global(.hljs-selector-attr),
+.frame :global(.hljs-selector-pseudo) {
+  color: var(--astra-syntax-property);
+}
+
+.frame :global(.hljs-type),
+.frame :global(.hljs-built_in),
+.frame :global(.hljs-title\.class_\.inherited__),
+.frame :global(.hljs-variable\.language_) {
+  color: var(--astra-syntax-type);
+}
+
+.frame :global(.hljs-meta),
+.frame :global(.hljs-meta .hljs-keyword),
+.frame :global(.hljs-subst) {
+  color: var(--astra-syntax-meta);
+}
+
+.frame :global(.hljs-meta .hljs-string) {
+  color: var(--astra-syntax-string);
+}
+
+.frame :global(.hljs-punctuation),
+.frame :global(.hljs-operator),
+.frame :global(.hljs-tag) {
+  color: var(--astra-syntax-punct);
+}
+
+.frame :global(.hljs-tag .hljs-name) {
+  color: var(--astra-syntax-keyword);
+}
+
+.frame :global(.hljs-tag .hljs-attr) {
+  color: var(--astra-syntax-property);
+}
+
+.frame :global(.hljs-emphasis) { font-style: italic; }
+.frame :global(.hljs-strong) { font-weight: 600; }
+
+.frame :global(.hljs-addition) {
+  color: var(--astra-ok);
+  background: var(--astra-ok-soft);
+}
+
+.frame :global(.hljs-deletion) {
+  color: var(--astra-danger);
+  background: var(--astra-danger-soft);
+}

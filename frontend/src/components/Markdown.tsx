@@ -65,7 +65,7 @@ function remarkHermesMedia(sessionId?: string) {
 }
 
 // highlight.js is a genuinely heavy dependency (see CodePreview.tsx) — only fetched once a fenced
-// code block actually renders, and only when a caller opts in via `codeHighlight`.
+// code block actually renders.
 const CodePreview = lazy(() => import('./CodePreview'));
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'));
 
@@ -94,15 +94,13 @@ function RichPre({ children }: { children?: ReactNode }) {
   }
   return (
     <Suspense fallback={<Code block>{code}</Code>}>
-      <CodePreview code={code} language={language} />
+      <CodePreview code={code} language={language} withLanguageLabel />
     </Suspense>
   );
 }
 
-function MermaidPre({ children }: { children?: ReactNode }) {
-  const { code, language } = extractCodeBlock(children);
-  return language?.toLowerCase() === 'mermaid' ? <MermaidBlock code={code} /> : <pre>{children}</pre>;
-}
+// Theme Table styles are inline, so the chat-relative cell size has to come through `styles` too.
+const tableStyles = { td: { fontSize: 'calc(var(--astra-chat-font-size, 14px) * 0.93)' } };
 
 // Deliberately no rehype-raw: rendering raw HTML embedded in markdown from a file/tool source is
 // an XSS vector we don't need to take on for a preview pane.
@@ -116,11 +114,11 @@ const baseComponents: Components = {
     <img {...props} alt={alt ?? ''} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
   ),
   table: ({ children, ...props }) => (
-    <Table.ScrollContainer minWidth={320}>
-      <Table striped highlightOnHover withTableBorder {...props}>
+    <div className={classes.tableFrame}>
+      <Table className={classes.table} withRowBorders={false} styles={tableStyles} {...props}>
         {children}
       </Table>
-    </Table.ScrollContainer>
+    </div>
   ),
   thead: Table.Thead,
   tbody: Table.Tbody,
@@ -134,19 +132,14 @@ const baseComponents: Components = {
   ),
 };
 
-const plainComponents = { ...baseComponents, pre: MermaidPre };
-const highlightedComponents = { ...baseComponents, pre: RichPre };
+const components: Components = { ...baseComponents, pre: RichPre };
 const rehypePlugins = [rehypeKatex];
 
 export const Markdown = memo(function Markdown({
   children,
-  codeHighlight = false,
   sessionId,
 }: {
   children: string;
-  /** Render fenced code blocks with @mantine/code-highlight (lazy-loaded) instead of a plain
-   * `<pre>`. Opt-in so most callers (file/memory previews) keep the lighter default. */
-  codeHighlight?: boolean;
   /** Session used to authorize absolute local paths emitted in Hermes MEDIA tokens. */
   sessionId?: string;
 }) {
@@ -156,7 +149,7 @@ export const Markdown = memo(function Markdown({
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
-        components={codeHighlight ? highlightedComponents : plainComponents}
+        components={components}
       >
         {children}
       </ReactMarkdown>

@@ -118,6 +118,18 @@
   --astra-recess-bg:     #090B0D;  /* sits below --astra-bg: dark mode needs a lower floor, not just shadow, to read as recessed */
   --astra-recess-shadow: rgba(0,0,0,.55);
   --astra-float-shadow:  0 2px 4px rgba(0,0,0,.5), 0 8px 20px rgba(0,0,0,.4);
+
+  /* syntax highlighting — teal/sand carry the two most frequent token kinds so code reads as Astra */
+  --astra-syntax-text:     var(--astra-graphite-0);
+  --astra-syntax-comment:  var(--astra-graphite-3);
+  --astra-syntax-keyword:  var(--astra-teal-3);
+  --astra-syntax-string:   var(--astra-sand-3);
+  --astra-syntax-number:   #C9A8F5;
+  --astra-syntax-function: #7DD3B0;
+  --astra-syntax-property: #9DBCEB;
+  --astra-syntax-type:     #7FD3DE;
+  --astra-syntax-meta:     var(--astra-graphite-2);
+  --astra-syntax-punct:    var(--astra-graphite-2);
 }
 
 /* ---- semantic roles: light ---- */
@@ -159,6 +171,17 @@
   --astra-recess-bg:     var(--astra-bg);  /* --astra-bg already reads recessed against --astra-surface in light mode */
   --astra-recess-shadow: rgba(16,20,24,.14);
   --astra-float-shadow:  0 1px 2px rgba(16,20,24,.10), 0 4px 12px rgba(16,20,24,.07);
+
+  --astra-syntax-text:     #1E2329;
+  --astra-syntax-comment:  #858B93;
+  --astra-syntax-keyword:  var(--astra-teal-8);
+  --astra-syntax-string:   var(--astra-sand-8);
+  --astra-syntax-number:   #7445B8;
+  --astra-syntax-function: #1F7556;
+  --astra-syntax-property: #3A5C9C;
+  --astra-syntax-type:     #0B5F6A;
+  --astra-syntax-meta:     #5F656C;
+  --astra-syntax-punct:    #5F656C;
 }
 
 /* ---- base ---- */
