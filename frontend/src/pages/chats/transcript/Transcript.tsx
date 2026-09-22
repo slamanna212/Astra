@@ -14,7 +14,9 @@ import { scrollBehavior } from '../../../lib/motion';
 import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
 import { MessageRow } from './MessageRow';
 import { isLiveAnswerCanonical, type LiveTurn } from '../../../lib/liveTurn';
+import type { LiveActivityEvent } from '../../../lib/liveActivity';
 import { LiveTurnRow } from './LiveTurnRow';
+import { AgentWorkspaceDrawer } from './AgentWorkspaceDrawer';
 import { SkillCommandResult } from './SkillCommandResult';
 import classes from './Transcript.module.css';
 
@@ -43,9 +45,10 @@ export const Transcript = memo(function Transcript({
   reasoningEffort,
   sessionTokens = 0,
   sessionCostUsd = null,
-  activityDisplayMode = 'transparent_stream',
+  activityDisplayMode = 'compact_worklog',
   skillCommands = EMPTY_SKILL_COMMANDS,
   liveTurn = null,
+  onRetryLiveTurn,
 }: {
   sessionId: string;
   highlightMessageId?: number;
@@ -58,6 +61,7 @@ export const Transcript = memo(function Transcript({
   activityDisplayMode?: ActivityDisplayMode;
   skillCommands?: SkillCommandExchange[];
   liveTurn?: LiveTurn | null;
+  onRetryLiveTurn?: () => void;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -203,6 +207,28 @@ export const Transcript = memo(function Transcript({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: scrollBehavior() });
   }, [hasNextPage, navigate, sessionId]);
 
+  // The transcript owns the agent workspace rather than the live row, because the row is a
+  // placeholder that is replaced by canonical history mid-turn. It also retains the last activity
+  // snapshot so the drawer does not empty out under the reader when the turn ends.
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceEvents, setWorkspaceEvents] = useState<LiveActivityEvent[]>([]);
+  const liveTurnEvents = liveTurn?.events;
+  useEffect(() => {
+    if (liveTurnEvents) setWorkspaceEvents(liveTurnEvents);
+  }, [liveTurnEvents]);
+  // Reset only on an actual session change: doing this unconditionally would run after the snapshot
+  // effect above on mount and wipe the activity it just captured.
+  const workspaceSessionRef = useRef(sessionId);
+  useEffect(() => {
+    if (workspaceSessionRef.current === sessionId) return;
+    workspaceSessionRef.current = sessionId;
+    setWorkspaceOpen(false);
+    setWorkspaceEvents([]);
+  }, [sessionId]);
+  const workspace = (
+    <AgentWorkspaceDrawer opened={workspaceOpen} onClose={() => setWorkspaceOpen(false)} events={workspaceEvents} />
+  );
+
   if (query.isPending) {
     return (
       <Center h="100%">
@@ -221,11 +247,14 @@ export const Transcript = memo(function Transcript({
   }
   if (messages.length === 0 && skillCommands.length === 0 && !liveTurn) {
     return (
-      <Center h="100%">
-        <Text c="dimmed" size="sm">
-          No messages in this conversation.
-        </Text>
-      </Center>
+      <>
+        <Center h="100%">
+          <Text c="dimmed" size="sm">
+            No messages in this conversation.
+          </Text>
+        </Center>
+        {workspace}
+      </>
     );
   }
 
@@ -273,7 +302,14 @@ export const Transcript = memo(function Transcript({
                   />
                 )}
                 {row.kind === 'skill-command' && <SkillCommandResult exchange={row.exchange} />}
-                {row.kind === 'live' && <LiveTurnRow turn={row.turn} />}
+                {row.kind === 'live' && (
+                  <LiveTurnRow
+                    turn={row.turn}
+                    workspaceOpen={workspaceOpen}
+                    onOpenWorkspace={() => setWorkspaceOpen(true)}
+                    onRetry={onRetryLiveTurn}
+                  />
+                )}
               </div>
             </div>
           );
@@ -293,6 +329,7 @@ export const Transcript = memo(function Transcript({
           </ActionIcon>
         </Tooltip>
       )}
+      {workspace}
     </div>
   );
 });

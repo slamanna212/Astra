@@ -7,7 +7,16 @@ import SessionPane from './SessionPane';
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('../../lib/refreshMessages', () => ({ refreshMessages: refresh }));
-vi.mock('./transcript/Transcript', () => ({ Transcript: ({ liveTurn }: { liveTurn?: { userText: string | null; answer: string; state: string } | null }) => <div>History{liveTurn && <div data-testid="live-turn">{liveTurn.userText} {liveTurn.answer} {liveTurn.state}</div>}</div> }));
+vi.mock('./transcript/Transcript', () => ({
+  Transcript: ({ liveTurn, onRetryLiveTurn }: { liveTurn?: { userText: string | null; answer: string; state: string } | null; onRetryLiveTurn?: () => void }) => (
+    <div>
+      History
+      {liveTurn && <div data-testid="live-turn">{liveTurn.userText} {liveTurn.answer} {liveTurn.state}</div>}
+      {/* Mirrors the real contract: the retry affordance only exists for an unreconciled turn. */}
+      {onRetryLiveTurn && liveTurn?.state === 'unreconciled' && <button onClick={onRetryLiveTurn}>Retry history refresh</button>}
+    </div>
+  ),
+}));
 vi.mock('./ChatComposer', () => ({
   ChatComposer: ({ draft, onDraftChange, onSend, liveTps }: { draft: string; onDraftChange: (text: string) => void; onSend: (text: string) => Promise<void>; liveTps: number | null }) => (
     <><input aria-label="Draft" value={draft} onChange={(event) => onDraftChange(event.target.value)} /><button onClick={() => void onSend(draft).catch(() => {})}>Send</button><output data-testid="tps">{liveTps ?? 'none'}</output></>
@@ -178,6 +187,25 @@ describe('conversation stream updates', () => {
     expect(screen.getByTestId('live-turn')).toHaveTextContent('Ask now');
     expect(screen.getByLabelText('Draft')).toHaveValue('Ask now');
     await act(async () => resolveSend(jsonResponse({ status: 'started' })));
+  });
+
+  it('keeps the streamed response and offers a retry when the history refresh fails', async () => {
+    // A failed refresh must not leave the row claiming to be "finishing" forever, and must not
+    // discard text the reader already received.
+    refresh.mockImplementationOnce(() => Promise.reject(new Error('offline')));
+    const { stream } = await mount();
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Streamed answer' }));
+    act(flushFrame);
+    act(() => stream.emit('done', {}));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByTestId('live-turn')).toHaveTextContent('unreconciled'));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Streamed answer');
+
+    refresh.mockImplementationOnce(() => Promise.resolve(undefined));
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
   });
 
   it('reports the turn as finishing while the canonical refresh is still in flight', async () => {

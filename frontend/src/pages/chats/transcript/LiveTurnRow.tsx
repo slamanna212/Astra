@@ -1,39 +1,24 @@
-import { Badge, Box, Drawer, Group, Paper, Stack, Text } from '@mantine/core';
+import { Badge, Box, Button, Group, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
-import type { LiveActivityEvent } from '../../../lib/liveActivity';
-import { deriveLivePhase, type LiveTurn } from '../../../lib/liveTurn';
+import { deriveLivePhase, isWorkspaceActivity, type LiveTurn } from '../../../lib/liveTurn';
 import classes from './Transcript.module.css';
 
 const MAX_REASONING = 4000;
 
-function eventLabel(event: LiveActivityEvent): string {
-  const data = event.data ?? {};
-  const candidate = [data.name, data.tool_name, data.tool, data.message, data.status]
-    .find((value) => typeof value === 'string' && value.trim());
-  return candidate ? String(candidate) : event.kind;
-}
-
-function WorkspaceEvent({ event }: { event: LiveActivityEvent }) {
-  const [open, setOpen] = useState(false);
-  const data = event.data ?? {};
-  return (
-    <Paper withBorder p="xs">
-      <Text size="xs" fw={600}>{event.kind}: {eventLabel(event)}</Text>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>Event details</button>
-      {open && (
-        <Text component="pre" size="xs" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 240, overflow: 'auto' }}>
-          {JSON.stringify(data, null, 2)}
-        </Text>
-      )}
-    </Paper>
-  );
-}
-
-export function LiveTurnRow({ turn }: { turn: LiveTurn }) {
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+export function LiveTurnRow({
+  turn,
+  workspaceOpen,
+  onOpenWorkspace,
+  onRetry,
+}: {
+  turn: LiveTurn;
+  workspaceOpen: boolean;
+  onOpenWorkspace: () => void;
+  onRetry?: () => void;
+}) {
   const [reasoningOpen, setReasoningOpen] = useState(false);
-  const activities = turn.events.filter((event) => event.kind === 'tool' || event.kind === 'subagent' || event.kind === 'status');
   const phase = deriveLivePhase(turn);
+  const activityCount = turn.events.filter(isWorkspaceActivity).length;
   return (
     <Stack gap="sm" aria-label="Current turn">
       {turn.userText !== null && (
@@ -59,34 +44,21 @@ export function LiveTurnRow({ turn }: { turn: LiveTurn }) {
         <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
           {turn.answer || (turn.state === 'failed' ? 'Response could not be completed.' : turn.reasoning ? 'Thinking…' : 'Waiting for response…')}
         </Text>
+        {turn.state === 'unreconciled' && onRetry && (
+          <Group gap="xs" mt="xs">
+            <Text size="xs" c="dimmed">This response is shown from the live stream and is not confirmed in saved history.</Text>
+            <Button size="compact-xs" variant="light" onClick={onRetry}>Retry history refresh</Button>
+          </Group>
+        )}
         <button
           className={classes.workspaceTrigger}
           type="button"
           aria-haspopup="dialog"
-          onClick={() => setWorkspaceOpen(true)}
+          aria-expanded={workspaceOpen}
+          onClick={onOpenWorkspace}
         >
-          Agent workspace{activities.length > 0 ? ` · ${activities.length} recent event${activities.length === 1 ? '' : 's'}` : ''}
+          Agent workspace{activityCount > 0 ? ` · ${activityCount} recent event${activityCount === 1 ? '' : 's'}` : ''}
         </button>
-        <Drawer
-          opened={workspaceOpen}
-          onClose={() => setWorkspaceOpen(false)}
-          title="Agent workspace"
-          position="right"
-          size="min(420px, 100%)"
-          aria-label="Agent workspace"
-          keepMounted={false}
-        >
-          <Text size="xs" c="dimmed">
-            Recent live activity in arrival order. Earlier events may have rolled off; this is not a durable audit log.
-          </Text>
-          {activities.length === 0
-            ? <Text size="sm" mt="xs" c="dimmed">No agent activity yet.</Text>
-            : (
-              <Stack gap="xs" mt="xs" aria-label="Agent workspace timeline">
-                {activities.map((event, index) => <WorkspaceEvent key={index} event={event} />)}
-              </Stack>
-            )}
-        </Drawer>
       </Box>
     </Stack>
   );

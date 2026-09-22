@@ -9,16 +9,26 @@ export interface LiveTurn {
   answer: string;
   reasoning: string;
   events: LiveActivityEvent[];
-  state: 'sending' | 'running' | 'reconnecting' | 'finishing' | 'failed';
+  /**
+   * `unreconciled` is distinct from `finishing`: the turn is over but the canonical reload failed,
+   * so the text on screen is real but unconfirmed against saved history.
+   */
+  state: 'sending' | 'running' | 'reconnecting' | 'finishing' | 'unreconciled' | 'failed';
 }
 
 const ACTIVITY_KINDS = new Set(['tool', 'subagent', 'status']);
+
+/** Activity kinds the agent workspace surfaces. Reasoning and answer text belong in the transcript. */
+export function isWorkspaceActivity(event: LiveActivityEvent): boolean {
+  return ACTIVITY_KINDS.has(event.kind);
+}
 
 /** One coarse, screen-reader-stable label per turn phase — never one announcement per token. */
 export function deriveLivePhase(turn: LiveTurn): string {
   if (turn.state === 'sending') return 'Sending';
   if (turn.state === 'reconnecting') return 'Reconnecting';
   if (turn.state === 'failed') return 'Error';
+  if (turn.state === 'unreconciled') return 'Refresh failed';
   if (turn.state === 'finishing') return 'Finishing';
   if (turn.answer) return 'Writing';
   if (turn.events.some((event) => ACTIVITY_KINDS.has(event.kind))) return 'Working';

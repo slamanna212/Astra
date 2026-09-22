@@ -132,6 +132,51 @@ describe('Transcript', () => {
     expect(screen.getByText(/sensitive argument/)).toBeInTheDocument();
   });
 
+  it('keeps the agent workspace open when the live row is replaced by canonical history', async () => {
+    // The row is a placeholder that disappears on handoff; the drawer the reader opened must not
+    // disappear with it.
+    fetchMock.mockImplementation(async (input) => String(input).includes('/children')
+      ? jsonResponse({ items: [] })
+      : jsonResponse({ items: [], has_older: false, has_newer: false, oldest_id: null, newest_id: null }));
+    const view = render(
+      <Transcript
+        sessionId="s1"
+        liveTurn={{ userText: 'Question', answer: '', reasoning: '', events: [{ kind: 'tool', data: { name: 'search_files' } }], state: 'running' }}
+      />,
+      { route: '/chats/s1' },
+    );
+    await screen.findByText('Question');
+    fireEvent.click(screen.getByRole('button', { name: /Agent workspace/i }));
+    expect(screen.getByRole('dialog', { name: /Agent workspace/i })).toBeInTheDocument();
+
+    view.rerender(<Transcript sessionId="s1" liveTurn={null} />);
+
+    expect(screen.getByRole('dialog', { name: /Agent workspace/i })).toHaveTextContent('tool: search_files');
+  });
+
+  it('shows a mid-turn reload as the durable user turn followed by the partial answer', async () => {
+    // Hermes persists the inbound user turn before the first model call, so after a reload the
+    // canonical window already carries it. The live row must sit below it and must not repeat it.
+    const earlierReply = { ...makeMessage(1), role: 'assistant' as const, content: 'An earlier reply' };
+    const durableUser = { ...makeMessage(2), role: 'user' as const, content: 'Question that was persisted' };
+    fetchMock.mockImplementation(async (input) => String(input).includes('/children')
+      ? jsonResponse({ items: [] })
+      : jsonResponse({ items: [earlierReply, durableUser], has_older: false, has_newer: false, oldest_id: 1, newest_id: 2 }));
+
+    render(
+      <Transcript
+        sessionId="s1"
+        liveTurn={{ userText: null, answer: 'Partial streamed answer', reasoning: '', events: [], state: 'reconnecting' }}
+      />,
+      { route: '/chats/s1' },
+    );
+
+    await screen.findByText('Question that was persisted');
+    expect(screen.getAllByText(/Question that was persisted/)).toHaveLength(1);
+    const text = screen.getByTestId('transcript-scroller').textContent ?? '';
+    expect(text.indexOf('Question that was persisted')).toBeLessThan(text.indexOf('Partial streamed answer'));
+  });
+
   it('does not render the live answer twice once canonical history already contains it', async () => {
     const canonical = { ...makeMessage(1), role: 'assistant' as const, content: 'Duplicate answer' };
     fetchMock.mockImplementation(async (input) => String(input).includes('/children')

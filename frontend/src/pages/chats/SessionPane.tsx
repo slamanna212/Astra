@@ -98,6 +98,7 @@ export default function SessionPane() {
   const runningRef = useRef(false);
   const lastEventIdRef = useRef(0);
   const retryNowRef = useRef<() => void>(() => {});
+  const retryHistoryRef = useRef<() => void>(() => {});
   const drainingQueueRef = useRef<{ sessionId: string; messageId: string } | null>(null);
   const skillCommandIdRef = useRef(0);
   const prefs = useUiPreferences();
@@ -258,13 +259,32 @@ export default function SessionPane() {
         setLiveTurn({ sessionId, turn: liveTurnRef.current });
       }
       const finishedVersion = turnVersion;
-      void refreshCanonical(reconcile).then((refreshed) => {
-        if (!refreshed || disposed || runningRef.current || turnVersion !== finishedVersion) return;
+      const retireLiveTurn = () => {
         streamingRef.current = '';
         reasoningRef.current = '';
         liveEventsRef.current = [];
         liveTurnRef.current = null;
         setLiveTurn(null);
+      };
+      const settled = () => !disposed && !runningRef.current && turnVersion === finishedVersion;
+      void refreshCanonical(reconcile).then((refreshed) => {
+        if (!settled()) return;
+        if (refreshed) {
+          retireLiveTurn();
+          return;
+        }
+        // The streamed text is real, but Astra could not confirm it against saved history. Keep
+        // what the reader already has, stop claiming the turn is still finishing, and offer a retry
+        // rather than leaving a permanently "Finishing" row.
+        if (liveTurnRef.current) {
+          liveTurnRef.current = { ...liveTurnRef.current, state: 'unreconciled' };
+          setLiveTurn({ sessionId, turn: liveTurnRef.current });
+        }
+        retryHistoryRef.current = () => {
+          void refreshCanonical(true).then((recovered) => {
+            if (recovered && settled()) retireLiveTurn();
+          });
+        };
       });
     };
     const finish = (event: Event) => {
@@ -863,6 +883,7 @@ export default function SessionPane() {
             activityDisplayMode={prefs.activityDisplayMode}
             skillCommands={skillCommands}
             liveTurn={liveTurn?.sessionId === sessionId ? liveTurn.turn : null}
+            onRetryLiveTurn={() => retryHistoryRef.current()}
           />
         </Box>
       </Box>
