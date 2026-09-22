@@ -127,6 +127,45 @@ describe('conversation stream updates', () => {
     expect(screen.getByTestId('live-turn')).toHaveTextContent('Race Early');
   });
 
+  it('does not wipe deltas that arrive before the started frame while the send is pending', async () => {
+    // The optimistic turn is created before the POST resolves, so a delta can land before the
+    // server's `started` frame. `started` must not reset buffers that a send is still filling.
+    let resolveSend!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? new Promise<Response>((resolve) => { resolveSend = resolve; })
+      : originalFetch(input as RequestInfo)));
+    const { stream } = await mount();
+    fireEvent.change(screen.getByLabelText('Draft'), { target: { value: 'Race' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    act(() => stream.emit('delta', { text: 'Early' }));
+    act(flushFrame);
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(flushFrame);
+    await act(async () => resolveSend(jsonResponse({ status: 'started' })));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Race Early');
+  });
+
+  it('does not end the turn on a stale idle state frame while the send is pending', async () => {
+    // A resubscribe can deliver a `state` frame computed before this turn started. Acting on it
+    // while the POST is still in flight would retire the optimistic row and lose the response.
+    let resolveSend!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? new Promise<Response>((resolve) => { resolveSend = resolve; })
+      : originalFetch(input as RequestInfo)));
+    const { stream } = await mount();
+    fireEvent.change(screen.getByLabelText('Draft'), { target: { value: 'Keep' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Alive' }));
+    act(flushFrame);
+    act(() => stream.emit('state', { running: false }));
+    act(flushFrame);
+    await act(async () => resolveSend(jsonResponse({ status: 'started' })));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Keep Alive');
+  });
+
   it('shows the optimistic exchange before the send request resolves', async () => {
     let resolveSend!: (response: Response) => void;
     const originalFetch = globalThis.fetch;
@@ -139,6 +178,22 @@ describe('conversation stream updates', () => {
     expect(screen.getByTestId('live-turn')).toHaveTextContent('Ask now');
     expect(screen.getByLabelText('Draft')).toHaveValue('Ask now');
     await act(async () => resolveSend(jsonResponse({ status: 'started' })));
+  });
+
+  it('reports the turn as finishing while the canonical refresh is still in flight', async () => {
+    // The response text arriving is not the end of the turn: the reader must be able to tell that
+    // history is still being reconciled, rather than seeing a stale "Writing" phase.
+    let finishRefresh!: () => void;
+    refresh.mockImplementationOnce(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    const { stream } = await mount();
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Complete answer' }));
+    act(flushFrame);
+    act(() => stream.emit('done', {}));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('finishing');
+    await act(async () => finishRefresh());
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
   });
 
   it('keeps the partial response until canonical refresh finishes', async () => {
