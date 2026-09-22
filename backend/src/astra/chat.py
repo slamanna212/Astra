@@ -84,6 +84,10 @@ class Turn:
     done: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
     agent: Any = None
+    # The session store this turn was built against, owned by Astra (see _build_agent).
+    # Hermes' AIAgent does not expose the store it is handed, so this is the only
+    # reference callers may rely on.
+    session_db: Any = None
     question: PendingQuestion | None = None
     next_question_id: int = 1
     pump: asyncio.Task[None] | None = None
@@ -495,6 +499,7 @@ class ChatManager:
             self._wire_agent_callbacks(agent, turn)
             with self._cache_lock:
                 self._agents.move_to_end(turn.session_id)
+            turn.session_db = cached.session_db
             return agent
         if cached is not None:
             self._commit_and_close(cached)
@@ -532,6 +537,7 @@ class ChatManager:
                 _, evicted = self._agents.popitem(last=False)
         if evicted is not None:
             self._commit_and_close(evicted)
+        turn.session_db = session_db
         return agent
 
     def _run_turn(self, turn: Turn) -> None:
@@ -541,7 +547,7 @@ class ChatManager:
                 turn.agent = agent
             turn.start_output_tokens = getattr(agent, "session_completion_tokens", 0) or 0
             self._register_approvals(turn)
-            history = turn.agent.session_db.get_messages_as_conversation(turn.session_id)
+            history = turn.session_db.get_messages_as_conversation(turn.session_id)
             run_kwargs = _supported(
                 agent.run_conversation,
                 {"user_message": turn.message, "conversation_history": history, "task_id": turn.session_id,
@@ -594,9 +600,9 @@ class ChatManager:
                 "kind": "compacting",
                 "message": "Compacting context — summarizing earlier conversation…",
             })
-            db = getattr(agent, "session_db", None) or getattr(agent, "_session_db", None)
+            db = turn.session_db
             if db is None:
-                raise ChatError("The active Hermes runtime does not expose a session store for compaction.")
+                raise ChatError("No Hermes session store is attached to this turn for compaction.")
             acquire_lock = getattr(db, "try_acquire_compression_lock", None)
             if callable(acquire_lock):
                 lock_holder = f"astra:{threading.get_ident()}:{time.monotonic_ns()}"

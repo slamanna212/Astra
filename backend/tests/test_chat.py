@@ -60,6 +60,11 @@ class FakeAgent:
     interrupted = threading.Event()
 
     def __init__(self, **kwargs) -> None:
+        # The deployed Hermes AIAgent hands ``session_db`` to its own persistence delegate
+        # and keeps NO public attribute for it (v2026.8.31 only assigns ``_session_db`` on the
+        # lazy recall path). Mirror that here: if Astra reads a store it did not create, the
+        # suite must fail the same way production does.
+        kwargs.pop("session_db", None)
         self.__dict__.update(kwargs)
         self._pending_steer: str | None = None
         self.commits: list[list[dict[str, str]]] = []
@@ -264,7 +269,7 @@ async def test_commit_idle_is_a_non_request_thread_session_boundary(base_setting
     # Hermes' shared turn prologue uses this surface identity to run its canonical
     # opening-turn auto-title path. Astra deliberately adds no periodic title calls.
     assert agent.platform == "webui"
-    assert isinstance(agent.session_db, FakeSessionDB)
+    assert isinstance(turn.session_db, FakeSessionDB)
     assert not agent.commits
     await manager.commit_idle()
     assert agent.commits
@@ -347,9 +352,16 @@ async def test_manual_compaction_streams_status_and_archives_history(base_settin
             return [messages[0], {"role": "assistant", "content": "summary"}, messages[-1]]
 
     db = CompactDB()
-    agent = type("CompactAgent", (), {"session_db": db, "context_compressor": Compressor()})()
+    # Mirrors the deployed AIAgent: it holds the compressor but no public reference to
+    # the session store, which Astra attaches to the turn instead.
+    agent = type("CompactAgent", (), {"context_compressor": Compressor()})()
+
+    def build(turn):
+        turn.session_db = db
+        return agent
+
     manager = ChatManager(base_settings, max_workers=1)
-    monkeypatch.setattr(manager, "_build_agent", lambda _turn: agent)
+    monkeypatch.setattr(manager, "_build_agent", build)
 
     await manager.start_compaction("session-1", "deployment", model=None, provider=None)
     subscriber, running = await manager.subscribe("session-1")
