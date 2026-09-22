@@ -56,6 +56,7 @@ def create_app(settings: Settings) -> FastAPI:
             await ctx.terminal.close()
             await ctx.cron_events.stop()
             await ctx.chat.close()
+            await ctx.openviking.close()
             ctx.db.close()
 
     app = FastAPI(

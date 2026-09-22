@@ -1,5 +1,4 @@
-/* Block frame. Mantine's CodeHighlight root is made position:static so its copy control anchors
- * to this frame — which puts it in the language header when one is shown. */
+/* The copy control remains accessible above the bounded, independently scrollable code page. */
 .frame {
   position: relative;
   overflow: hidden;
@@ -27,15 +26,12 @@
   user-select: none;
 }
 
-.frame .codeHighlight {
-  position: static;
-  --ch-background: var(--code-frame-bg);
-}
-
 .frame .controls {
+  position: absolute;
+  z-index: 1;
   top: 6px;
   right: 6px;
-  background: transparent;
+  background: var(--code-frame-bg);
 }
 
 .frame[data-labelled] .controls {
@@ -45,7 +41,22 @@
 .frame .code {
   font-family: var(--astra-font-mono);
   font-size: calc(var(--astra-chat-font-size, 14px) * 0.89);
-  padding: 10px 14px;
+  padding: 10px 30px 10px 14px;
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre;
+  line-height: 1.55;
+  color: var(--astra-syntax-text);
+}
+
+.code code {
+  font: inherit;
+}
+
+.pagination {
+  padding: 4px 8px;
+  border-top: 1px solid var(--astra-border);
 }
 
 /* ---- highlight.js tokens → Graphite syntax palette (tokens.css) ---- */

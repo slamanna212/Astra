@@ -1,6 +1,7 @@
 """Small, read-only server-side adapter for the versioned OpenViking API."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -15,6 +16,13 @@ class OpenVikingUnavailable(RuntimeError):
 class OpenVikingClient:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._client: httpx.AsyncClient | None = None
+        self._requests = asyncio.Semaphore(4)
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     @property
     def configured(self) -> bool:
@@ -27,8 +35,14 @@ class OpenVikingClient:
         if not self.configured:
             raise OpenVikingUnavailable("OpenViking is not configured")
         try:
-            async with httpx.AsyncClient(base_url=self.settings.openviking_endpoint, timeout=httpx.Timeout(35, connect=4)) as client:
-                response = await client.request(method, path, params=params, json=body, headers=self._headers() if auth else {})
+            async with self._requests:
+                if self._client is None:
+                    self._client = httpx.AsyncClient(
+                        base_url=self.settings.openviking_endpoint,
+                        timeout=httpx.Timeout(35, connect=4),
+                        limits=httpx.Limits(max_connections=4, max_keepalive_connections=4),
+                    )
+                response = await self._client.request(method, path, params=params, json=body, headers=self._headers() if auth else {})
         except httpx.HTTPError as exc:
             raise OpenVikingUnavailable("OpenViking is unreachable") from exc
         if response.status_code >= 500:

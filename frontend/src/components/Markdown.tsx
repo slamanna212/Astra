@@ -4,6 +4,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import { CODE_PAGE_CHARS } from '../lib/highlightWindow';
 import 'katex/dist/katex.min.css';
 import classes from './Markdown.module.css';
 
@@ -93,7 +94,7 @@ function RichPre({ children }: { children?: ReactNode }) {
     return <MermaidBlock code={code} />;
   }
   return (
-    <Suspense fallback={<Code block>{code}</Code>}>
+    <Suspense fallback={<Code block>{code.slice(0, CODE_PAGE_CHARS)}</Code>}>
       <CodePreview code={code} language={language} withLanguageLabel />
     </Suspense>
   );

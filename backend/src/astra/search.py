@@ -188,7 +188,9 @@ def search_messages(conn: sqlite3.Connection, schema: Schema, params: SearchPara
             "JOIN messages m ON m.id = messages_fts.rowid "
             "JOIN sessions s ON s.id = m.session_id "
             f"WHERE {' AND '.join(where)} "
-            "ORDER BY bm25(messages_fts) LIMIT ? OFFSET ?"
+            # FTS5's rank cursor can stop at LIMIT instead of sorting every matching row.
+            # Pin the ranking function explicitly in case Hermes changes the table default.
+            "AND rank MATCH 'bm25()' ORDER BY messages_fts.rank LIMIT ? OFFSET ?"
         )
         args.extend([message_limit + 1, offset])
         try:

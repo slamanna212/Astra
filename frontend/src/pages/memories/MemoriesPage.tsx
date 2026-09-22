@@ -53,13 +53,16 @@ function isEmpty(value: unknown): boolean {
 }
 
 function NodeRow({ node, selected, onChoose }: { node: OpenVikingNode; selected: boolean; onChoose: () => void }) {
+  const [interested, setInterested] = useState(false);
+  const listedCount = typeof node.count === 'number' ? node.count : null;
   const stat = useQuery({
     queryKey: queryKeys.openviking.stat(node.uri),
     queryFn: ({ signal }) => getOpenVikingStat(node.uri, signal),
     retry: false,
     staleTime: 60_000,
+    enabled: listedCount === null && (interested || selected),
   });
-  const count = typeof stat.data?.count === 'number' ? stat.data.count : null;
+  const count = listedCount ?? (typeof stat.data?.count === 'number' ? stat.data.count : null);
   const directory = isDirectory(node);
   return (
     <Button
@@ -69,6 +72,8 @@ function NodeRow({ node, selected, onChoose }: { node: OpenVikingNode; selected:
       leftSection={directory ? <IconFolder size={16} /> : <IconFileText size={16} />}
       rightSection={count !== null ? <Badge size="xs" variant="light" color={count === 0 ? 'gray' : 'teal'}>{count}</Badge> : undefined}
       onClick={onChoose}
+      onMouseEnter={() => setInterested(true)}
+      onFocus={() => setInterested(true)}
       aria-label={`${directory ? 'Open folder' : 'Open document'} ${nodeName(node)}${count !== null ? `, ${count} indexed` : ''}`}
     >
       <Text truncate size="sm">{nodeName(node)}</Text>

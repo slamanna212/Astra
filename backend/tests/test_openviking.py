@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
+
+import httpx
+
 from astra.openviking import OpenVikingClient, OpenVikingUnavailable
 
 from .conftest import CSRF
@@ -93,3 +98,68 @@ def test_openviking_search_forces_actor_scope(authed, monkeypatch):
     assert response.status_code == 200
     assert calls[0][1] == "/api/v1/search/search"
     assert calls[0][2]["body"] == {"query": "home network", "mode": "context", "query_expansion": "off", "max_tokens": 4000, "peer_scope": "actor"}
+
+
+def test_client_reuses_connections_bounds_concurrency_and_closes(base_settings, monkeypatch):
+    clients = []
+    active = peak = 0
+    headers = []
+    real_client = httpx.AsyncClient
+
+    async def check():
+        nonlocal active, peak
+        reached_limit = asyncio.Event()
+
+        async def handle(request):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            headers.append(dict(request.headers))
+            if active == 4:
+                reached_limit.set()
+            await asyncio.wait_for(reached_limit.wait(), 1)
+            await asyncio.sleep(0)
+            active -= 1
+            return httpx.Response(200, json={"result": {"ok": True}})
+
+        def create(**kwargs):
+            client = real_client(transport=httpx.MockTransport(handle), **kwargs)
+            clients.append(client)
+            return client
+
+        monkeypatch.setattr("astra.openviking.httpx.AsyncClient", create)
+        client = OpenVikingClient(replace(base_settings, openviking_endpoint="https://viking.test", openviking_api_key="test-only"))
+        try:
+            results = await asyncio.gather(*(client.request("GET", "/stat") for _ in range(12)))
+            assert results == [{"ok": True}] * 12
+            await client.request("GET", "/health", auth=False)
+        finally:
+            await client.close()
+        assert len(clients) == 1
+        assert clients[0].is_closed
+        assert peak == 4
+        assert all(h.get("x-api-key") == "test-only" for h in headers[:-1])
+        assert "x-api-key" not in headers[-1]
+
+    asyncio.run(check())
+
+
+def test_status_requests_are_started_together(authed, monkeypatch):
+    started = []
+    ready = None
+
+    async def fake(self, method, path, **kwargs):
+        nonlocal ready
+        if ready is None:
+            ready = asyncio.Event()
+        started.append(path)
+        if len(started) == 8:
+            ready.set()
+        await asyncio.wait_for(ready.wait(), 1)
+        return {"path": path}
+
+    monkeypatch.setattr(OpenVikingClient, "request", fake)
+    response = authed.get("/api/openviking/status")
+    assert response.status_code == 200
+    assert response.json()["queue"] == {"path": "/api/v1/observer/queue"}
+    assert response.json()["tasks"] == {"path": "/api/v1/tasks"}

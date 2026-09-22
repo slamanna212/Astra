@@ -197,3 +197,40 @@ def test_unauthenticated_request_rejected(make_client: Callable[..., TestClient]
     client = make_client(hermes_home=hermes_home_with_logs)
     resp = client.get("/api/logs", params={"file": "agent.log"})
     assert resp.status_code == 401
+
+
+@pytest.mark.parametrize("level,search", [
+    (None, None), ("warning", None), (None, "agent"), ("info", "auxiliary"),
+    (None, "REDACTED"), (None, "sk-ant-abcdefghijklmnop"), (None, "no matches"),
+])
+@pytest.mark.parametrize("limit", [1, 2, 200])
+def test_tail_preserves_filter_order_redaction_and_truncation(
+    hermes_home_with_logs: Path, level: str | None, search: str | None, limit: int,
+) -> None:
+    expected = [logsmod.parse_line(raw) for raw in AGENT_LOG.rstrip("\n").split("\n")]
+    expected = [e for e in expected if (not level or e.level == level.upper())
+                and (not search or search.lower() in e.raw.lower())]
+    tail = logsmod.tail_log(hermes_home_with_logs / "logs", "agent.log", lines=limit, level=level, search=search)
+    assert tail.lines == expected[-limit:]
+    assert tail.truncated == (len(expected) > limit)
+
+
+def test_tail_stops_parsing_after_extra_match(hermes_home_with_logs: Path, monkeypatch) -> None:
+    original = logsmod.parse_line
+    parsed = []
+
+    def count(raw):
+        parsed.append(raw)
+        return original(raw)
+
+    monkeypatch.setattr(logsmod, "parse_line", count)
+    tail = logsmod.tail_log(hermes_home_with_logs / "logs", "agent.log", lines=2)
+    assert tail.truncated
+    assert len(parsed) == 3
+
+
+def test_tail_normalizes_warn_and_keeps_partial_final_line(tmp_path: Path) -> None:
+    (tmp_path / "agent.log").write_text("2026-09-15 00:00:00,000 WARN x: first\n2026-09-15 00:00:00,001 WARNING x: last")
+    tail = logsmod.tail_log(tmp_path, "agent.log", lines=2, level="warning")
+    assert [e.message for e in tail.lines] == ["first", "last"]
+    assert not tail.truncated

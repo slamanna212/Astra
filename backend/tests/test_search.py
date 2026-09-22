@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import sqlite3
+
+import pytest
 from fastapi.testclient import TestClient
 
-from astra.search import SNIPPET_END, SNIPPET_START, sanitize_query
+from astra.db import Schema
+from astra.search import SNIPPET_END, SNIPPET_START, SearchParams, sanitize_query, search_messages
 
 
 def test_sanitize_query_strips_operators() -> None:
@@ -87,3 +91,42 @@ def test_snippet_markers_are_sentinel_not_html() -> None:
     assert "<mark>" not in SNIPPET_START
     assert SNIPPET_START != "<mark>"
     assert SNIPPET_END != "</mark>"
+
+
+@pytest.mark.parametrize("sources", [(), ("cli",)])
+def test_rank_pagination_matches_bm25_even_with_changed_fts_default(sources) -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.executescript("""
+            CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, display_name TEXT,
+                                   source TEXT, last_activity_at REAL, started_at REAL);
+            CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT,
+                                   timestamp REAL, content TEXT, tool_name TEXT, tool_calls TEXT);
+            CREATE VIRTUAL TABLE messages_fts USING fts5(content, tool_name, tool_calls,
+                                                       content='messages', content_rowid='id');
+            INSERT INTO sessions VALUES ('a', 'A', NULL, 'cli', 1, 1), ('b', 'B', NULL, 'web', 1, 1);
+        """)
+        conn.executemany("INSERT INTO messages VALUES (?, ?, 'assistant', 1, ?, NULL, NULL)", [
+            (i, "a" if i % 2 else "b", "needle " * (i % 5 + 1) + "filler " * (i % 7))
+            for i in range(1, 41)
+        ])
+        conn.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
+        conn.execute("INSERT INTO messages_fts(messages_fts, rank) VALUES ('rank', 'bm25(0.0)')")
+        source_filter = " AND s.source = 'cli'" if sources else ""
+        expected = [r[0] for r in conn.execute(
+            "SELECT m.id FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid "
+            "JOIN sessions s ON s.id = m.session_id WHERE messages_fts MATCH 'needle'"
+            + source_filter + " ORDER BY bm25(messages_fts)"
+        )]
+        found = []
+        cursor = None
+        while True:
+            page = search_messages(conn, Schema({}), SearchParams(q="needle", limit=3, cursor=cursor, sources=sources))
+            found.extend(hit.message_id for hit in page.items)
+            cursor = page.next_cursor
+            if cursor is None:
+                break
+        assert found == expected
+    finally:
+        conn.close()

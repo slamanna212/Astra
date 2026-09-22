@@ -151,22 +151,25 @@ def tail_log(
     if raw_lines and raw_lines[-1] == "":
         raw_lines = raw_lines[:-1]
 
-    entries = [parse_line(ln) for ln in raw_lines]
-
     level_norm = level.upper() if level else None
     search_norm = search.lower() if search else None
-    if level_norm or search_norm:
-        filtered = []
-        for e in entries:
-            if level_norm and (e.level or "").upper() != level_norm:
+    entries: list[LogEntry] = []
+    window_truncated = byte_truncated
+    # Work backward and stop after one extra match, which preserves the truncation flag.
+    # Search still runs on redacted text, so a secret can never be used as a search oracle.
+    for raw in reversed(raw_lines):
+        if level_norm:
+            match = _LINE_RE.match(raw)
+            raw_level = match.group("level") if match else None
+            if ("WARNING" if raw_level == "WARN" else raw_level) != level_norm:
                 continue
-            if search_norm and search_norm not in e.raw.lower():
-                continue
-            filtered.append(e)
-        entries = filtered
-
-    window_truncated = byte_truncated or len(entries) > lines
-    if len(entries) > lines:
-        entries = entries[-lines:]
+        entry = parse_line(raw)
+        if search_norm and search_norm not in entry.raw.lower():
+            continue
+        if len(entries) == lines:
+            window_truncated = True
+            break
+        entries.append(entry)
+    entries.reverse()
 
     return LogTail(file=file, lines=entries, truncated=window_truncated, total_bytes=total_bytes, mtime=mtime)
