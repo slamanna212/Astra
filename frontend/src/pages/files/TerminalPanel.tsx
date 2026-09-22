@@ -1,5 +1,5 @@
 import { ActionIcon, Group, Text, Tooltip } from '@mantine/core';
-import { IconPlugConnected, IconRefresh, IconX } from '@tabler/icons-react';
+import { IconPlugConnected, IconRefresh, IconTerminal2, IconX } from '@tabler/icons-react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
@@ -152,6 +152,7 @@ export default function TerminalPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className={classes.root}>
       <Group className={classes.header} gap="xs" wrap="nowrap">
+        <IconTerminal2 size={15} stroke={1.7} color="var(--astra-text-dim)" style={{ flexShrink: 0 }} aria-hidden />
         <Text size="xs" fw={600}>
           Terminal
         </Text>

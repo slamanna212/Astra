@@ -1,6 +1,6 @@
-import { Alert, Badge, Button, Center, Group, Loader, Paper, Stack, Switch, Tabs, Text, Textarea, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Center, Group, Loader, Menu, Paper, Stack, Switch, Tabs, Text, Textarea, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconAlertCircle, IconFileText, IconTrash } from '@tabler/icons-react';
+import { IconAlertCircle, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -83,15 +83,22 @@ export default function SkillDetail() {
             disabled={toggle.isPending}
             onChange={(event) => toggle.mutate(event.currentTarget.checked)}
           />
-          <Button
-            color="red"
-            variant="subtle"
-            size="xs"
-            leftSection={<IconTrash size={15} />}
-            loading={remove.isPending}
-            onClick={() => { if (window.confirm(`Delete skill “${skill.name}” and its directory?`)) remove.mutate(); }}
-          >Delete</Button>
-          <IconFileText size={22} color="var(--astra-text-dim)" />
+          <Menu position="bottom-end" shadow="md" width={190}>
+            <Menu.Target>
+              <ActionIcon aria-label="More skill actions">
+                <IconDotsVertical size={17} stroke={1.7} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                color="red"
+                leftSection={remove.isPending ? <Loader size={14} /> : <IconTrash size={15} />}
+                onClick={() => { if (window.confirm(`Delete skill “${skill.name}” and its directory?`)) remove.mutate(); }}
+              >
+                Delete skill
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
       </Group>
 

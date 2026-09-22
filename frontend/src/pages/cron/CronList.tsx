@@ -1,21 +1,39 @@
-import { ActionIcon, Badge, Center, Group, Loader, Modal, Stack, Text, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Center, Group, Loader, Modal, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconPlus } from '@tabler/icons-react';
+import { IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { createCronJob, listCronJobs } from '../../api/cron';
 import { queryKeys } from '../../api/queryKeys';
 import type { CronJob } from '../../api/types';
 import { useNow } from '../../hooks/useNow';
-import { deliveryLabel, humanSchedule, jobStateBadge, lastRunBadge } from '../../lib/cron';
+import { deliveryLabel, humanSchedule, jobStateBadge } from '../../lib/cron';
 import { formatRelativeTime } from '../../lib/format';
 import classes from './CronList.module.css';
 import { CronForm } from './CronForm';
 
-function CronRow({ job, active, now }: { job: CronJob; active: boolean; now: number }) {
+/** The row's own badge stays quiet for the common healthy case (matches the mock: only a
+    paused/error/failing job earns a badge) — repeating "Scheduled" on every row is noise
+    the detail header already carries. */
+function CronRowBadge({ job }: { job: CronJob }) {
+  if (job.failure_streak > 0) {
+    return (
+      <Badge color="red" size="sm" variant="light">
+        {job.failure_streak} failure{job.failure_streak === 1 ? '' : 's'}
+      </Badge>
+    );
+  }
   const state = jobStateBadge(job);
-  const lastRun = lastRunBadge(job);
+  if (state.label === 'Scheduled') return null;
+  return (
+    <Badge color={state.color} size="sm" variant="light">
+      {state.label}
+    </Badge>
+  );
+}
+
+function CronRow({ job, active, now }: { job: CronJob; active: boolean; now: number }) {
   const nextRun = job.next_run_at ? Date.parse(job.next_run_at) / 1000 : null;
   return (
     <Link to={`/cron/${encodeURIComponent(job.id)}`} className={classes.row} data-active={active || undefined}>
@@ -23,23 +41,11 @@ function CronRow({ job, active, now }: { job: CronJob; active: boolean; now: num
         <Text size="sm" fw={500} truncate="end">
           {job.name}
         </Text>
-        <Badge color={state.color} size="sm" variant="light">
-          {state.label}
-        </Badge>
+        <CronRowBadge job={job} />
       </Group>
-      <Text component="span" ff="monospace" fz={11} c="dimmed" truncate="end">
-        {humanSchedule(job)} · {deliveryLabel(job.deliver)}
+      <Text component="span" fz={11} c="dimmed" truncate="end">
+        {nextRun ? `Next ${formatRelativeTime(nextRun, now)}` : 'No next run'} · {humanSchedule(job)} · {deliveryLabel(job.deliver)}
       </Text>
-      <Group justify="space-between" wrap="nowrap" gap="xs">
-        <Text component="span" ff="monospace" fz={11} c="dimmed">
-          {nextRun ? `Next ${formatRelativeTime(nextRun, now)}` : 'No next run'}
-        </Text>
-        {lastRun && (
-          <Badge color={lastRun.color} size="xs" variant="light">
-            {lastRun.label}
-          </Badge>
-        )}
-      </Group>
     </Link>
   );
 }
@@ -49,6 +55,7 @@ export function CronList({ selectedId }: { selectedId: string | undefined }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: queryKeys.cron.list(),
     queryFn: ({ signal }) => listCronJobs(signal),
@@ -64,26 +71,36 @@ export function CronList({ selectedId }: { selectedId: string | undefined }) {
     onError: (error) => notifications.show({ color: 'red', title: 'Could not create task', message: error.message }),
   });
 
+  const filtered = useMemo(() => {
+    const items = query.data?.items ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((job) => job.name.toLowerCase().includes(q));
+  }, [query.data, search]);
+
   return (
     <Stack gap={0} h="100%">
-      <Group
-        justify="space-between"
-        px="md"
-        py="sm"
-        style={{ borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}
-      >
-        <Title order={3}>Scheduled tasks</Title>
-        <Group gap="xs">
-          {query.data && (
-            <Text ff="monospace" fz={11} c="dimmed">
-              {query.data.items.length}
-            </Text>
-          )}
-          <Tooltip label="Create scheduled task">
-            <ActionIcon aria-label="Create scheduled task" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon>
-          </Tooltip>
+      <Stack gap="xs" px="md" py="sm" style={{ borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}>
+        <Group justify="space-between">
+          <Title order={3}>Scheduled tasks</Title>
+          <Group gap="xs">
+            {query.data && (
+              <Text fz={11} c="dimmed">
+                {query.data.items.length} task{query.data.items.length === 1 ? '' : 's'}
+              </Text>
+            )}
+            <Tooltip label="Create scheduled task">
+              <ActionIcon aria-label="Create scheduled task" onClick={() => setCreating(true)}><IconPlus size={16} /></ActionIcon>
+            </Tooltip>
+          </Group>
         </Group>
-      </Group>
+        <TextInput
+          placeholder="Search tasks…"
+          leftSection={<IconSearch size={14} />}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+        />
+      </Stack>
       <div className={classes.scroller}>
         {query.isLoading && (
           <Center py="xl">
@@ -95,12 +112,12 @@ export function CronList({ selectedId }: { selectedId: string | undefined }) {
             {query.error.message}
           </Text>
         )}
-        {query.data?.items.map((job) => (
+        {filtered.map((job) => (
           <CronRow key={job.id} job={job} active={job.id === selectedId} now={now} />
         ))}
-        {query.data && query.data.items.length === 0 && (
+        {query.data && filtered.length === 0 && (
           <Text c="dimmed" size="sm" p="md">
-            No scheduled tasks.
+            {search ? 'No matching tasks.' : 'No scheduled tasks.'}
           </Text>
         )}
       </div>

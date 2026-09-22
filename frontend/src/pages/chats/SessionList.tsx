@@ -1,12 +1,25 @@
-import { Badge, Button, Center, Group, Loader, MultiSelect, Stack, Text, UnstyledButton } from '@mantine/core';
-import { IconArchive, IconArrowLeft, IconEyeOff, IconPlus, IconStarFilled } from '@tabler/icons-react';
+import { ActionIcon, Badge, Button, Center, Group, Loader, Menu, MultiSelect, Stack, Text, UnstyledButton } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import {
+  IconArchive,
+  IconArrowLeft,
+  IconCopy,
+  IconDotsVertical,
+  IconEyeOff,
+  IconPencil,
+  IconPin,
+  IconPinFilled,
+  IconPlus,
+  IconStarFilled,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { getChildSessions } from '../../api/messages';
 import { queryKeys } from '../../api/queryKeys';
-import { countArchivedSessions, createSession, getSession, listSessions, SESSION_PAGE_SIZE } from '../../api/sessions';
+import { countArchivedSessions, createSession, deleteSession, getSession, listSessions, SESSION_PAGE_SIZE, updateSession } from '../../api/sessions';
 import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
 import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
@@ -23,9 +36,96 @@ const LOAD_MORE_THRESHOLD = 10;
 
 const SOURCE_OPTIONS = KNOWN_SOURCES.map((s) => ({ value: s, label: s }));
 
+/** The row's own overflow menu: same actions as the conversation header, minus Download —
+    there's no room in a 44px row for a separate download trigger, and downloading a
+    conversation you haven't opened yet is a rare enough need to live in the header only. */
+function SessionRowMenu({ session, active }: { session: SessionSummary; active: boolean }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const patch = useMutation({
+    mutationFn: (body: Parameters<typeof updateSession>[1]) => updateSession(session.id, body),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.sessions.detail(session.id), updated);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.lists() });
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () => deleteSession(session.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      if (active) navigate('/chats', { replace: true });
+    },
+  });
+
+  const stop = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  return (
+    <Menu position="bottom-end" shadow="md" width={200} withinPortal>
+      <Menu.Target>
+        <ActionIcon
+          size={26}
+          variant="subtle"
+          color="gray"
+          className={classes.rowMenuTrigger}
+          aria-label="Conversation actions"
+          onClick={stop}
+        >
+          <IconDotsVertical size={15} stroke={1.7} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown onClick={stop}>
+        <Menu.Label>Conversation</Menu.Label>
+        <Menu.Item
+          leftSection={<IconPencil size={15} />}
+          onClick={() => {
+            const title = window.prompt('Conversation title', session.title ?? '');
+            if (title !== null) patch.mutate({ title });
+          }}
+        >
+          Rename
+        </Menu.Item>
+        <Menu.Item
+          leftSection={session.pinned ? <IconPinFilled size={15} color="var(--astra-accent)" /> : <IconPin size={15} />}
+          onClick={() => patch.mutate({ pinned: !session.pinned })}
+        >
+          {session.pinned ? 'Unpin' : 'Pin'}
+        </Menu.Item>
+        <Menu.Item leftSection={<IconArchive size={15} />} onClick={() => patch.mutate({ archived: !session.archived })}>
+          {session.archived ? 'Unarchive' : 'Archive'}
+        </Menu.Item>
+        <Menu.Item leftSection={<IconEyeOff size={15} />} onClick={() => patch.mutate({ hidden: !session.hidden })}>
+          {session.hidden ? 'Unhide' : 'Hide from list'}
+        </Menu.Item>
+        <Menu.Item
+          leftSection={<IconCopy size={15} />}
+          onClick={() => {
+            void navigator.clipboard.writeText(session.id);
+            notifications.show({ color: 'teal', message: 'Session ID copied' });
+          }}
+        >
+          Copy session ID
+        </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item
+          color="red"
+          leftSection={remove.isPending ? <Loader size={14} /> : <IconTrash size={15} />}
+          onClick={() => {
+            if (window.confirm('Delete this conversation and its messages? This cannot be undone.')) remove.mutate();
+          }}
+        >
+          Delete conversation
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 const SessionRow = memo(function SessionRow({ session, active, now }: { session: SessionSummary; active: boolean; now: number }) {
   const lastActivity = session.last_activity_at ?? session.started_at;
-  const showStatus = session.pinned || session.archived || session.hidden;
+  const showStatus = session.archived || session.hidden;
   return (
     <UnstyledButton
       component={Link}
@@ -38,6 +138,11 @@ const SessionRow = memo(function SessionRow({ session, active, now }: { session:
       data-testid="session-row"
     >
       <span className={classes.dot} style={{ background: `var(--mantine-color-${sourceColor(session.source)}-6)` }} aria-hidden />
+      {session.pinned && (
+        <span role="img" aria-label="Pinned" title="Pinned" className={classes.pinIcon}>
+          <IconStarFilled size={11} color="var(--astra-accent)" aria-hidden />
+        </span>
+      )}
       <Text
         size="sm"
         fw={400}
@@ -52,16 +157,8 @@ const SessionRow = memo(function SessionRow({ session, active, now }: { session:
           {session.child_count}
         </Badge>
       )}
-      <Text component="span" className={classes.age} title={formatDateTime(lastActivity)}>
-        {formatCompactAge(lastActivity, now)}
-      </Text>
       {showStatus && (
         <span className={classes.statusIcons}>
-          {session.pinned && (
-            <span role="img" aria-label="Pinned" title="Pinned">
-              <IconStarFilled size={11} color="var(--astra-accent)" aria-hidden />
-            </span>
-          )}
           {session.archived && (
             <span role="img" aria-label="Archived" title="Archived">
               <IconArchive size={12} color="var(--astra-text-dim)" aria-hidden />
@@ -74,6 +171,14 @@ const SessionRow = memo(function SessionRow({ session, active, now }: { session:
           )}
         </span>
       )}
+      <span className={classes.trailingSlot}>
+        <Text component="span" className={classes.age} title={formatDateTime(lastActivity)}>
+          {formatCompactAge(lastActivity, now)}
+        </Text>
+        <span className={classes.rowMenuSlot}>
+          <SessionRowMenu session={session} active={active} />
+        </span>
+      </span>
     </UnstyledButton>
   );
 });

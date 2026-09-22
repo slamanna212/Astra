@@ -28,9 +28,57 @@
 
 .controlRow {
   align-items: center;
+  row-gap: 8px;
 }
 
-/* ---- model pill trigger ---- */
+/* ---- model + effort: one borderless control, two segments ---- */
+
+.pillGroup {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 8px;
+  background: var(--astra-hover);
+  overflow: hidden;
+}
+
+.groupTrigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  min-width: 0;
+  max-width: 160px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--astra-transition);
+  font: inherit;
+  font-weight: 600;
+}
+
+.groupTrigger:hover:not(:disabled) {
+  background: var(--astra-divider);
+}
+
+.groupTrigger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.groupTrigger + .groupTrigger {
+  border-left: 1px solid var(--astra-border);
+}
+
+.effortTrigger {
+  font-weight: 400;
+  color: var(--astra-text-dim);
+}
+
+/* ---- standalone bordered pill (busy-turn-mode selector, shown only while running) ---- */
 
 .pill {
   display: flex;
@@ -57,20 +105,7 @@
   cursor: default;
 }
 
-.pillProvider {
-  font-family: var(--astra-font-mono);
-  font-size: 11px;
-  color: var(--astra-text-dim);
-}
-
-.pillSlash {
-  font-family: var(--astra-font-mono);
-  font-size: 11px;
-  color: var(--astra-border-strong);
-}
-
 .pillModel {
-  font-family: var(--astra-font-mono);
   font-size: 12px;
   color: var(--astra-text);
   min-width: 0;

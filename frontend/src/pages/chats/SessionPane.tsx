@@ -1,6 +1,22 @@
-import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Menu, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Code, Divider, Group, Loader, Menu, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconChevronDown, IconDownload, IconFileCode, IconFileText, IconGitBranch, IconRefresh } from '@tabler/icons-react';
+import {
+  IconArchive,
+  IconArrowLeft,
+  IconCopy,
+  IconDotsVertical,
+  IconDownload,
+  IconEyeOff,
+  IconFileCode,
+  IconFileText,
+  IconGitBranch,
+  IconPencil,
+  IconPin,
+  IconPinFilled,
+  IconRefresh,
+  IconStarFilled,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -564,16 +580,9 @@ export default function SessionPane() {
   };
 
   const back = (
-    <Button
-      component={Link}
-      to="/chats"
-      variant="subtle"
-      size="xs"
-      leftSection={<IconArrowLeft size={14} />}
-      hiddenFrom="sm"
-    >
-      All chats
-    </Button>
+    <ActionIcon component={Link} to="/chats" variant="subtle" color="gray" hiddenFrom="sm" aria-label="Back to all chats">
+      <IconArrowLeft size={18} stroke={1.8} />
+    </ActionIcon>
   );
 
   if (query.isPending) {
@@ -607,35 +616,54 @@ export default function SessionPane() {
         pb="sm"
         style={{ flexShrink: 0, borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}
       >
-        {back}
-        <Group gap="xs" wrap="nowrap" align="flex-start">
+        <Group gap="xs" wrap="nowrap" align="center">
+          {back}
           {s.pinned && (
-            <Text component="span" c="sand" fz={14} style={{ marginTop: 2 }} aria-label="Pinned">
-              ★
-            </Text>
+            <IconStarFilled size={14} color="var(--astra-accent)" style={{ flexShrink: 0 }} aria-label="Pinned" />
           )}
-          <Text fz={14} fw={600} style={{ minWidth: 0, overflowWrap: 'anywhere', flex: 1 }}>
+          <Text fz={14} fw={600} truncate="end" style={{ minWidth: 0, flex: 1 }}>
             {sessionTitle(s)}
           </Text>
-          <Group gap={4} wrap="wrap" justify="flex-end">
-            <Button size="compact-xs" variant="subtle" onClick={() => {
-              const title = window.prompt('Conversation title', s.title ?? '');
-              if (title !== null) patchSession.mutate({ title });
-            }}>Rename</Button>
-            <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ pinned: !s.pinned })}>{s.pinned ? 'Unpin' : 'Pin'}</Button>
-            <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ archived: !s.archived })}>{s.archived ? 'Unarchive' : 'Archive'}</Button>
-            <Button size="compact-xs" variant="subtle" onClick={() => patchSession.mutate({ hidden: !s.hidden })}>{s.hidden ? 'Unhide' : 'Hide'}</Button>
-            <Menu position="bottom-end" shadow="md" width={190}>
+          <Group gap={4} wrap="nowrap" justify="flex-end" visibleFrom="sm">
+            <Tooltip label="Rename">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                onClick={() => {
+                  const title = window.prompt('Conversation title', s.title ?? '');
+                  if (title !== null) patchSession.mutate({ title });
+                }}
+                aria-label="Rename conversation"
+              >
+                <IconPencil size={17} stroke={1.7} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={s.pinned ? 'Unpin' : 'Pin'}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                c={s.pinned ? 'var(--astra-accent)' : undefined}
+                onClick={() => patchSession.mutate({ pinned: !s.pinned })}
+                aria-label={s.pinned ? 'Unpin conversation' : 'Pin conversation'}
+              >
+                {s.pinned ? <IconPinFilled size={17} /> : <IconPin size={17} stroke={1.7} />}
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={s.archived ? 'Unarchive' : 'Archive'}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                onClick={() => patchSession.mutate({ archived: !s.archived })}
+                aria-label={s.archived ? 'Unarchive conversation' : 'Archive conversation'}
+              >
+                <IconArchive size={17} stroke={1.7} />
+              </ActionIcon>
+            </Tooltip>
+            <Menu position="bottom-end" shadow="md">
               <Menu.Target>
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  leftSection={<IconDownload size={13} />}
-                  rightSection={<IconChevronDown size={11} />}
-                  loading={exportingFormat !== null}
-                >
-                  Download
-                </Button>
+                <ActionIcon variant="subtle" color="gray" loading={exportingFormat !== null} aria-label="Download conversation">
+                  <IconDownload size={17} stroke={1.7} />
+                </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>Download conversation</Menu.Label>
@@ -650,21 +678,84 @@ export default function SessionPane() {
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
-            <Button size="compact-xs" color="red" variant="subtle" disabled={running} loading={removeSession.isPending} onClick={() => {
-              if (window.confirm('Delete this conversation and its messages? This cannot be undone.')) removeSession.mutate();
-            }}>Delete</Button>
           </Group>
+          <Divider orientation="vertical" mx={2} visibleFrom="sm" />
+          <Menu position="bottom-end" shadow="md" width={200}>
+            <Menu.Target>
+              <ActionIcon aria-label="More conversation actions">
+                <IconDotsVertical size={17} stroke={1.7} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Box hiddenFrom="sm">
+                <Menu.Item
+                  leftSection={<IconPencil size={15} />}
+                  onClick={() => {
+                    const title = window.prompt('Conversation title', s.title ?? '');
+                    if (title !== null) patchSession.mutate({ title });
+                  }}
+                >
+                  Rename
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={s.pinned ? <IconPinFilled size={15} color="var(--astra-accent)" /> : <IconPin size={15} />}
+                  onClick={() => patchSession.mutate({ pinned: !s.pinned })}
+                >
+                  {s.pinned ? 'Unpin' : 'Pin'}
+                </Menu.Item>
+                <Menu.Item leftSection={<IconArchive size={15} />} onClick={() => patchSession.mutate({ archived: !s.archived })}>
+                  {s.archived ? 'Unarchive' : 'Archive'}
+                </Menu.Item>
+                <Menu.Divider />
+                <Menu.Label>Download</Menu.Label>
+                <Menu.Item leftSection={<IconFileCode size={15} />} onClick={() => void downloadConversation('json')}>
+                  JSON
+                </Menu.Item>
+                <Menu.Item leftSection={<IconFileText size={15} />} onClick={() => void downloadConversation('markdown')}>
+                  Markdown
+                </Menu.Item>
+                <Menu.Item leftSection={<IconFileText size={15} />} onClick={() => void downloadConversation('pdf')}>
+                  PDF
+                </Menu.Item>
+                <Menu.Divider />
+              </Box>
+              <Menu.Label>Conversation</Menu.Label>
+              <Menu.Item leftSection={<IconEyeOff size={15} />} onClick={() => patchSession.mutate({ hidden: !s.hidden })}>
+                {s.hidden ? 'Unhide' : 'Hide from list'}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconCopy size={15} />}
+                onClick={() => {
+                  void navigator.clipboard.writeText(s.id);
+                  notifications.show({ color: 'teal', message: 'Session ID copied' });
+                }}
+              >
+                Copy session ID
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item
+                color="red"
+                disabled={running}
+                leftSection={removeSession.isPending ? <Loader size={14} /> : <IconTrash size={15} />}
+                onClick={() => {
+                  if (window.confirm('Delete this conversation and its messages? This cannot be undone.')) removeSession.mutate();
+                }}
+              >
+                Delete conversation
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
         <Group gap="sm" wrap="wrap">
           <SourceBadge source={s.source} size="sm" />
           <Badge size="sm" color={connection === 'live' ? 'green' : 'sand'} variant="light">{connection}</Badge>
           {s.model && (
-            <Text ff="monospace" fz={11} c="dimmed">
+            <Text fz={11} c="dimmed">
               {s.model}
             </Text>
           )}
           <Tooltip label={`${formatTokens(s.input_tokens)} in · ${formatTokens(s.output_tokens)} out`}>
-            <Text ff="monospace" fz={11} c="dimmed">
+            <Text fz={11} c="dimmed">
               {formatCount(s.message_count)} msgs · {formatCost(s.estimated_cost_usd)}
             </Text>
           </Tooltip>

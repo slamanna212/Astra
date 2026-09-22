@@ -57,6 +57,11 @@
   flex-shrink: 0;
 }
 
+.pinIcon {
+  display: flex;
+  flex-shrink: 0;
+}
+
 .title {
   flex: 1;
   min-width: 0;
@@ -64,35 +69,79 @@
 
 .meta {
   flex-shrink: 0;
-  font-family: var(--astra-font-mono);
-  font-size: var(--astra-label-size);
+  font-size: 11px;
   color: var(--astra-text-dim);
 }
 
 .age {
   composes: meta;
-  width: 34px;
+  width: 100%;
   text-align: right;
+  opacity: 1;
+  transition: opacity var(--astra-transition);
 }
 
-/* Pinned/archived/hidden indicators: hidden until the row is hovered or active, so the
-   common case (none of them true) never crowds the title/count/age line. */
-.statusIcons {
-  position: absolute;
-  right: 14px;
-  top: 0;
-  bottom: 0;
+/* Fixed-width trailing slot: age (idle) and the row's overflow menu (hover/touch) occupy
+   the same space rather than shifting row width, so every row stays 44px and single-line. */
+.trailingSlot {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 100%;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding-left: 8px;
+  justify-content: flex-end;
+}
+
+.rowMenuSlot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   opacity: 0;
   transition: opacity var(--astra-transition);
-  /* The row tints (hover/selected) are translucent, so layer the row's tint over the list
-     surface — a plain surface fill shows up as a mismatched block around the icons. */
+  /* Same tint-blend trick as .statusIcons: the row's hover/selected tint is translucent, so
+     layer it under the trigger rather than painting a mismatched solid patch. */
   background:
     linear-gradient(to right, transparent, var(--row-tint, transparent) 40%),
     linear-gradient(to right, transparent, var(--astra-surface) 40%);
+}
+
+.row:hover .age,
+.row:focus-within .age,
+.trailingSlot:has([aria-expanded='true']) .age {
+  opacity: 0;
+}
+
+.row:hover .rowMenuSlot,
+.row:focus-within .rowMenuSlot,
+.rowMenuSlot:has([aria-expanded='true']) {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .age {
+    display: none;
+  }
+
+  .rowMenuSlot {
+    position: static;
+    opacity: 1;
+    background: none;
+  }
+}
+
+/* Archived/hidden indicators: hidden until the row is hovered or active, so the common case
+   (neither true) never crowds the title/count/age line. A normal flex item (not an overlay)
+   so it never collides with the trailing age/menu slot's own space. */
+.statusIcons {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--astra-transition);
 
   .row:hover &,
   .row[data-active] & {

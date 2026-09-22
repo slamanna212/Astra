@@ -160,6 +160,7 @@ export function FileBrowser({
               component="button"
               type="button"
               size="sm"
+              ff="monospace"
               truncate="end"
               fw={i === crumbs.length - 1 ? 600 : 400}
               c={i === crumbs.length - 1 ? undefined : 'dimmed'}

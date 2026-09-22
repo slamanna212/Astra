@@ -1,6 +1,6 @@
-import { Badge, Button, Center, Code, Group, Loader, Modal, Paper, Stack, Tabs, Text, Title } from '@mantine/core';
+import { ActionIcon, Badge, Button, Center, Code, Group, Loader, Menu, Modal, Paper, Stack, Tabs, Text, Title, Tooltip, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconEdit, IconPlayerPlay, IconTrash } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronRight, IconCopy, IconDotsVertical, IconEdit, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -23,18 +23,33 @@ function isoOrDash(value: unknown): string {
   return Number.isNaN(parsed) ? value : formatDateTime(parsed / 1000);
 }
 
+/** A field whose natural shape is JSON stays hidden behind this toggle — mono/raw payloads
+    are for debugging, not the primary reading surface. */
+function RawJsonToggle({ value }: { value: unknown }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Stack gap={4}>
+      <UnstyledButton onClick={() => setOpen((v) => !v)} className={classes.rawJsonToggle}>
+        {open ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}
+        Raw JSON
+      </UnstyledButton>
+      {open && (
+        <Code block fz="xs">
+          {JSON.stringify(value, null, 2)}
+        </Code>
+      )}
+    </Stack>
+  );
+}
+
 function FieldValue({ job, field }: { job: CronJob; field: string }) {
   const value = job[field];
 
   if (field === 'schedule') {
     return (
-      <Stack gap={2}>
+      <Stack gap={4}>
         <Text size="sm">{humanSchedule(job)}</Text>
-        {value != null && (
-          <Code block fz="xs">
-            {JSON.stringify(value, null, 2)}
-          </Code>
-        )}
+        {value != null && <RawJsonToggle value={value} />}
       </Stack>
     );
   }
@@ -66,11 +81,7 @@ function FieldValue({ job, field }: { job: CronJob; field: string }) {
   }
   if (value === null || value === undefined || value === '') return <Text size="sm" c="dimmed">—</Text>;
   if (typeof value === 'object') {
-    return (
-      <Code block fz="xs">
-        {JSON.stringify(value, null, 2)}
-      </Code>
-    );
+    return <RawJsonToggle value={value} />;
   }
   if (typeof value === 'boolean') {
     return (
@@ -185,17 +196,44 @@ export default function CronDetail() {
               {job.failure_streak} failure{job.failure_streak === 1 ? '' : 's'} in a row
             </Badge>
           )}
-          <Button size="xs" variant="default" leftSection={<IconEdit size={15} />} onClick={() => setEditing(true)}>Edit</Button>
-          <Button size="xs" variant="default" onClick={() => toggle.mutate()} loading={toggle.isPending}>{job.enabled ? 'Pause' : 'Resume'}</Button>
           <Button size="xs" leftSection={<IconPlayerPlay size={15} />} onClick={() => run.mutate()} loading={run.isPending}>Run now</Button>
-          <Button
-            size="xs"
-            color="red"
-            variant="subtle"
-            leftSection={<IconTrash size={15} />}
-            loading={remove.isPending}
-            onClick={() => { if (window.confirm(`Delete “${job.name}”? This cannot be undone.`)) remove.mutate(); }}
-          >Delete</Button>
+          <Tooltip label="Edit">
+            <ActionIcon variant="subtle" color="gray" onClick={() => setEditing(true)} aria-label="Edit task">
+              <IconEdit size={17} stroke={1.7} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={job.enabled ? 'Pause' : 'Resume'}>
+            <ActionIcon variant="subtle" color="gray" onClick={() => toggle.mutate()} loading={toggle.isPending} aria-label={job.enabled ? 'Pause task' : 'Resume task'}>
+              {job.enabled ? <IconPlayerPause size={17} stroke={1.7} /> : <IconPlayerPlay size={17} stroke={1.7} />}
+            </ActionIcon>
+          </Tooltip>
+          <Menu position="bottom-end" shadow="md" width={190}>
+            <Menu.Target>
+              <ActionIcon aria-label="More task actions">
+                <IconDotsVertical size={17} stroke={1.7} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Task</Menu.Label>
+              <Menu.Item
+                leftSection={<IconCopy size={15} />}
+                onClick={() => {
+                  void navigator.clipboard.writeText(job.id);
+                  notifications.show({ color: 'teal', message: 'Task ID copied' });
+                }}
+              >
+                Copy task ID
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item
+                color="red"
+                leftSection={remove.isPending ? <Loader size={14} /> : <IconTrash size={15} />}
+                onClick={() => { if (window.confirm(`Delete “${job.name}”? This cannot be undone.`)) remove.mutate(); }}
+              >
+                Delete task
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
       </Group>
 

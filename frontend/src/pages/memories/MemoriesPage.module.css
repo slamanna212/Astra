@@ -5,4 +5,6 @@
 .search { flex: 1; }
 .breakText { overflow-wrap: anywhere; font-family: var(--astra-font-mono); font-size: 11px; }
 .statusCode { max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rawJsonToggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--astra-text-dim); transition: color var(--astra-transition); }
+.rawJsonToggle:hover { color: var(--astra-text-body); }
 @media (max-width: 48em) { .root { grid-template-columns: 1fr; } .browser { border-right: 0; border-bottom: 1px solid var(--astra-border); } }

@@ -5,13 +5,32 @@
 
 .fieldGrid {
   display: grid;
-  grid-template-columns: 12rem 1fr;
-  gap: 0.5rem 1rem;
+  grid-template-columns: 9rem 1fr 9rem 1fr;
+  gap: 0.65rem 1.5rem;
   align-items: start;
 }
 
-@media (max-width: 48em) {
+@media (max-width: 60em) {
+  .fieldGrid {
+    grid-template-columns: 9rem 1fr;
+  }
+}
+
+@media (max-width: 36em) {
   .fieldGrid {
     grid-template-columns: 1fr;
   }
+}
+
+.rawJsonToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--astra-text-dim);
+  transition: color var(--astra-transition);
+}
+
+.rawJsonToggle:hover {
+  color: var(--astra-text-body);
 }

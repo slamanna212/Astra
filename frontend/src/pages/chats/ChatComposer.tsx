@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
-import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
+import { IconArrowUp, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
@@ -209,7 +209,7 @@ export function ChatComposer({
           </Group>
         )}
         {uploadError && <Text c="red" fz="xs">{uploadError}</Text>}
-        <Group gap={8} wrap="nowrap" className={classes.controlRow}>
+        <Group gap={8} wrap="wrap" className={classes.controlRow}>
           <FileButton onChange={handleAttach}>
             {(props) => (
               <Tooltip label="Attach a workspace file">
@@ -220,11 +220,10 @@ export function ChatComposer({
             )}
           </FileButton>
 
+          <Box className={classes.pillGroup}>
           <Menu opened={menuOpened} onChange={(opened) => (opened ? openMenu() : closeMenu())} position="top-start" offset={8} radius="md" trapFocus>
             <Menu.Target>
-              <button type="button" className={classes.pill} aria-label="Model" disabled={running}>
-                <span className={classes.pillProvider}>{provider ?? '—'}</span>
-                <span className={classes.pillSlash}>/</span>
+              <button type="button" className={classes.groupTrigger} aria-label="Model" disabled={running}>
                 <span className={classes.pillModel}>{model ?? '—'}</span>
                 <IconChevronDown size={13} className={classes.pillChevron} />
               </button>
@@ -289,9 +288,10 @@ export function ChatComposer({
 
           <Menu position="top-start" offset={8} radius="md">
             <Menu.Target>
-              <button type="button" className={`${classes.pill} ${classes.effortPill}`} aria-label="Reasoning effort" disabled={running}>
-                <IconBrain size={14} className={classes.pillChevron} />
-                <span className={classes.pillModel}>{reasoningEffort ?? 'default'}</span>
+              <button type="button" className={`${classes.groupTrigger} ${classes.effortTrigger}`} aria-label="Reasoning effort" disabled={running}>
+                <span className={classes.pillModel}>
+                  {reasoningEffort ? `${reasoningEffort[0]!.toUpperCase()}${reasoningEffort.slice(1)} effort` : 'Default effort'}
+                </span>
                 <IconChevronDown size={13} className={classes.pillChevron} />
               </button>
             </Menu.Target>
@@ -309,6 +309,7 @@ export function ChatComposer({
               </Menu.RadioGroup>
             </Menu.Dropdown>
           </Menu>
+          </Box>
 
           {running && (
             <>
@@ -357,9 +358,17 @@ export function ChatComposer({
             </Button>
           )}
           <ContextRing tokens={contextTokens} contextLength={contextLength} estimated={contextEstimated} />
-          <Button h={30} onClick={() => void submit()} aria-label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}>
-            {running ? BUSY_MODE_LABELS[busyTurnMode] : 'Send'}
-          </Button>
+          <Tooltip label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}>
+            <ActionIcon
+              size={32}
+              radius="xl"
+              variant="filled"
+              onClick={() => void submit()}
+              aria-label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}
+            >
+              <IconArrowUp size={18} stroke={2.2} />
+            </ActionIcon>
+          </Tooltip>
         </Group>
       </Box>
     </Box>

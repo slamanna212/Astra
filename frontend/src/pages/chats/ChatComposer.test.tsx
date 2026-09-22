@@ -91,7 +91,7 @@ describe('ChatComposer', () => {
     await user.click(screen.getByRole('button', { name: 'Reasoning effort' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'high' }));
 
-    expect(screen.getByRole('button', { name: 'Reasoning effort' })).toHaveTextContent('high');
+    expect(screen.getByRole('button', { name: 'Reasoning effort' })).toHaveTextContent('High effort');
   });
 
   it('runs /compact locally with an optional focus topic', async () => {

@@ -24,7 +24,7 @@ function SkillRow({ skill, active }: { skill: SkillSummary; active: boolean }) {
         </Text>
         {!skill.enabled && (
           <Badge size="xs" color="gray" variant="outline">
-            disabled
+            off
           </Badge>
         )}
       </Group>

@@ -1,10 +1,10 @@
 import {
   Alert, Badge, Button, Card, Code, Group, Loader, ScrollArea, SegmentedControl,
-  SimpleGrid, Stack, Tabs, Text, TextInput, Textarea, Title,
+  SimpleGrid, Stack, Tabs, Text, TextInput, Textarea, Title, UnstyledButton,
 } from '@mantine/core';
-import { IconAlertCircle, IconFileText, IconFolder, IconSearch } from '@tabler/icons-react';
+import { IconAlertCircle, IconChevronDown, IconChevronRight, IconFileText, IconFolder, IconSearch } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   getOpenVikingContent, getOpenVikingHealth, getOpenVikingStat, getOpenVikingStatus,
   getOpenVikingTree, getWorkingMemory, saveWorkingMemory, searchOpenViking,
@@ -115,20 +115,42 @@ function SearchResults({ data }: { data: Awaited<ReturnType<typeof searchOpenVik
   </Stack>;
 }
 
-function StatusValue({ value }: { value: unknown }) {
-  if (isEmpty(value)) return <Text size="sm" c="dimmed">Checked — no records reported.</Text>;
-  if (typeof value !== 'object') return <Text size="sm">{String(value)}</Text>;
-  return <Code block className={classes.statusCode}>{JSON.stringify(value, null, 2)}</Code>;
+/** Every OpenViking status field is backend-opaque (typed `unknown`) — this reduces whatever
+    shape shows up to one short tile value; the exact payload stays behind the card's Raw JSON
+    toggle for debugging. */
+function summarizeStatusValue(value: unknown): string {
+  if (isEmpty(value)) return '—';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string') return value.length > 40 ? `${value.slice(0, 40)}…` : value;
+  if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? 'item' : 'items'}`;
+  const record = value as Record<string, unknown>;
+  for (const key of ['count', 'total', 'length', 'size']) {
+    if (typeof record[key] === 'number') return String(record[key]);
+  }
+  const keys = Object.keys(record);
+  return keys.length === 0 ? '—' : `${keys.length} field${keys.length === 1 ? '' : 's'}`;
+}
+
+function StatusTile({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div>
+      <Text size="xs" c="dimmed">{label}</Text>
+      <Text size="lg" fw={600}>{summarizeStatusValue(value)}</Text>
+    </div>
+  );
 }
 
 export default function MemoriesPage() {
   const [uri, setUri] = useState(ROOT);
   const [file, setFile] = useState<string | null>(null);
   const [contentOffset, setContentOffset] = useState(0);
+  const [treeFilter, setTreeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<'fast' | 'deep'>('fast');
   const [working, setWorking] = useState('memory');
   const [draft, setDraft] = useState<string | null>(null);
+  const [showRawStatus, setShowRawStatus] = useState(false);
   const queryClient = useQueryClient();
   const tree = useQuery({ queryKey: queryKeys.openviking.tree(uri), queryFn: ({ signal }) => getOpenVikingTree(uri, signal) });
   const content = useQuery({
@@ -142,12 +164,18 @@ export default function MemoriesPage() {
   const save = useMutation({ mutationFn: () => saveWorkingMemory(working, draft ?? workingFiles.data?.files[working] ?? ''), onSuccess: () => { setDraft(null); queryClient.invalidateQueries({ queryKey: ['memory', 'files'] }); } });
   const runSearch = useMutation({ mutationFn: () => searchOpenViking({ query: search, mode, target_uri: mode === 'fast' ? uri : undefined }) });
   const choose = (node: OpenVikingNode) => {
-    if (isDirectory(node)) { setUri(node.uri); setFile(null); }
+    if (isDirectory(node)) { setUri(node.uri); setFile(null); setTreeFilter(''); }
     else setFile(node.uri);
     setContentOffset(0);
   };
   const workingValue = draft ?? workingFiles.data?.files[working] ?? '';
   const documentText = displayText(content.data?.content);
+  const treeItems = useMemo(() => {
+    const items = tree.data?.items ?? [];
+    const q = treeFilter.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((node) => nodeName(node).toLowerCase().includes(q));
+  }, [tree.data, treeFilter]);
 
   return <Tabs defaultValue="inspector" className={classes.tabs}>
     <Tabs.List><Tabs.Tab value="inspector">OpenViking inspector</Tabs.Tab><Tabs.Tab value="working">Working memory</Tabs.Tab></Tabs.List>
@@ -155,12 +183,22 @@ export default function MemoriesPage() {
       <section className={classes.browser}>
         <Title order={3}>OpenViking</Title>
         <Text size="xs" c="dimmed" mt={4} className={classes.breakText}>{uri}</Text>
-        <Button size="xs" variant="subtle" mt="xs" onClick={() => { setUri(parentVikingUri(uri)); setFile(null); setContentOffset(0); }} disabled={uri === 'viking://'}>Up one level</Button>
-        <ScrollArea h="calc(100vh - 250px)" mt="sm">
+        <Button size="xs" variant="subtle" mt="xs" onClick={() => { setUri(parentVikingUri(uri)); setFile(null); setContentOffset(0); setTreeFilter(''); }} disabled={uri === 'viking://'}>Up one level</Button>
+        <TextInput
+          mt="sm"
+          placeholder="Search memories…"
+          leftSection={<IconSearch size={14} />}
+          value={treeFilter}
+          onChange={(e) => setTreeFilter(e.currentTarget.value)}
+        />
+        <ScrollArea h="calc(100vh - 300px)" mt="sm">
           {tree.isLoading && <Loader size="sm" />}
           {tree.isError && <Alert color="red" icon={<IconAlertCircle />}>{errorText(tree.error)}</Alert>}
           {tree.data?.items.length === 0 && <Alert color="gray" title="Directory checked">This directory is empty.</Alert>}
-          <Stack gap={2}>{tree.data?.items.map((node) => <NodeRow key={node.uri} node={node} selected={file === node.uri} onChoose={() => choose(node)} />)}</Stack>
+          {tree.data && tree.data.items.length > 0 && treeItems.length === 0 && (
+            <Alert color="gray" title="No matches">No items match “{treeFilter}”.</Alert>
+          )}
+          <Stack gap={2}>{treeItems.map((node) => <NodeRow key={node.uri} node={node} selected={file === node.uri} onChoose={() => choose(node)} />)}</Stack>
         </ScrollArea>
       </section>
       <section className={classes.content}>
@@ -189,15 +227,27 @@ export default function MemoriesPage() {
           {runSearch.data && <SearchResults data={runSearch.data} />}
         </Card>
         <Card withBorder mt="md">
-          <Group justify="space-between"><Title order={4}>OpenViking status</Title>{health.data && <Badge color="green">Live</Badge>}</Group>
+          <Group justify="space-between">
+            <Title order={4}>OpenViking status</Title>
+            <Group gap="xs">
+              {health.data && <Badge color="green">Live</Badge>}
+              {status.data && (
+                <UnstyledButton onClick={() => setShowRawStatus((v) => !v)} className={classes.rawJsonToggle}>
+                  {showRawStatus ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}
+                  Raw JSON
+                </UnstyledButton>
+              )}
+            </Group>
+          </Group>
           {health.isLoading && <Loader size="sm" mt="sm" />}
           {health.isError && <Alert mt="sm" color="red" icon={<IconAlertCircle />} title="Backend unreachable">{errorText(health.error)}</Alert>}
           {health.data && <Text size="xs" c="dimmed" mt={4}>Liveness confirmed by /health and observer/system. The unreliable /ready endpoint is not used.</Text>}
           {status.isLoading && <Loader size="sm" mt="sm" />}
           {status.isError && <Alert mt="sm" color="sand" title="Live, but status details failed">OpenViking responded to its liveness checks, but observer details could not be loaded.</Alert>}
-          {status.data && <SimpleGrid cols={{ base: 1, sm: 2 }} mt="sm">
-            {([['Queue depth', status.data.queue], ['Lock conflicts', status.data.lock], ['Vector database', status.data.vikingdb], ['Model usage', status.data.models], ['Retrieval quality', status.data.retrieval], ['Memory census', status.data.memories], ['Recent tasks', status.data.tasks], ['System', status.data.system]] as const).map(([label, value]) => <Card key={label} withBorder padding="sm"><Text fw={700} size="sm" mb={4}>{label}</Text><StatusValue value={value} /></Card>)}
+          {status.data && <SimpleGrid cols={{ base: 2, sm: 4 }} mt="sm" spacing="md">
+            {([['Queue depth', status.data.queue], ['Lock conflicts', status.data.lock], ['Vector database', status.data.vikingdb], ['Model usage', status.data.models], ['Retrieval quality', status.data.retrieval], ['Memory census', status.data.memories], ['Recent tasks', status.data.tasks], ['System', status.data.system]] as const).map(([label, value]) => <StatusTile key={label} label={label} value={value} />)}
           </SimpleGrid>}
+          {status.data && showRawStatus && <Code block mt="sm" className={classes.statusCode}>{JSON.stringify(status.data, null, 2)}</Code>}
         </Card>
       </section>
     </div></Tabs.Panel>

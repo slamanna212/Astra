@@ -41,7 +41,6 @@
 }
 
 .meta {
-  font-family: var(--astra-font-mono);
   font-size: 11px;
   color: var(--astra-text-dim);
 }
