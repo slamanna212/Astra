@@ -10,8 +10,11 @@ import { queryKeys } from '../../../api/queryKeys';
 import type { Message } from '../../../api/types';
 import type { SkillCommandExchange } from '../../../lib/skillSlashCommand';
 import { buildToolResultIndex } from '../../../lib/transcript';
+import { scrollBehavior } from '../../../lib/motion';
 import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
 import { MessageRow } from './MessageRow';
+import { isLiveAnswerCanonical, type LiveTurn } from '../../../lib/liveTurn';
+import { LiveTurnRow } from './LiveTurnRow';
 import { SkillCommandResult } from './SkillCommandResult';
 import classes from './Transcript.module.css';
 
@@ -24,6 +27,7 @@ interface PageParam {
 type Row =
   | { key: string; kind: 'loader-top' | 'loader-bottom' }
   | { key: string; kind: 'message'; message: Message }
+  | { key: string; kind: 'live'; turn: LiveTurn }
   | { key: string; kind: 'skill-command'; exchange: SkillCommandExchange };
 
 const NEAR_EDGE_PX = 400;
@@ -41,6 +45,7 @@ export const Transcript = memo(function Transcript({
   sessionCostUsd = null,
   activityDisplayMode = 'transparent_stream',
   skillCommands = EMPTY_SKILL_COMMANDS,
+  liveTurn = null,
 }: {
   sessionId: string;
   highlightMessageId?: number;
@@ -52,6 +57,7 @@ export const Transcript = memo(function Transcript({
   sessionCostUsd?: number | null;
   activityDisplayMode?: ActivityDisplayMode;
   skillCommands?: SkillCommandExchange[];
+  liveTurn?: LiveTurn | null;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -100,8 +106,9 @@ export const Transcript = memo(function Transcript({
     for (const exchange of skillCommands) {
       list.push({ key: `skills-${exchange.id}`, kind: 'skill-command', exchange });
     }
+    if (liveTurn && !hasNextPage && !isLiveAnswerCanonical(messages, liveTurn)) list.push({ key: 'live-turn', kind: 'live', turn: liveTurn });
     return list;
-  }, [messages, hasPreviousPage, hasNextPage, skillCommands]);
+  }, [messages, hasPreviousPage, hasNextPage, skillCommands, liveTurn]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -154,14 +161,23 @@ export const Transcript = memo(function Transcript({
   }, [rows, highlightMessageId, virtualizer]);
 
   const [nearBottom, setNearBottom] = useState(true);
-  const lastSkillCommandId = skillCommands.at(-1)?.id;
+  const lastRowKey = rows.at(-1)?.key;
+  const lastRowSize = liveTurn ? `${liveTurn.answer.length}:${liveTurn.reasoning.length}:${liveTurn.events.length}` : '';
   useEffect(() => {
-    if (lastSkillCommandId === undefined) return;
+    if (!nearBottom || !didInitialScrollRef.current || prependingRef.current || highlightMessageId) return;
     requestAnimationFrame(() => {
       const el = scrollRef.current;
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      if (el) el.scrollTop = el.scrollHeight;
     });
-  }, [lastSkillCommandId]);
+  }, [lastRowKey, lastRowSize, nearBottom, highlightMessageId]);
+  const lastSkillCommandId = skillCommands.at(-1)?.id;
+  useEffect(() => {
+    if (lastSkillCommandId === undefined || !nearBottom) return;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
+    });
+  }, [lastSkillCommandId, nearBottom]);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -184,7 +200,7 @@ export const Transcript = memo(function Transcript({
       navigate(`/chats/${encodeURIComponent(sessionId)}`, { replace: true });
       return;
     }
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: scrollBehavior() });
   }, [hasNextPage, navigate, sessionId]);
 
   if (query.isPending) {
@@ -203,7 +219,7 @@ export const Transcript = memo(function Transcript({
       </Center>
     );
   }
-  if (messages.length === 0 && skillCommands.length === 0) {
+  if (messages.length === 0 && skillCommands.length === 0 && !liveTurn) {
     return (
       <Center h="100%">
         <Text c="dimmed" size="sm">
@@ -257,6 +273,7 @@ export const Transcript = memo(function Transcript({
                   />
                 )}
                 {row.kind === 'skill-command' && <SkillCommandResult exchange={row.exchange} />}
+                {row.kind === 'live' && <LiveTurnRow turn={row.turn} />}
               </div>
             </div>
           );

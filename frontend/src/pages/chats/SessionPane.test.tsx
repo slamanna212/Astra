@@ -7,10 +7,10 @@ import SessionPane from './SessionPane';
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('../../lib/refreshMessages', () => ({ refreshMessages: refresh }));
-vi.mock('./transcript/Transcript', () => ({ Transcript: () => <div>History</div> }));
+vi.mock('./transcript/Transcript', () => ({ Transcript: ({ liveTurn }: { liveTurn?: { userText: string | null; answer: string; state: string } | null }) => <div>History{liveTurn && <div data-testid="live-turn">{liveTurn.userText} {liveTurn.answer} {liveTurn.state}</div>}</div> }));
 vi.mock('./ChatComposer', () => ({
-  ChatComposer: ({ draft, onDraftChange, liveTps }: { draft: string; onDraftChange: (text: string) => void; liveTps: number | null }) => (
-    <><input aria-label="Draft" value={draft} onChange={(event) => onDraftChange(event.target.value)} /><output data-testid="tps">{liveTps ?? 'none'}</output></>
+  ChatComposer: ({ draft, onDraftChange, onSend, liveTps }: { draft: string; onDraftChange: (text: string) => void; onSend: (text: string) => Promise<void>; liveTps: number | null }) => (
+    <><input aria-label="Draft" value={draft} onChange={(event) => onDraftChange(event.target.value)} /><button onClick={() => void onSend(draft).catch(() => {})}>Send</button><output data-testid="tps">{liveTps ?? 'none'}</output></>
   ),
 }));
 
@@ -76,6 +76,85 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('conversation stream updates', () => {
+  it('marks the live turn as reconnecting when the stream drops', async () => {
+    const { stream } = await mount();
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Partial' }));
+    act(flushFrame);
+    act(() => stream.dispatchEvent(new Event('error')));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('reconnecting');
+  });
+
+  it('keeps a cancelled partial response until canonical history replaces it', async () => {
+    let finishRefresh!: () => void;
+    refresh.mockImplementationOnce(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    const { stream } = await mount();
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Cancelled partial' }));
+    act(flushFrame);
+    act(() => stream.emit('cancel', {}));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Cancelled partial');
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    await act(async () => finishRefresh());
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
+  });
+
+  it('preserves the draft and removes optimistic rows when sending fails', async () => {
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? Promise.resolve(jsonResponse({ detail: 'Rejected' }, 500))
+      : originalFetch(input as RequestInfo)));
+    await mount();
+    fireEvent.change(screen.getByLabelText('Draft'), { target: { value: 'Keep this' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('Draft')).toHaveValue('Keep this');
+  });
+
+  it('does not drop SSE answer deltas arriving before the send request resolves', async () => {
+    let resolveSend!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? new Promise<Response>((resolve) => { resolveSend = resolve; })
+      : originalFetch(input as RequestInfo)));
+    const { stream } = await mount();
+    fireEvent.change(screen.getByLabelText('Draft'), { target: { value: 'Race' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Early' }));
+    act(flushFrame);
+    await act(async () => resolveSend(jsonResponse({ status: 'started' })));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Race Early');
+  });
+
+  it('shows the optimistic exchange before the send request resolves', async () => {
+    let resolveSend!: (response: Response) => void;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((input: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? new Promise<Response>((resolve) => { resolveSend = resolve; })
+      : originalFetch(input as RequestInfo)));
+    await mount();
+    fireEvent.change(screen.getByLabelText('Draft'), { target: { value: 'Ask now' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Ask now');
+    expect(screen.getByLabelText('Draft')).toHaveValue('Ask now');
+    await act(async () => resolveSend(jsonResponse({ status: 'started' })));
+  });
+
+  it('keeps the partial response until canonical refresh finishes', async () => {
+    let finishRefresh!: () => void;
+    refresh.mockImplementationOnce(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    const { stream } = await mount();
+    act(() => stream.emit('started', { operation: 'chat' }));
+    act(() => stream.emit('delta', { text: 'Partial' }));
+    act(flushFrame);
+    act(() => stream.emit('done', {}));
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Partial');
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    await act(async () => finishRefresh());
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
+  });
+
   it('batches text and TPS together and incrementally refreshes an observed chat turn', async () => {
     const { stream, queryClient } = await mount();
     expect(refresh).not.toHaveBeenCalled();
@@ -86,7 +165,7 @@ describe('conversation stream updates', () => {
     expect(screen.getByTestId('tps')).toHaveTextContent('none');
     expect(frames.size).toBe(1);
     act(flushFrame);
-    expect(screen.getByText('Hello world')).toBeInTheDocument();
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Hello world');
     expect(screen.getByTestId('tps')).toHaveTextContent('20');
     act(() => stream.emit('delta', { text: '!', tps: 30 }));
     act(() => stream.emit('done', {}));
@@ -142,6 +221,6 @@ describe('conversation stream updates', () => {
     act(() => stream.emit('delta', { text: 'Next response' }));
     act(flushFrame);
     await act(async () => finishRefresh());
-    expect(screen.getByText('Next response')).toBeInTheDocument();
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Next response');
   });
 });

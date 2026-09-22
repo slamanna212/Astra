@@ -49,7 +49,7 @@ import { filterAndGroupSkills, type SkillCommandExchange } from '../../lib/skill
 import { refreshMessages } from '../../lib/refreshMessages';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
-import { LiveTurnActivity } from './LiveTurnActivity';
+import type { LiveTurn } from '../../lib/liveTurn';
 
 const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
 
@@ -77,7 +77,9 @@ export default function SessionPane() {
     sessionId,
     messages: loadBusyTurnQueue(sessionId),
   }));
-  const [liveEvents, setLiveEvents] = useState<LiveActivityEvent[]>([]);
+  const [liveTurn, setLiveTurn] = useState<{ sessionId: string; turn: LiveTurn } | null>(null);
+  const liveTurnRef = useRef<LiveTurn | null>(null);
+  const sendingRef = useRef(false);
   const [compaction, setCompaction] = useState<{ phase: 'running' | 'done'; message: string } | null>(null);
   const [turnError, setTurnError] = useState<{ message: string; recoveryAvailable: boolean } | null>(null);
   const [skillCommandState, setSkillCommandState] = useState<{ sessionId: string; items: SkillCommandExchange[] }>({
@@ -159,13 +161,15 @@ export default function SessionPane() {
           ...(recovered?.streaming ? [{ kind: 'assistant' as const, text: recovered.streaming }] : []),
         ];
     runningRef.current = recovered !== null;
+    sendingRef.current = false;
+    liveTurnRef.current = recovered ? { userText: null, answer: recovered.streaming, reasoning: recovered.reasoning, events: liveEventsRef.current, state: 'reconnecting' } : null;
+    setLiveTurn(liveTurnRef.current ? { sessionId, turn: liveTurnRef.current } : null);
     lastEventIdRef.current = recovered?.lastEventId ?? 0;
     pendingText.current = '';
     pendingReasoning.current = '';
     pendingLiveEvents.current = [];
     pendingTps.current = null;
     // Synchronize React with session-scoped browser recovery state when the route changes.
-    setLiveEvents(liveEventsRef.current);
     setRunning(runningRef.current);
     setShowRecoveryBanner(recovered !== null);
     setCompaction(null);
@@ -208,11 +212,14 @@ export default function SessionPane() {
         const additions = pendingLiveEvents.current;
         pendingLiveEvents.current = [];
         liveEventsRef.current = appendLiveActivity(liveEventsRef.current, additions);
-        setLiveEvents(liveEventsRef.current);
       }
       if (pendingTps.current !== null) {
         setLiveTps(pendingTps.current);
         pendingTps.current = null;
+      }
+      if (liveTurnRef.current) {
+        liveTurnRef.current = { ...liveTurnRef.current, answer: streamingRef.current, reasoning: reasoningRef.current, events: liveEventsRef.current };
+        setLiveTurn({ sessionId, turn: liveTurnRef.current });
       }
       schedulePersist();
     };
@@ -246,13 +253,18 @@ export default function SessionPane() {
       setApproval(null);
       clearChatRecovery(sessionId);
       setShowRecoveryBanner(false);
+      if (liveTurnRef.current) {
+        liveTurnRef.current = { ...liveTurnRef.current, state: 'finishing' };
+        setLiveTurn({ sessionId, turn: liveTurnRef.current });
+      }
       const finishedVersion = turnVersion;
       void refreshCanonical(reconcile).then((refreshed) => {
         if (!refreshed || disposed || runningRef.current || turnVersion !== finishedVersion) return;
         streamingRef.current = '';
         reasoningRef.current = '';
         liveEventsRef.current = [];
-        setLiveEvents([]);
+        liveTurnRef.current = null;
+        setLiveTurn(null);
       });
     };
     const finish = (event: Event) => {
@@ -303,8 +315,12 @@ export default function SessionPane() {
           });
         }
         // A missed terminal frame is recovered from durable canonical history.
-        if (!state.running && needsRecovery) terminal(true);
+        if (!state.running && needsRecovery && !sendingRef.current) terminal(true);
         else if (state.running) {
+          if (liveTurnRef.current) {
+            liveTurnRef.current = { ...liveTurnRef.current, state: 'running' };
+            setLiveTurn({ sessionId, turn: liveTurnRef.current });
+          }
           if (reconnecting || recovered !== null) {
             reconcileTurn = true;
             void refreshCanonical(true);
@@ -321,15 +337,18 @@ export default function SessionPane() {
         observedIdle = false;
         runningRef.current = true;
         setTurnState({ sessionId, known: true });
-        streamingRef.current = '';
-        reasoningRef.current = '';
-        liveEventsRef.current = [];
-        pendingText.current = '';
-        pendingReasoning.current = '';
-        pendingLiveEvents.current = [];
+        if (!sendingRef.current) {
+          streamingRef.current = '';
+          reasoningRef.current = '';
+          liveEventsRef.current = [];
+          pendingText.current = '';
+          pendingReasoning.current = '';
+          pendingLiveEvents.current = [];
+        }
+        liveTurnRef.current = { userText: liveTurnRef.current?.userText ?? null, answer: streamingRef.current, reasoning: reasoningRef.current, events: liveEventsRef.current, state: 'running' };
+        setLiveTurn({ sessionId, turn: liveTurnRef.current });
         pendingTps.current = null;
         setRunning(true);
-        setLiveEvents([]);
         setShowRecoveryBanner(false);
         setLiveTps(null);
         setTurnTps(null);
@@ -365,6 +384,8 @@ export default function SessionPane() {
       }));
       currentSource.addEventListener('status', tracked((event) => {
         const payload = JSON.parse((event as MessageEvent).data) as { kind?: string; message?: string };
+        pendingLiveEvents.current.push({ kind: 'status', data: { message: payload.message ?? payload.kind ?? 'Status' } });
+        schedule();
         if (payload.kind === 'compacting') {
           reconcileTurn = true;
           setCompaction({ phase: 'running', message: payload.message || 'Compacting context…' });
@@ -398,6 +419,10 @@ export default function SessionPane() {
         currentSource.close();
         if (disposed || source !== currentSource || retryTimer !== null) return;
         setConnection('reconnecting');
+        if (liveTurnRef.current) {
+          liveTurnRef.current = { ...liveTurnRef.current, state: 'reconnecting' };
+          setLiveTurn({ sessionId, turn: liveTurnRef.current });
+        }
         reconnecting = true;
         reconcileTurn = true;
         const index = Math.min(attempt, CHAT_RECONNECT_DELAYS_MS.length - 1);
@@ -433,21 +458,38 @@ export default function SessionPane() {
   const start = useCallback(async (text: string) => {
     clearChatRecovery(sessionId);
     setShowRecoveryBanner(false);
-    await sendChat(sessionId, {
-      message: text,
-      model: selectedModel,
-      provider: selectedProvider,
-      reasoning_effort: reasoningEffort,
-    });
+    sendingRef.current = true;
     streamingRef.current = '';
     reasoningRef.current = '';
     liveEventsRef.current = [];
     pendingText.current = '';
     pendingReasoning.current = '';
     pendingLiveEvents.current = [];
+    liveTurnRef.current = { userText: text, answer: '', reasoning: '', events: [], state: 'sending' };
+    setLiveTurn({ sessionId, turn: liveTurnRef.current });
+    try {
+      await sendChat(sessionId, {
+        message: text,
+        model: selectedModel,
+        provider: selectedProvider,
+        reasoning_effort: reasoningEffort,
+      });
+    } catch (error) {
+      if (liveTurnRef.current?.userText === text && liveTurnRef.current.state === 'sending') {
+        liveTurnRef.current = null;
+        setLiveTurn(null);
+      }
+      setTurnError({ message: error instanceof Error ? error.message : 'Could not send message.', recoveryAvailable: false });
+      throw error;
+    } finally {
+      sendingRef.current = false;
+    }
     runningRef.current = true;
     setTurnState({ sessionId, known: true });
-    setLiveEvents([]);
+    if (liveTurnRef.current?.state === 'sending') {
+      liveTurnRef.current = { ...liveTurnRef.current, state: 'running' };
+      setLiveTurn({ sessionId, turn: liveTurnRef.current });
+    }
     setTurnError(null);
     setCompaction(null);
     setRunning(true);
@@ -820,6 +862,7 @@ export default function SessionPane() {
             sessionCostUsd={s.estimated_cost_usd}
             activityDisplayMode={prefs.activityDisplayMode}
             skillCommands={skillCommands}
+            liveTurn={liveTurn?.sessionId === sessionId ? liveTurn.turn : null}
           />
         </Box>
       </Box>
@@ -844,7 +887,6 @@ export default function SessionPane() {
             </Group>
           </Alert>
         )}
-        <LiveTurnActivity events={liveEvents} mode={prefs.activityDisplayMode} />
         {liveTps !== null && (
           <Text fz={11} c="dimmed" ff="monospace" px="sm">
             {formatTps(liveTps)}

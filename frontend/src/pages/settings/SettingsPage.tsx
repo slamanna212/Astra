@@ -84,7 +84,7 @@ export default function SettingsPage() {
             ]}
           />
           <Text size="xs" c="dimmed">
-            Transparent stream shows thinking, tool calls, results, and response text in execution order. Compact worklog groups operational details.
+            This setting applies to saved tool calls in the transcript. Live responses stay in-thread; their recent agent activity is available in the closed-by-default workspace.
           </Text>
           <Text size="sm" c="dimmed" mt="sm">
             While Hermes is responding

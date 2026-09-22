@@ -172,7 +172,9 @@ export function ChatComposer({
     const references = attachments.map((path) => `[Attached workspace file: ${path}]`).join('\n');
     const value = [references, draft.trim()].filter(Boolean).join('\n\n');
     if (!value) return;
-    if (!running) await onSend(value);
+    if (!running) {
+      try { await onSend(value); } catch { return; } // Parent renders the send error; leave draft and attachments intact.
+    }
     else if (busyTurnMode === 'queue') await onQueue(value);
     else if (busyTurnMode === 'interrupt') await onInterrupt(value);
     else await onSteer(value);
