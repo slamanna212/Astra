@@ -463,6 +463,9 @@ class ChatModelOption(BaseModel):
 class ChatOptions(BaseModel):
     default_model: str | None = None
     default_provider: str | None = None
+    # Model/provider this session last ran a main-loop turn on (falls back to its first route).
+    session_model: str | None = None
+    session_provider: str | None = None
     models: list[ChatModelOption]
     providers: list[str]
 

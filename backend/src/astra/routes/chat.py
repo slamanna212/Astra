@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -61,9 +62,22 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
     default_provider = model_config.get("provider") if isinstance(model_config.get("provider"), str) else None
 
     def recent_values(conn):
-        row = conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        row = conn.execute("SELECT model, billing_provider FROM sessions WHERE id = ?", (session_id,)).fetchone()
         if row is None:
             return None
+        # `sessions.model` only keeps the first accounted route; the latest main-loop route
+        # (task = '') lives in session_model_usage, which older state.db files may lack.
+        last_route = None
+        try:
+            last_route = conn.execute(
+                "SELECT model, billing_provider FROM session_model_usage"
+                " WHERE session_id = ? AND task = '' AND model != ''"
+                " ORDER BY last_seen DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            pass
+        session_route = tuple(last_route or row)
         model_rows = conn.execute(
             "SELECT DISTINCT model, billing_provider FROM sessions"
             " WHERE model IS NOT NULL AND model != ''"
@@ -72,12 +86,14 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
         providers = [r[0] for r in conn.execute(
             "SELECT DISTINCT billing_provider FROM sessions WHERE billing_provider IS NOT NULL AND billing_provider != '' ORDER BY last_activity_at DESC LIMIT 20"
         )]
-        return model_rows, providers
+        return model_rows, providers, session_route
 
     values = await ctx.db.run(recent_values)
     if values is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    model_rows, providers = values
+    model_rows, providers, (session_model, session_provider) = values
+    session_model = session_model or None
+    session_provider = session_provider or None
 
     # `model` and `billing_provider` are independent columns; pairing distinct rows recovers the
     # actual provider a model was billed under last, rather than guessing from the model name.
@@ -98,6 +114,9 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
             # Alias values are "<provider>/<model>" (the model id itself may contain "/").
             if isinstance(alias_target, str) and "/" in alias_target:
                 provider_for[alias_name] = alias_target.split("/", 1)[0]
+                # Usage rows record the resolved model id; show the alias the user picked.
+                if session_model and alias_target == f"{session_provider}/{session_model}":
+                    session_model = alias_name
             else:
                 provider_for.setdefault(alias_name, None)
 
@@ -124,6 +143,9 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
             provider_for[default_model] = default_provider
         elif default_provider:
             provider_for[default_model] = default_provider
+    if session_model and session_model not in provider_for:
+        model_names.append(session_model)
+        provider_for[session_model] = session_provider
     if default_provider and default_provider not in providers:
         providers.insert(0, default_provider)
     # Every provider a model actually resolved to must have a group to render into.
@@ -132,6 +154,8 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
     return ChatOptions(
         default_model=default_model,
         default_provider=default_provider,
+        session_model=session_model,
+        session_provider=session_provider,
         models=[ChatModelOption(name=name, provider=provider_for.get(name)) for name in model_names],
         providers=providers,
     )

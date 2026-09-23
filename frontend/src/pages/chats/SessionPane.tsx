@@ -69,8 +69,8 @@ export default function SessionPane() {
   const [turnTps, setTurnTps] = useState<{ tps: number; outputTokens: number } | null>(null);
   const [draft, setDraft] = useComposerDraft(sessionId);
   const [exportingFormat, setExportingFormat] = useState<ConversationExportFormat | null>(null);
-  const [model, setModel] = useState<string | null | undefined>(undefined);
-  const [provider, setProvider] = useState<string | null | undefined>(undefined);
+  // `undefined` = no choice made in this session yet; `null` = explicit "use config default".
+  const [modelChoice, setModelChoice] = useState<{ sessionId: string; model?: string | null; provider?: string | null }>({ sessionId });
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const [queueState, setQueueState] = useState<{ sessionId: string; messages: QueuedTurnMessage[] }>(() => ({
     sessionId,
@@ -133,8 +133,14 @@ export default function SessionPane() {
     },
   });
 
-  const selectedModel = model === undefined ? (options.data?.default_model ?? null) : model;
-  const selectedProvider = provider === undefined ? (options.data?.default_provider ?? null) : provider;
+  const choice = modelChoice.sessionId === sessionId ? modelChoice : { sessionId };
+  const sessionModel = options.data?.session_model ?? null;
+  const selectedModel = choice.model === undefined ? (sessionModel ?? options.data?.default_model ?? null) : choice.model;
+  const selectedProvider = choice.provider === undefined
+    ? (sessionModel ? (options.data?.session_provider ?? null) : (options.data?.default_provider ?? null))
+    : choice.provider;
+  const setModel = (value: string | null) => setModelChoice((prev) => ({ ...(prev.sessionId === sessionId ? prev : { sessionId }), model: value }));
+  const setProvider = (value: string | null) => setModelChoice((prev) => ({ ...(prev.sessionId === sessionId ? prev : { sessionId }), provider: value }));
 
   useEffect(() => {
     let disposed = false;

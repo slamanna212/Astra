@@ -20,6 +20,8 @@ export interface ChatModelOption {
 export interface ChatOptions {
   default_model: string | null;
   default_provider: string | null;
+  session_model: string | null;
+  session_provider: string | null;
   models: ChatModelOption[];
   providers: string[];
 }

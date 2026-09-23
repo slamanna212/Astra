@@ -467,7 +467,7 @@ def test_chat_state_and_options_are_canonical_and_do_not_expose_keys(authed):
     options = authed.get(f"/api/chat/{session_id}/options")
     assert options.status_code == 200
     payload = options.json()
-    assert set(payload) == {"default_model", "default_provider", "models", "providers"}
+    assert set(payload) == {"default_model", "default_provider", "session_model", "session_provider", "models", "providers"}
     assert "api_key" not in options.text
     assert authed.get("/api/chat/not-a-session/state").status_code == 404
 
@@ -636,3 +636,22 @@ async def test_tool_progress_is_emitted_as_structured_fields(base_settings, monk
     assert isinstance(emitted[2][1]["arguments"], str) and len(emitted[2][1]["arguments"]) <= 4097
     assert emitted[3] == ("tool", {"args": ["something.new", "42"]})
     assert len(emitted) == 4
+
+
+def test_options_report_the_sessions_latest_main_loop_route(authed):
+    session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
+    db_path = authed.app.state.ctx.settings.paths.state_db
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO session_model_usage (session_id, model, billing_provider, task, last_seen)"
+            " VALUES (?, 'older-model', 'old-provider', '', 1), (?, 'latest-model', 'new-provider', '', 2),"
+            " (?, 'aux-model', 'aux-provider', 'title_generation', 3)",
+            (session_id, session_id, session_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    payload = authed.get(f"/api/chat/{session_id}/options").json()
+    assert (payload["session_model"], payload["session_provider"]) == ("latest-model", "new-provider")
+    assert {"name": "latest-model", "provider": "new-provider"} in payload["models"]

@@ -78,7 +78,7 @@ beforeEach(() => {
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
   vi.stubGlobal('fetch', vi.fn(async (input: unknown) => jsonResponse(
     String(input).endsWith('/options')
-      ? { default_model: 'test', default_provider: null, models: [], providers: [] }
+      ? { default_model: 'test', default_provider: null, session_model: null, session_provider: null, models: [], providers: [] }
       : session,
   )));
 });
