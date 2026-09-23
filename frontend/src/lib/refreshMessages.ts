@@ -11,12 +11,13 @@ export async function refreshMessages(
   client: QueryClient,
   sessionId: string,
   { reconcile = false, signal }: { reconcile?: boolean; signal?: AbortSignal } = {},
-): Promise<void> {
+): Promise<boolean> {
   const queryKey = queryKeys.messages.all(sessionId);
   if (reconcile) {
     await client.invalidateQueries({ queryKey }, { throwOnError: true });
-    return;
+    return true;
   }
+  let added = false;
 
   // Other cached views should reconcile when revisited; only the visible window needs updates now.
   await client.invalidateQueries({ queryKey, type: 'inactive', refetchType: 'none' });
@@ -34,6 +35,7 @@ export async function refreshMessages(
     const tail = data?.pages.at(-1);
     if (!tail || tail.newest_id === null) {
       await client.invalidateQueries({ queryKey: query.queryKey, exact: true }, { throwOnError: true });
+      added = true;
       return;
     }
     // A deep-linked window already has a newer-page affordance. Do not download the gap.
@@ -62,6 +64,7 @@ export async function refreshMessages(
       const last = current?.pages.at(-1);
       // A replacement fetch may have completed meanwhile. Never overwrite its newer snapshot.
       if (!current || !last || last.newest_id !== fromId || last.has_newer) return current;
+      added = true;
       const pages = current.pages.slice(0, -1);
       const pageParams = current.pageParams.slice();
       const items = [...last.items, ...additions];
@@ -81,4 +84,5 @@ export async function refreshMessages(
     });
   }));
   await client.invalidateQueries({ queryKey: queryKeys.messages.children(sessionId), exact: true });
+  return added;
 }

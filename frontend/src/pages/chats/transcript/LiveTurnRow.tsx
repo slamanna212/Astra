@@ -1,8 +1,9 @@
-import { Badge, Box, Button, Code, Group, Stack, Text, UnstyledButton } from '@mantine/core';
-import { IconChevronRight } from '@tabler/icons-react';
+import { Badge, Box, Button, Code, Group, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import type { LiveActivityEvent } from '../../../lib/liveActivity';
-import { deriveLivePhase, isWorkspaceActivity, type LiveTurn } from '../../../lib/liveTurn';
+import { deriveLivePhase, groupLiveActivity, isWorkspaceActivity, type LiveToolItem, type LiveTurn } from '../../../lib/liveTurn';
+import { formatToolArguments, toolArgumentPreview } from '../../../lib/toolDisplay';
+import { ToolCard, ToolSection } from './ToolCard';
 import classes from './Transcript.module.css';
 
 const MAX_REASONING = 4000;
@@ -24,30 +25,28 @@ function activityDetail(event: LiveActivityEvent): string {
 }
 
 function LiveActivityCard({ event }: { event: LiveActivityEvent }) {
-  const [opened, setOpened] = useState(false);
   return (
-    <Box className={classes.toolCard} mb={6}>
-      <UnstyledButton onClick={() => setOpened((value) => !value)} className={classes.toolCardHeader}>
-        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
-          <IconChevronRight
-            size={12}
-            color="var(--astra-text-dim)"
-            style={{ transform: opened ? 'rotate(90deg)' : undefined, transition: 'transform 120ms ease', flexShrink: 0 }}
-          />
-          <Badge size="xs" variant="light" color={event.kind === 'subagent' ? 'violet' : 'blue'} style={{ flexShrink: 0 }}>
-            {event.kind}
-          </Badge>
-          <Text component="span" className={classes.toolArgs} truncate="end" style={{ minWidth: 0 }}>
-            {activityLabel(event)}
-          </Text>
-        </Group>
-      </UnstyledButton>
-      {opened && (
-        <Box className={classes.toolCardBody}>
-          <Code block className={classes.toolCode}>{activityDetail(event) || '(no details)'}</Code>
-        </Box>
-      )}
-    </Box>
+    <ToolCard name={activityLabel(event)} kind={event.kind} preview="">
+      <Code block className={classes.toolCode}>{activityDetail(event) || '(no details)'}</Code>
+    </ToolCard>
+  );
+}
+
+function LiveToolCard({ item }: { item: LiveToolItem }) {
+  const args = formatToolArguments(item.arguments);
+  return (
+    <ToolCard
+      name={item.name}
+      preview={item.preview || toolArgumentPreview(item.arguments)}
+      status={item.status}
+      duration={item.duration}
+      warning={item.risk ? 'Hermes flagged this tool output as potentially risky' : null}
+    >
+      {args && <ToolSection label="Arguments">{args}</ToolSection>}
+      <ToolSection label="Result">
+        {item.result ?? <Text size="xs" c="dimmed">{item.status === 'running' ? 'Running…' : '(no output)'}</Text>}
+      </ToolSection>
+    </ToolCard>
   );
 }
 
@@ -60,7 +59,7 @@ export function LiveTurnRow({
 }) {
   const [reasoningOpen, setReasoningOpen] = useState(false);
   const phase = deriveLivePhase(turn);
-  const activities = turn.events.filter(isWorkspaceActivity);
+  const activities = groupLiveActivity(turn.events.filter(isWorkspaceActivity));
   return (
     <Stack gap="sm" aria-label="Current turn">
       {turn.userText !== null && (
@@ -84,8 +83,10 @@ export function LiveTurnRow({
           </Box>
         )}
         {activities.length > 0 && (
-          <Stack gap={0} mt="xs" aria-label="Current turn activity">
-            {activities.map((event, index) => <LiveActivityCard key={`${event.kind}-${index}`} event={event} />)}
+          <Stack gap={6} mt="xs" mb="xs" align="flex-start" aria-label="Current turn activity">
+            {activities.map((item, index) => (item.type === 'tool'
+              ? <LiveToolCard key={`tool-${index}`} item={item} />
+              : <LiveActivityCard key={`${item.event.kind}-${index}`} event={item.event} />))}
           </Stack>
         )}
         <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>

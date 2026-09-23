@@ -242,6 +242,63 @@ export default function SessionPane() {
       });
       return refreshQueue;
     };
+    // Hermes flushes the assistant/tool rows to state.db before announcing `tool.completed`, so
+    // each completion marks a point up to which the live stream is already durable. Pull those rows
+    // in and trim the live turn back to what came after the mark, so saved history takes over
+    // as soon as it exists instead of only at turn end.
+    let durableMark: { answer: number; reasoning: number; events: number; version: number } | null = null;
+    let midTurnTimer: ReturnType<typeof setTimeout> | null = null;
+    const syncDurable = () => {
+      midTurnTimer = null;
+      const mark = durableMark;
+      durableMark = null;
+      if (!mark || !runningRef.current || mark.version !== turnVersion) return;
+      const { version } = mark;
+      refreshQueue = refreshQueue.then(async () => {
+        if (disposed) return false;
+        let added: boolean;
+        try {
+          added = await refreshMessages(queryClient, sessionId, { signal: refreshController.signal });
+        } catch {
+          return true; // best effort; the end-of-turn refresh still reconciles
+        }
+        if (!added || disposed || !runningRef.current || turnVersion !== version) return true;
+        flush();
+        streamingRef.current = streamingRef.current.slice(mark.answer);
+        reasoningRef.current = reasoningRef.current.slice(mark.reasoning);
+        liveEventsRef.current = liveEventsRef.current.slice(mark.events);
+        if (durableMark) {
+          durableMark = {
+            ...durableMark,
+            answer: Math.max(0, durableMark.answer - mark.answer),
+            reasoning: Math.max(0, durableMark.reasoning - mark.reasoning),
+            events: Math.max(0, durableMark.events - mark.events),
+          };
+        }
+        if (liveTurnRef.current) {
+          liveTurnRef.current = {
+            ...liveTurnRef.current,
+            userText: null,
+            answer: streamingRef.current,
+            reasoning: reasoningRef.current,
+            events: liveEventsRef.current,
+          };
+          setLiveTurn({ sessionId, turn: liveTurnRef.current });
+        }
+        persist();
+        return true;
+      });
+    };
+    const markDurable = () => {
+      flush();
+      durableMark = {
+        answer: streamingRef.current.length,
+        reasoning: reasoningRef.current.length,
+        events: liveEventsRef.current.length,
+        version: turnVersion,
+      };
+      if (midTurnTimer === null) midTurnTimer = setTimeout(syncDurable, 250);
+    };
     // The sidebar's live dot polls; nudge it on turn transitions so this chat's dot flips now.
     const refreshActive = () => void queryClient.invalidateQueries({ queryKey: queryKeys.chat.active() });
     const terminal = (reconcile = reconcileTurn) => {
@@ -418,8 +475,10 @@ export default function SessionPane() {
         setApproval(null);
       }));
       currentSource.addEventListener('tool', tracked((event) => {
-        pendingLiveEvents.current.push({ kind: 'tool', data: parseLiveActivityData((event as MessageEvent).data) });
-        schedule();
+        const data = parseLiveActivityData((event as MessageEvent).data);
+        pendingLiveEvents.current.push({ kind: 'tool', data });
+        if (data.event === 'tool.completed') markDurable();
+        else schedule();
       }));
       currentSource.addEventListener('subagent', tracked((event) => {
         pendingLiveEvents.current.push({ kind: 'subagent', data: parseLiveActivityData((event as MessageEvent).data) });
@@ -492,6 +551,7 @@ export default function SessionPane() {
       source?.close();
       if (retryTimer !== null) clearTimeout(retryTimer);
       if (persistTimer !== null) clearTimeout(persistTimer);
+      if (midTurnTimer !== null) clearTimeout(midTurnTimer);
       if (runningRef.current) persist();
       if (raf.current !== null) cancelAnimationFrame(raf.current);
       raf.current = null;

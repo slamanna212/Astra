@@ -108,17 +108,50 @@
 }
 
 .toolCard {
+  /* Collapsed cards hug their content; an opened card takes the column for args/results. */
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid var(--astra-border);
   border-radius: var(--astra-radius);
   background-color: var(--astra-surface-sunk);
+}
+
+.toolCard[data-opened] {
+  width: 100%;
+}
+
+.toolCard[data-status='error'] {
+  border-color: var(--astra-danger-soft);
 }
 
 .toolCardHeader {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 7px 10px;
+  min-width: 0;
+  padding: 5px 10px 5px 8px;
   gap: 8px;
+  border-radius: var(--astra-radius);
+}
+
+.toolCardHeader:hover {
+  background-color: var(--astra-hover);
+}
+
+.toolChevron {
+  flex-shrink: 0;
+  color: var(--astra-text-dim);
+  transition: transform var(--astra-transition);
+}
+
+.toolChevron[data-opened] {
+  transform: rotate(90deg);
+}
+
+.toolIcon {
+  flex-shrink: 0;
+  color: var(--astra-text-dim);
 }
 
 .toolCardBody {
@@ -127,13 +160,34 @@
 }
 
 .toolName {
+  flex-shrink: 0;
   font-family: var(--astra-font-mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--astra-text-body);
+  white-space: nowrap;
 }
 
 .toolArgs {
+  min-width: 0;
+  font-family: var(--astra-font-mono);
+  font-size: 11.5px;
+  color: var(--astra-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 4px;
+}
+
+.toolDuration {
   font-family: var(--astra-font-mono);
   font-size: 11px;
   color: var(--astra-text-dim);

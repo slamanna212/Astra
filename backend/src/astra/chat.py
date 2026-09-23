@@ -122,6 +122,17 @@ def _supported(callable_obj: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in parameters or accepts_kwargs}
 
 
+def _json_safe_preview(value: Any, limit: int = 4096) -> Any:
+    """Return a JSON-serializable, size-bounded copy of callback data for the SSE stream."""
+    try:
+        text = json.dumps(value, default=str)
+    except (TypeError, ValueError):
+        return str(value)[:limit]
+    if len(text) <= limit:
+        return json.loads(text)
+    return text[:limit] + "…"
+
+
 def _load_chat_config(path: Path) -> dict[str, Any]:
     try:
         parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -817,9 +828,33 @@ class ChatManager:
         self._emit(turn, "status", {"kind": kind, "message": message[:1200]})
 
     def _tool_callback(self, turn: Turn, *args: Any, **kwargs: Any) -> None:
-        # Hermes callback shape changes between releases; preserve only JSON-safe summaries.
-        payload: dict[str, Any] = {"args": [str(item)[:4096] for item in args]}
-        payload.update({key: str(value)[:4096] for key, value in kwargs.items()})
+        # Hermes v0.21: (event_type, name, preview, args, **kwargs). Unknown shapes fall back to
+        # stringified positional args so nothing is silently lost if the signature drifts.
+        event = str(args[0]) if args else ""
+        if event in {"_thinking", "reasoning.available"}:
+            return  # reasoning already streams through its own callback
+        if not event.startswith("tool."):
+            payload: dict[str, Any] = {"args": [str(item)[:4096] for item in args]}
+            payload.update({key: str(value)[:4096] for key, value in kwargs.items()})
+            self._emit(turn, "tool", payload)
+            return
+        name, preview, tool_args = (list(args[1:4]) + [None, None, None])[:3]
+        payload = {"event": event, "name": str(name) if name is not None else None}
+        if preview:
+            payload["preview"] = str(preview)[:1024]
+        if tool_args is not None:
+            payload["arguments"] = _json_safe_preview(tool_args)
+        if "duration" in kwargs:
+            try:
+                payload["duration"] = round(float(kwargs["duration"]), 3)
+            except (TypeError, ValueError):
+                pass
+        if "is_error" in kwargs:
+            payload["is_error"] = bool(kwargs["is_error"])
+        if kwargs.get("result") is not None:
+            payload["result"] = str(kwargs["result"])[:4096]
+        if kwargs.get("risk_metadata") is not None:
+            payload["risk"] = _json_safe_preview(kwargs["risk_metadata"])
         self._emit(turn, "tool", payload)
 
     def _agent_event_callback(self, turn: Turn, name: Any, data: Any) -> None:

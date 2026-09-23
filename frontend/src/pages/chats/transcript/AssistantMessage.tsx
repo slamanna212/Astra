@@ -51,6 +51,7 @@ export function AssistantMessage({
       result={call.id ? toolResults.get(call.id) : undefined}
       callTimestamp={message.timestamp}
       childSessions={childSessions}
+      running={running}
     />
   ));
 

@@ -605,3 +605,34 @@ def test_regenerate_rewinds_selected_response_and_starts_replacement(
     assert calls["start"] == ("session-1", "Try this again", "test-model", "test-provider", "high")
     assert calls["rewind"][0:2] == ("session-1", 10)
     assert calls["rewind"][2]["expected_active_ids"] == [10, 11]
+
+
+@pytest.mark.anyio
+async def test_tool_progress_is_emitted_as_structured_fields(base_settings, monkeypatch):
+    manager = ChatManager(base_settings)
+    turn = chatmod.Turn("tool-session", "go", None, None)
+    emitted: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(manager, "_emit", lambda _turn, name, data: emitted.append((name, data)))
+    try:
+        manager._tool_callback(turn, "tool.started", "terminal", "ls -la", {"command": "ls -la"})
+        manager._tool_callback(
+            turn, "tool.completed", "terminal", None, None, duration=1.23456, is_error=False, result="ok",
+        )
+        manager._tool_callback(turn, "reasoning.available", "_thinking", "hmm", None)
+        manager._tool_callback(turn, "_thinking", "first line")
+        manager._tool_callback(turn, "tool.started", "write_file", None, {"content": "x" * 10_000})
+        manager._tool_callback(turn, "something.new", 42)
+    finally:
+        await manager.close()
+
+    assert emitted[0] == ("tool", {
+        "event": "tool.started", "name": "terminal", "preview": "ls -la", "arguments": {"command": "ls -la"},
+    })
+    assert emitted[1] == ("tool", {
+        "event": "tool.completed", "name": "terminal", "duration": 1.235, "is_error": False, "result": "ok",
+    })
+    # Reasoning callbacks are not tool activity; oversized args are bounded; unknown shapes survive.
+    assert emitted[2][1]["name"] == "write_file"
+    assert isinstance(emitted[2][1]["arguments"], str) and len(emitted[2][1]["arguments"]) <= 4097
+    assert emitted[3] == ("tool", {"args": ["something.new", "42"]})
+    assert len(emitted) == 4
