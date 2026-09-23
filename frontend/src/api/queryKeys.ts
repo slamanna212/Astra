@@ -14,6 +14,9 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.sessions.all, 'detail', id] as const,
     count: (source: string[] | null) => [...queryKeys.sessions.all, 'count', 'archived', source] as const,
   },
+  chat: {
+    active: () => ['chat', 'active'] as const,
+  },
   insights: {
     all: ['insights'] as const,
     report: (days: InsightsRange, tz: string) => [...queryKeys.insights.all, days, tz] as const,

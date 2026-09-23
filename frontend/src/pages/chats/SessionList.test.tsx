@@ -107,6 +107,7 @@ describe('SessionList', () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('/sessions/count')) return jsonResponse({ count: 0 });
+      if (url.includes('/chat/active')) return jsonResponse({ turns: [] });
       listCalls += 1;
       return listCalls === 1
         ? jsonResponse({ items: page1, next_cursor: 'c1' })
@@ -117,8 +118,36 @@ describe('SessionList', () => {
 
     await waitFor(() => expect(screen.getAllByTestId('session-row')).toHaveLength(10));
     expect(listCalls).toBe(2);
-    const listRequestUrls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes('/sessions/count'));
+    const listRequestUrls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/api/sessions?'));
     expect(listRequestUrls[1]).toContain('cursor=c1');
+  });
+
+  it('marks running and waiting chats on the source dot', async () => {
+    const items = [makeSession(1), makeSession(2), makeSession(3)];
+    fetchMock.mockImplementation(async (input) => {
+      const path = pathOf(input);
+      if (path === '/api/chat/active') {
+        return jsonResponse({
+          turns: [
+            { session_id: 's-1', operation: 'chat', waiting: false },
+            { session_id: 's-2', operation: 'chat', waiting: true },
+          ],
+        });
+      }
+      if (path === '/api/sessions/count') return jsonResponse({ count: 0 });
+      return jsonResponse({ items, next_cursor: null });
+    });
+
+    render(<SessionList />, { route: '/chats' });
+
+    const running = await screen.findByRole('img', { name: 'Running' });
+    const waiting = screen.getByRole('img', { name: 'Waiting for your input' });
+    expect(running).toHaveAttribute('data-run', 'running');
+    expect(waiting).toHaveAttribute('data-run', 'waiting');
+    expect(running.closest('a')).toHaveAttribute('href', '/chats/s-1');
+    expect(waiting.closest('a')).toHaveAttribute('href', '/chats/s-2');
+    const idleRow = screen.getAllByTestId('session-row').find((row) => row.getAttribute('href') === '/chats/s-3')!;
+    expect(idleRow.querySelector('[data-run]')).toBeNull();
   });
 
   it('shows an empty state', async () => {

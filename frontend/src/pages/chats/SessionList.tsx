@@ -25,6 +25,7 @@ import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
 import { formatCompactAge, formatCount, formatDateTime, formatGroupDate, sessionTitle } from '../../lib/format';
 import classes from './SessionList.module.css';
+import { type RunState, useActiveTurns } from './useActiveTurns';
 
 export const SESSION_ROW_HEIGHT = 44;
 /** Nested sub-agent row: title only, no age/type dot. */
@@ -123,7 +124,22 @@ function SessionRowMenu({ session, active }: { session: SessionSummary; active: 
   );
 }
 
-const SessionRow = memo(function SessionRow({ session, active, now }: { session: SessionSummary; active: boolean; now: number }) {
+const RUN_STATE_LABEL: Record<RunState, string> = {
+  running: 'Running',
+  waiting: 'Waiting for your input',
+};
+
+const SessionRow = memo(function SessionRow({
+  session,
+  active,
+  now,
+  runState,
+}: {
+  session: SessionSummary;
+  active: boolean;
+  now: number;
+  runState?: RunState;
+}) {
   const lastActivity = session.last_activity_at ?? session.started_at;
   const showStatus = session.archived || session.hidden;
   return (
@@ -137,7 +153,19 @@ const SessionRow = memo(function SessionRow({ session, active, now }: { session:
       aria-current={active ? 'page' : undefined}
       data-testid="session-row"
     >
-      <span className={classes.dot} style={{ background: `var(--mantine-color-${sourceColor(session.source)}-6)` }} aria-hidden />
+      {runState ? (
+        // The source dot doubles as the live-turn signal: teal + breathing halo while running,
+        // steady sand when the turn is blocked on an approval or clarify answer.
+        <span
+          className={classes.dot}
+          data-run={runState}
+          role="img"
+          aria-label={RUN_STATE_LABEL[runState]}
+          title={RUN_STATE_LABEL[runState]}
+        />
+      ) : (
+        <span className={classes.dot} style={{ background: `var(--mantine-color-${sourceColor(session.source)}-6)` }} aria-hidden />
+      )}
       {session.pinned && (
         <span role="img" aria-label="Pinned" title="Pinned" className={classes.pinIcon}>
           <IconStarFilled size={11} color="var(--astra-accent)" aria-hidden />
@@ -229,6 +257,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   const [showArchived, setShowArchived] = useState(false);
   const status: SessionStatus = showArchived ? 'archived' : 'active';
   const now = useNow();
+  const runStates = useActiveTurns();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const create = useMutation({
@@ -453,7 +482,12 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
                   {!row ? null : row.kind === 'group-header' ? (
                     <div className={classes.groupHeader}>{row.label}</div>
                   ) : row.kind === 'parent' ? (
-                    <SessionRow session={row.session} active={row.session.id === selectedId} now={now} />
+                    <SessionRow
+                      session={row.session}
+                      active={row.session.id === selectedId}
+                      now={now}
+                      runState={runStates.get(row.session.id)}
+                    />
                   ) : row.kind === 'child' ? (
                     <SessionChildRow session={row.session} active={row.session.id === selectedId} />
                   ) : row.kind === 'child-loading' ? (

@@ -207,6 +207,7 @@ async def test_turn_fans_out_clarify_approval_late_steer_and_commits(base_settin
 
     clarify_a, clarify_b = await asyncio.gather(next_named(first, "clarify"), next_named(second, "clarify"))
     assert clarify_a.data == clarify_b.data
+    assert await manager.active_turns() == [("session-1", "chat", True)]
     assert await manager.answer("session-1", clarify_a.data["id"], "dev")
 
     approval_a, approval_b = await asyncio.gather(next_named(first, "approval"), next_named(second, "approval"))
@@ -216,6 +217,7 @@ async def test_turn_fans_out_clarify_approval_late_steer_and_commits(base_settin
     assert await manager.steer("session-1", "remember this if too late")
     FakeAgent.release.set()
 
+    assert await manager.active_turns() == [("session-1", "chat", False)]
     done_a, done_b = await asyncio.gather(next_named(first, "done"), next_named(second, "done"))
     assert done_a.data == done_b.data
     assert done_a.data["late_steer"] == "remember this if too late"
@@ -225,6 +227,7 @@ async def test_turn_fans_out_clarify_approval_late_steer_and_commits(base_settin
             break
         await asyncio.sleep(0.01)
     assert not await manager.is_running("session-1")
+    assert await manager.active_turns() == []
 
     # A second turn on the same identity reuses the same Hermes instance.
     approvals.resolved.clear()
@@ -446,6 +449,21 @@ def test_chat_state_and_options_are_canonical_and_do_not_expose_keys(authed):
     assert set(payload) == {"default_model", "default_provider", "models", "providers"}
     assert "api_key" not in options.text
     assert authed.get("/api/chat/not-a-session/state").status_code == 404
+
+
+def test_active_route_lists_running_turns(authed, monkeypatch):
+    assert authed.get("/api/chat/active").json() == {"turns": []}
+
+    async def active_turns():
+        return [("s-run", "chat", False), ("s-wait", "compact", True)]
+
+    monkeypatch.setattr(authed.app.state.ctx.chat, "active_turns", active_turns)
+    assert authed.get("/api/chat/active").json() == {
+        "turns": [
+            {"session_id": "s-run", "operation": "chat", "waiting": False},
+            {"session_id": "s-wait", "operation": "compact", "waiting": True},
+        ]
+    }
 
 
 def test_compact_route_starts_a_streamed_manual_compaction(authed, monkeypatch):

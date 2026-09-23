@@ -76,6 +76,18 @@ export function approveChat(sessionId: string, requestId: string, choice: 'once'
   });
 }
 
+export interface ChatActiveTurn {
+  session_id: string;
+  operation: 'chat' | 'compact' | 'regenerate';
+  /** Blocked on the user: a clarify question or a pending approval. */
+  waiting: boolean;
+}
+
+/** Turns this Astra process is running right now (in-memory, no DB read). */
+export function getActiveTurns(signal?: AbortSignal) {
+  return apiFetch<{ turns: ChatActiveTurn[] }>('/chat/active', { signal });
+}
+
 export function chatStreamUrl(sessionId: string, afterSeq = 0): string {
   const url = buildUrl(`/chat/${encodeURIComponent(sessionId)}/stream`);
   if (afterSeq <= 0) return url;

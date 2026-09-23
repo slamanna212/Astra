@@ -11,6 +11,8 @@ from fastapi.responses import StreamingResponse
 from astra.chat import ChatError, NoActiveTurn, SessionBusy, _load_chat_config
 from astra.deps import Ctx
 from astra.models import (
+    ChatActive,
+    ChatActiveTurn,
     ChatAnswerRequest,
     ChatApprovalRequest,
     ChatCompactRequest,
@@ -25,6 +27,17 @@ from astra.models import (
 from astra.routes.sessions import _with_session_db
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+@router.get("/active", response_model=ChatActive)
+async def active(ctx: Ctx) -> ChatActive:
+    """In-memory snapshot of running turns for the chat list's live indicators."""
+    return ChatActive(
+        turns=[
+            ChatActiveTurn(session_id=session_id, operation=operation, waiting=waiting)
+            for session_id, operation, waiting in await ctx.chat.active_turns()
+        ]
+    )
 
 
 @router.get("/{session_id}/state", response_model=ChatState)

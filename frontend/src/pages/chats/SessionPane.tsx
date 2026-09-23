@@ -242,8 +242,11 @@ export default function SessionPane() {
       });
       return refreshQueue;
     };
+    // The sidebar's live dot polls; nudge it on turn transitions so this chat's dot flips now.
+    const refreshActive = () => void queryClient.invalidateQueries({ queryKey: queryKeys.chat.active() });
     const terminal = (reconcile = reconcileTurn) => {
       flush();
+      refreshActive();
       if (liveTurnRef.current) {
         // Keep the final streamed text across reloads until durable history confirms it.
         saveChatRecovery(sessionId, {
@@ -360,6 +363,7 @@ export default function SessionPane() {
         reconnecting = false;
       }));
       currentSource.addEventListener('started', tracked((event) => {
+        refreshActive();
         const payload = JSON.parse((event as MessageEvent).data) as { operation?: string };
         turnVersion += 1;
         // A missing operation is compatible with older servers, whose turns may rewind history.
@@ -400,9 +404,18 @@ export default function SessionPane() {
         pendingLiveEvents.current.push({ kind: 'reasoning', text });
         schedule();
       }));
-      currentSource.addEventListener('clarify', tracked((event) => setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null })));
-      currentSource.addEventListener('approval', tracked((event) => setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string })));
-      currentSource.addEventListener('approval_resolved', tracked(() => setApproval(null)));
+      currentSource.addEventListener('clarify', tracked((event) => {
+        refreshActive();
+        setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null });
+      }));
+      currentSource.addEventListener('approval', tracked((event) => {
+        refreshActive();
+        setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string });
+      }));
+      currentSource.addEventListener('approval_resolved', tracked(() => {
+        refreshActive();
+        setApproval(null);
+      }));
       currentSource.addEventListener('tool', tracked((event) => {
         pendingLiveEvents.current.push({ kind: 'tool', data: parseLiveActivityData((event as MessageEvent).data) });
         schedule();

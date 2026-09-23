@@ -445,6 +445,16 @@ class ChatState(BaseModel):
     recovery_available: bool = False
 
 
+class ChatActiveTurn(BaseModel):
+    session_id: str
+    operation: str
+    waiting: bool
+
+
+class ChatActive(BaseModel):
+    turns: list[ChatActiveTurn]
+
+
 class ChatModelOption(BaseModel):
     name: str
     provider: str | None = None

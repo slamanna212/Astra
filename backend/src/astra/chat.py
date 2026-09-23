@@ -183,6 +183,30 @@ class ChatManager:
         async with self._lock:
             return session_id in self._turns
 
+    async def active_turns(self) -> list[tuple[str, str, bool]]:
+        """(session_id, operation, waiting) for every turn this process is running.
+
+        ``waiting`` means the turn is blocked on the user: a clarify question or a queued
+        Hermes approval. Only Astra-started turns are visible; gateway/cron processes are not.
+        """
+        async with self._lock:
+            turns = list(self._turns.values())
+        try:
+            approvals = approval_module()
+        except Exception:
+            approvals = None
+        active: list[tuple[str, str, bool]] = []
+        for turn in turns:
+            with turn.lock:
+                waiting = turn.question is not None
+            if not waiting and approvals is not None:
+                try:
+                    waiting = bool(approvals.get_pending_gateway_approval(turn.session_id))
+                except Exception:
+                    log.debug("pending approval lookup failed for %s", turn.session_id, exc_info=True)
+            active.append((turn.session_id, turn.operation, waiting))
+        return active
+
     def recovery_available(self, session_id: str) -> bool:
         return session_id in self._compression_recovery
 

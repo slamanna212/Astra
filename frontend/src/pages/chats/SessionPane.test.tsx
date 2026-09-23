@@ -297,7 +297,7 @@ describe('conversation stream updates', () => {
     expect(screen.getByTestId('tps')).toHaveTextContent('none');
     expect(frames.size).toBe(0);
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
-      ['sessions', 'detail', 's1'], ['sessions', 'list'],
+      ['chat', 'active'], ['chat', 'active'], ['sessions', 'detail', 's1'], ['sessions', 'list'],
     ]);
   });
 
