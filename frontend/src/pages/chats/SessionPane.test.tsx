@@ -316,6 +316,20 @@ describe('conversation stream updates', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalledWith(queryClient, 's1', expect.objectContaining({ reconcile: true })));
   });
 
+  it('does not show compaction progress for a context configuration notice', async () => {
+    const { stream } = await mount();
+    act(() => stream.emit('started', { running: true, operation: 'chat' }));
+    act(() => stream.emit('status', {
+      kind: 'status',
+      message: 'Hermes is using a 272K context limit for this Codex gpt-5.6-luna session.',
+    }));
+    act(flushFrame);
+    expect(screen.queryByText('Compacting context')).not.toBeInTheDocument();
+
+    act(() => stream.emit('status', { kind: 'compacting', message: 'Summarizing earlier conversation…' }));
+    expect(screen.getByText('Compacting context')).toBeInTheDocument();
+  });
+
   it('reconciles a turn already running when the conversation opens', async () => {
     const { stream, queryClient } = await mount(true);
     act(() => stream.emit('started', { running: true, operation: 'chat' }));

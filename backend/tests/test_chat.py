@@ -408,6 +408,33 @@ def test_compression_exhaustion_classifier_handles_structured_and_legacy_errors(
     assert not ChatManager._is_compression_exhausted({"failed": True, "error": "rate limited"})
 
 
+@pytest.mark.anyio
+async def test_codex_context_notice_is_information_not_active_compaction(base_settings):
+    manager = ChatManager(base_settings, max_workers=1)
+    turn = chatmod.Turn("session-x", "test message", "gpt-5.6-luna", "openai-codex")
+    manager._status_callback(
+        turn,
+        "lifecycle",
+        "ℹ Codex gpt-5.6-luna caps context at 272K, so auto-compaction was raised "
+        "to 85% (from 50%) to use more of the window before summarizing.\n"
+        "  Opt back out: hermes config set compression.codex_gpt55_autoraise false",
+    )
+    notice = turn.events.get_nowait()
+    assert notice.name == "status"
+    assert notice.data == {
+        "kind": "status",
+        "message": "ℹ Hermes is using a 272K context limit for this Codex gpt-5.6-luna "
+        "session. Its auto-compaction threshold is 85% (instead of 50%).\n"
+        "  Opt back out: hermes config set compression.codex_gpt55_autoraise false",
+    }
+
+    manager._status_callback(turn, "compacting", "Compacting context — summarizing earlier conversation…")
+    assert turn.events.get_nowait().data["kind"] == "compacting"
+    manager._status_callback(turn, "compacted", "Context compaction complete.")
+    assert turn.events.get_nowait().data["kind"] == "compacted"
+    await manager.close()
+
+
 def test_chat_state_and_options_are_canonical_and_do_not_expose_keys(authed):
     session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
     state = authed.get(f"/api/chat/{session_id}/state")

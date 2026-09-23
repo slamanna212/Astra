@@ -14,6 +14,7 @@ import inspect
 import json
 import logging
 import queue
+import re
 import threading
 import time
 from collections import OrderedDict, deque
@@ -41,6 +42,11 @@ log = logging.getLogger(__name__)
 # visibly speed up/slow down as generation does, not just settle toward one number.
 _LIVE_TPS_WINDOW_SECONDS = 2.0
 _EVENT_BATCH_SIZE = 128
+_CODEX_AUTORAISE_NOTICE = re.compile(
+    r"^ℹ Codex (?P<model>\S+) caps context at (?P<limit>\d+K), so "
+    r"auto-compaction was raised to (?P<raised>\d+)% \(from (?P<previous>\d+)%\) "
+    r"to use more of the window before summarizing\."
+)
 
 
 class ChatError(RuntimeError):
@@ -760,6 +766,19 @@ class ChatManager:
     def _status_callback(self, turn: Turn, status: Any, *args: Any) -> None:
         status_text = str(status)
         message = " ".join(str(item) for item in args if item is not None).strip() or status_text
+        # Hermes sends its one-time configuration notice as a lifecycle status. It says the
+        # model "caps context" even though this is Hermes's selected Codex limit, and its
+        # mention of auto-compaction must not be reported as compaction in progress.
+        if status_text == "lifecycle" and (notice := _CODEX_AUTORAISE_NOTICE.match(message)):
+            message = _CODEX_AUTORAISE_NOTICE.sub(
+                f"ℹ Hermes is using a {notice['limit']} context limit for this Codex "
+                f"{notice['model']} session. Its auto-compaction threshold is "
+                f"{notice['raised']}% (instead of {notice['previous']}%).",
+                message,
+                count=1,
+            )
+            self._emit(turn, "status", {"kind": "status", "message": message[:1200]})
+            return
         lowered = f"{status_text} {message}".lower()
         kind = "status"
         if status_text == "compacted" or "compaction complete" in lowered:
