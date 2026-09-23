@@ -417,6 +417,42 @@ describe('Transcript', () => {
     expect(scroller.scrollTop).toBe(40000 - 640);
   });
 
+  it('follows the tail again when a different conversation is opened', async () => {
+    // The transcript instance is reused across sessions, so intent from the previous conversation
+    // must not carry over and strand the new one above its own latest message.
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 30));
+    const turn = (answer: string) => ({ userText: 'Q', answer, reasoning: '', events: [], state: 'running' as const });
+    const view = render(<Transcript sessionId="s1" liveTurn={turn('a')} />, { route: '/chats/s1' });
+    const scroller = await screen.findByTestId('transcript-scroller');
+    defineGeometry(scroller, { scrollHeight: 1000, clientHeight: 640, scrollTop: 360 });
+
+    // The reader is scrolled up in the first conversation.
+    scroller.scrollTop = 100;
+    fireEvent.scroll(scroller);
+    await act(flush);
+    expect(screen.getByRole('button', { name: 'Jump to latest' })).toBeInTheDocument();
+
+    // Opening another conversation replaces the scroller, so re-acquire it before measuring.
+    await act(async () => {
+      view.rerender(<Transcript sessionId="s2" liveTurn={turn('a')} />);
+      await flush();
+    });
+    const next = await screen.findByTestId('transcript-scroller');
+    const geometry = defineGeometry(next, { scrollHeight: 1000, clientHeight: 640, scrollTop: 0 });
+
+    geometry.setScrollHeight(40000);
+    await act(async () => {
+      view.rerender(<Transcript sessionId="s2" liveTurn={turn('a'.repeat(200))} />);
+      await flush();
+    });
+    // The browser reports the anchor the component made, which is what updates the affordance.
+    fireEvent.scroll(next);
+    await act(flush);
+
+    expect(next.scrollTop).toBe(40000 - 640);
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).not.toBeInTheDocument();
+  });
+
   it('does not reparse historical Markdown on parent updates or running-state changes', async () => {
     const view = render(<Transcript sessionId="s1" />, { route: '/chats/s1' });
     await waitFor(() => expect(screen.queryAllByText(/message body/).length).toBeGreaterThan(0));
