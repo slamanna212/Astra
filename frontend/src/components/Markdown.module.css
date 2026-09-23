@@ -40,9 +40,8 @@
 }
 
 .table :global(thead th) {
-  background: var(--astra-surface-sunk);
-  color: var(--astra-text-dim);
-  border-bottom: 1px solid var(--astra-border);
+  background: var(--astra-table-head-bg);
+  border-bottom: 1px solid var(--astra-table-head-rule);
   white-space: nowrap;
 }
 
@@ -52,7 +51,11 @@
 }
 
 .table :global(tbody tr + tr td) {
-  border-top: 1px solid var(--astra-divider);
+  border-top: 1px solid var(--astra-table-row-rule);
+}
+
+.table :global(tbody tr:nth-child(even) td) {
+  background: var(--astra-table-zebra);
 }
 
 /* First column usually names the row — give it a touch more weight than the data beside it. */

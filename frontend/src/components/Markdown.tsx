@@ -100,8 +100,20 @@ function RichPre({ children }: { children?: ReactNode }) {
   );
 }
 
-// Theme Table styles are inline, so the chat-relative cell size has to come through `styles` too.
-const tableStyles = { td: { fontSize: 'calc(var(--astra-chat-font-size, 14px) * 0.93)' } };
+// Theme Table styles are inline, so the chat-relative sizes have to come through `styles` too.
+// Markdown headers are content ("Monthly cost (USD)"), not UI labels, so they drop the theme's
+// mono-caps label treatment and read as normal sans text.
+const tableStyles = {
+  th: {
+    fontFamily: 'var(--astra-font)',
+    fontSize: 'calc(var(--astra-chat-font-size, 14px) * 0.9)',
+    fontWeight: 600,
+    letterSpacing: 'normal',
+    textTransform: 'none' as const,
+    color: 'var(--astra-text)',
+  },
+  td: { fontSize: 'calc(var(--astra-chat-font-size, 14px) * 0.93)' },
+};
 
 // Deliberately no rehype-raw: rendering raw HTML embedded in markdown from a file/tool source is
 // an XSS vector we don't need to take on for a preview pane.

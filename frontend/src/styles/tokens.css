@@ -89,6 +89,12 @@
   --astra-border-strong: var(--astra-graphite-4);
   --astra-divider:       #1F242B;
 
+  /* markdown tables: header and rules need more separation than code-block "sunk" gives */
+  --astra-table-head-bg:   var(--astra-graphite-9);
+  --astra-table-head-rule: var(--astra-border-strong);
+  --astra-table-row-rule:  var(--astra-graphite-6);
+  --astra-table-zebra:     rgba(255,255,255,.025);
+
   --astra-text:          var(--astra-graphite-0);
   --astra-text-body:     var(--astra-graphite-1);
   --astra-text-dim:      var(--astra-graphite-2);
@@ -141,6 +147,11 @@
   --astra-border:        #E2E4E8;
   --astra-border-strong: #C8CCD2;
   --astra-divider:       #EDEEF1;
+
+  --astra-table-head-bg:   #EEF0F2;
+  --astra-table-head-rule: var(--astra-border-strong);
+  --astra-table-row-rule:  var(--astra-border);
+  --astra-table-zebra:     rgba(16,20,24,.02);
 
   --astra-text:          #101418;
   --astra-text-body:     #2B3038;
