@@ -124,6 +124,33 @@ export const Transcript = memo(function Transcript({
     getItemKey: (index) => rows[index]?.key ?? index,
   });
 
+  // Scroll anchoring. `nearBottom` measures geometry, and geometry cannot express intent: this list
+  // is virtualized, so its height is recomputed as rows are measured and the bottom moves away from
+  // a reader who never scrolled. Reading that as "the reader left the bottom" is what silently
+  // stopped the stream from following. Intent is therefore tracked separately, and the only scroll
+  // offset that does not count as intent is the one this component set itself.
+  const [following, setFollowing] = useState(true);
+  // The offset our own anchoring produced, so the scroll event it triggers is not mistaken for the
+  // reader moving the viewport. Consumed by the first scroll event that observes it.
+  const anchoredScrollTopRef = useRef<number | null>(null);
+
+  const anchorToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 1) el.scrollTop = el.scrollHeight;
+    // Read back the offset the browser actually applied, which clamps to the scrollable range.
+    anchoredScrollTopRef.current = el.scrollTop;
+  }, []);
+
+  // A different conversation starts out following its own tail.
+  const followedSessionRef = useRef(sessionId);
+  useEffect(() => {
+    if (followedSessionRef.current === sessionId) return;
+    followedSessionRef.current = sessionId;
+    anchoredScrollTopRef.current = null;
+    setFollowing(true);
+  }, [sessionId]);
+
   // Prepending older messages must not move the content already on screen: capture the scroll
   // container's height before the fetch, then add back exactly what grew above the fold.
   const prependingRef = useRef(false);
@@ -151,9 +178,8 @@ export const Transcript = memo(function Transcript({
     if (didInitialScrollRef.current || query.isPending) return;
     didInitialScrollRef.current = true;
     if (highlightMessageId) return;
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [query.isPending, highlightMessageId]);
+    anchorToBottom();
+  }, [query.isPending, highlightMessageId, anchorToBottom]);
 
   const didHighlightScrollRef = useRef(false);
   useEffect(() => {
@@ -165,34 +191,41 @@ export const Transcript = memo(function Transcript({
   }, [rows, highlightMessageId, virtualizer]);
 
   const [nearBottom, setNearBottom] = useState(true);
+  const totalSize = virtualizer.getTotalSize();
   const lastRowKey = rows.at(-1)?.key;
   const lastRowSize = liveTurn ? `${liveTurn.answer.length}:${liveTurn.reasoning.length}:${liveTurn.events.length}` : '';
-  useEffect(() => {
-    if (!nearBottom || !didInitialScrollRef.current || prependingRef.current || highlightMessageId) return;
-    requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-  }, [lastRowKey, lastRowSize, nearBottom, highlightMessageId]);
+
+  // A following reader stays pinned as the list grows. Anchoring here, rather than only once the
+  // geometry happens to report the bottom, is what keeps a stream following after the list has been
+  // re-measured — before any scroll event has had the chance to report the new height.
+  useLayoutEffect(() => {
+    if (!following || !didInitialScrollRef.current || prependingRef.current || highlightMessageId) return;
+    anchorToBottom();
+  }, [following, lastRowKey, lastRowSize, totalSize, highlightMessageId, anchorToBottom]);
+
   const lastSkillCommandId = skillCommands.at(-1)?.id;
   useEffect(() => {
-    if (lastSkillCommandId === undefined || !nearBottom) return;
+    if (lastSkillCommandId === undefined || !following) return;
     requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
     });
-  }, [lastSkillCommandId, nearBottom]);
+  }, [lastSkillCommandId, following]);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
-    if (el.scrollTop < NEAR_EDGE_PX) loadOlder();
-    if (
-      el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_EDGE_PX &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
+    const top = el.scrollTop;
+    const distance = el.scrollHeight - top - el.clientHeight;
+    const atBottom = distance < NEAR_BOTTOM_PX;
+    const anchored = anchoredScrollTopRef.current;
+    anchoredScrollTopRef.current = null;
+    // Landing where this component deliberately anchored says nothing about the reader; anywhere
+    // else the viewport went, the reader put it there.
+    if (anchored === null || Math.abs(top - anchored) > 1) setFollowing(atBottom);
+    setNearBottom(atBottom);
+    if (top < NEAR_EDGE_PX) loadOlder();
+    if (distance < NEAR_EDGE_PX && hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
     }
   }, [loadOlder, hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -204,7 +237,10 @@ export const Transcript = memo(function Transcript({
       navigate(`/chats/${encodeURIComponent(sessionId)}`, { replace: true });
       return;
     }
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: scrollBehavior() });
+    // An explicit request to follow, so the stream resumes tracking the tail.
+    setFollowing(true);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
   }, [hasNextPage, navigate, sessionId]);
 
   // The transcript owns the agent workspace rather than the live row, because the row is a
