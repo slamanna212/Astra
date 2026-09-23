@@ -331,6 +331,27 @@ async def test_live_tps_is_a_sliding_window_not_a_since_start_average(base_setti
 
 
 @pytest.mark.anyio
+async def test_live_tps_counts_reasoning_chunks(base_settings, monkeypatch):
+    manager = ChatManager(base_settings, max_workers=1)
+    turn = chatmod.Turn("session-x", "go", None, None)
+    clock = [0.0]
+    monkeypatch.setattr(chatmod.time, "monotonic", lambda: clock[0])
+
+    # A thinking model spends most of a turn in reasoning; the rate must cover it and carry
+    # over seamlessly into the answer.
+    for _ in range(3):
+        manager._reasoning_callback(turn, "r")
+        clock[0] += 0.25
+    manager._token_callback(turn, "a")
+    events = [turn.events.get_nowait() for _ in range(4)]
+    assert [event.name for event in events] == ["reasoning"] * 3 + ["delta"]
+    assert "tps" not in events[0].data
+    assert [event.data["tps"] for event in events[1:]] == [pytest.approx(4.0)] * 3
+
+    await manager.close()
+
+
+@pytest.mark.anyio
 async def test_final_usage_averages_output_tokens_over_the_whole_turn(base_settings, monkeypatch):
     manager = ChatManager(base_settings, max_workers=1)
     turn = chatmod.Turn("session-x", "go", None, None)

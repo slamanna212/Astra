@@ -399,9 +399,10 @@ export default function SessionPane() {
         schedule();
       }));
       currentSource.addEventListener('reasoning', tracked((event) => {
-        const text = (JSON.parse((event as MessageEvent).data) as ChatStreamEvent & { text: string }).text;
-        pendingReasoning.current += text;
-        pendingLiveEvents.current.push({ kind: 'reasoning', text });
+        const data = JSON.parse((event as MessageEvent).data) as { text: string; tps?: number };
+        pendingReasoning.current += data.text;
+        pendingLiveEvents.current.push({ kind: 'reasoning', text: data.text });
+        if (data.tps !== undefined) pendingTps.current = data.tps;
         schedule();
       }));
       currentSource.addEventListener('clarify', tracked((event) => {

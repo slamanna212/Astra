@@ -278,6 +278,14 @@ describe('conversation stream updates', () => {
     await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
   });
 
+  it('shows a live rate while the model is reasoning', async () => {
+    const { stream } = await mount();
+    act(() => stream.emit('started', { running: true, operation: 'chat' }));
+    act(() => stream.emit('reasoning', { text: 'Thinking', tps: 42 }));
+    act(flushFrame);
+    expect(screen.getByTestId('tps')).toHaveTextContent('42');
+  });
+
   it('batches text and TPS together and incrementally refreshes an observed chat turn', async () => {
     const { stream, queryClient } = await mount();
     expect(refresh).not.toHaveBeenCalled();

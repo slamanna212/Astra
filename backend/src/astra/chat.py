@@ -759,9 +759,10 @@ class ChatManager:
                 except Exception:
                     log.debug("failed to close cached Hermes resource", exc_info=True)
 
-    def _token_callback(self, turn: Turn, text: Any) -> None:
-        if not text:
-            return
+    @staticmethod
+    def _live_payload(turn: Turn, text: Any) -> dict[str, Any]:
+        # Reasoning and answer chunks are both generated output, so both feed one rate window;
+        # counting answer text alone leaves thinking models with no rate for most of a turn.
         now = time.monotonic()
         window = turn.recent_delta_times
         window.append(now)
@@ -772,7 +773,11 @@ class ChatManager:
             span = window[-1] - window[0]
             if span > 0.1:
                 payload["tps"] = round((len(window) - 1) / span, 1)
-        self._emit(turn, "delta", payload)
+        return payload
+
+    def _token_callback(self, turn: Turn, text: Any) -> None:
+        if text:
+            self._emit(turn, "delta", self._live_payload(turn, text))
 
     @staticmethod
     def _final_usage(turn: Turn) -> dict[str, Any]:
@@ -785,7 +790,7 @@ class ChatManager:
 
     def _reasoning_callback(self, turn: Turn, text: Any) -> None:
         if text:
-            self._emit(turn, "reasoning", {"text": str(text)})
+            self._emit(turn, "reasoning", self._live_payload(turn, text))
 
     def _status_callback(self, turn: Turn, status: Any, *args: Any) -> None:
         status_text = str(status)

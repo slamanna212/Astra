@@ -3,7 +3,7 @@ import { apiFetch, buildUrl } from './client';
 export type ChatStreamEvent =
   | { type: 'state' | 'started'; running: boolean; recovery_available?: boolean; operation?: 'chat' | 'compact' | 'regenerate' }
   | { type: 'delta'; text: string; tps?: number }
-  | { type: 'reasoning'; text: string }
+  | { type: 'reasoning'; text: string; tps?: number }
   | { type: 'tool'; args: string[] }
   | { type: 'clarify'; id: number; question: string; choices: unknown[] | null }
   | { type: 'approval'; request_id: string; command?: string; description?: string; pattern_keys?: string[] }
