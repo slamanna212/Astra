@@ -84,7 +84,7 @@ export default function SettingsPage() {
             ]}
           />
           <Text size="xs" c="dimmed">
-            This setting applies to saved tool calls in the transcript. Live responses stay in-thread; their recent agent activity is available in the closed-by-default workspace.
+            This setting applies to saved tool calls in the transcript. Live responses always show their tool and subagent activity inline, collapsed by default.
           </Text>
           <Text size="sm" c="dimmed" mt="sm">
             While Hermes is responding

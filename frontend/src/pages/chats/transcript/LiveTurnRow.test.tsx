@@ -8,10 +8,6 @@ function turn(overrides: Partial<LiveTurn> = {}): LiveTurn {
   return { userText: 'Question', answer: '', reasoning: '', events: [], state: 'running', ...overrides };
 }
 
-function rowProps(overrides: Partial<Parameters<typeof LiveTurnRow>[0]> = {}) {
-  return { workspaceOpen: false, onOpenWorkspace: () => {}, ...overrides };
-}
-
 describe('deriveLivePhase', () => {
   it.each([
     ['Sending', turn({ state: 'sending' })],
@@ -30,39 +26,41 @@ describe('deriveLivePhase', () => {
 
 describe('LiveTurnRow', () => {
   it('announces the coarse phase once instead of every streamed token', () => {
-    const view = render(<LiveTurnRow turn={turn({ reasoning: 'thinking hard', answer: 'Streamed answer' })} {...rowProps()} />, { route: '/chats/s1' });
+    const view = render(<LiveTurnRow turn={turn({ reasoning: 'thinking hard', answer: 'Streamed answer' })} />, { route: '/chats/s1' });
     expect(screen.getByRole('status')).toHaveTextContent('Writing');
     expect(screen.getAllByRole('status')).toHaveLength(1);
-    view.rerender(<LiveTurnRow turn={turn({ reasoning: 'thinking hard', answer: 'Streamed answer plus more tokens' })} {...rowProps()} />);
+    view.rerender(<LiveTurnRow turn={turn({ reasoning: 'thinking hard', answer: 'Streamed answer plus more tokens' })} />);
     expect(screen.getAllByRole('status')).toHaveLength(1);
-  });
-
-  it('asks the transcript to open the workspace instead of owning the drawer', () => {
-    // The drawer lives in the transcript so it survives this row being replaced by canonical
-    // history mid-turn. The row only requests it.
-    const onOpenWorkspace = vi.fn();
-    render(<LiveTurnRow turn={turn({ reasoning: 'planning' })} {...rowProps({ onOpenWorkspace })} />, { route: '/chats/s1' });
-    fireEvent.click(screen.getByRole('button', { name: /Agent workspace/i }));
-    expect(onOpenWorkspace).toHaveBeenCalledOnce();
-  });
-
-  it('reports the workspace as expanded so the trigger is not a dead control', () => {
-    const view = render(<LiveTurnRow turn={turn()} {...rowProps({ workspaceOpen: true })} />, { route: '/chats/s1' });
-    expect(screen.getByRole('button', { name: /Agent workspace/i })).toHaveAttribute('aria-expanded', 'true');
-    view.rerender(<LiveTurnRow turn={turn()} {...rowProps({ workspaceOpen: false })} />);
-    expect(screen.getByRole('button', { name: /Agent workspace/i })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('does not expose reasoning text until the reader expands it', () => {
-    render(<LiveTurnRow turn={turn({ reasoning: 'secret plan' })} {...rowProps()} />, { route: '/chats/s1' });
+    render(<LiveTurnRow turn={turn({ reasoning: 'secret plan' })} />, { route: '/chats/s1' });
     expect(screen.queryByText(/secret plan/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Thinking' }));
     expect(screen.getByText(/secret plan/)).toBeInTheDocument();
   });
 
+  it('renders tool and subagent activity inline, collapsed by default', () => {
+    render(
+      <LiveTurnRow
+        turn={turn({ events: [{ kind: 'tool', data: { name: 'search', args: ['sensitive argument'] } }] })}
+      />,
+      { route: '/chats/s1' },
+    );
+    expect(screen.getByLabelText('Current turn activity')).toHaveTextContent('search');
+    expect(screen.queryByText(/sensitive argument/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('search'));
+    expect(screen.getByText(/sensitive argument/)).toBeInTheDocument();
+  });
+
+  it('shows no activity section when the turn has none', () => {
+    render(<LiveTurnRow turn={turn()} />, { route: '/chats/s1' });
+    expect(screen.queryByLabelText('Current turn activity')).not.toBeInTheDocument();
+  });
+
   it('keeps the response visible and offers a retry when saved history could not be refreshed', () => {
     const onRetry = vi.fn();
-    render(<LiveTurnRow turn={turn({ answer: 'Streamed answer', state: 'unreconciled' })} {...rowProps({ onRetry })} />, { route: '/chats/s1' });
+    render(<LiveTurnRow turn={turn({ answer: 'Streamed answer', state: 'unreconciled' })} onRetry={onRetry} />, { route: '/chats/s1' });
     expect(screen.getByRole('status')).toHaveTextContent('Refresh failed');
     // The text the reader already received must not be thrown away.
     expect(screen.getByText('Streamed answer')).toBeInTheDocument();
@@ -71,7 +69,7 @@ describe('LiveTurnRow', () => {
   });
 
   it('offers no retry while the turn is progressing normally', () => {
-    render(<LiveTurnRow turn={turn({ answer: 'Streamed answer', state: 'running' })} {...rowProps({ onRetry: () => {} })} />, { route: '/chats/s1' });
+    render(<LiveTurnRow turn={turn({ answer: 'Streamed answer', state: 'running' })} onRetry={() => {}} />, { route: '/chats/s1' });
     expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
   });
 });

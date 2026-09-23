@@ -18,7 +18,7 @@ export interface LiveTurn {
 
 const ACTIVITY_KINDS = new Set(['tool', 'subagent', 'status']);
 
-/** Activity kinds the agent workspace surfaces. Reasoning and answer text belong in the transcript. */
+/** Activity kinds rendered as inline tool/subagent cards. Reasoning and answer text render separately. */
 export function isWorkspaceActivity(event: LiveActivityEvent): boolean {
   return ACTIVITY_KINDS.has(event.kind);
 }

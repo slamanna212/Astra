@@ -115,7 +115,7 @@ describe('Transcript', () => {
     expect(screen.getByText('Partial answer')).toBeInTheDocument();
   });
 
-  it('keeps workspace and reasoning behind collapsed accessible controls', async () => {
+  it('keeps live reasoning and tool activity inline, collapsed by default', async () => {
     fetchMock.mockImplementation(async (input) => String(input).includes('/children')
       ? jsonResponse({ items: [] })
       : jsonResponse({ items: [], has_older: false, has_newer: false, oldest_id: null, newest_id: null }));
@@ -123,35 +123,12 @@ describe('Transcript', () => {
     await screen.findByText('Only answer');
     expect(screen.queryByText('Private thought')).not.toBeInTheDocument();
     expect(screen.queryByText('sensitive argument')).not.toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: /Agent workspace/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Agent workspace/i }));
-    expect(screen.getByRole('dialog', { name: /Agent workspace/i })).toBeInTheDocument();
-    expect(screen.getByText(/tool: search/)).toBeInTheDocument();
-    expect(screen.queryByText(/sensitive argument/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Event details'));
+    // The tool card is inline in the transcript, not behind a separate drawer.
+    expect(screen.getByLabelText('Current turn activity')).toHaveTextContent('search');
+    fireEvent.click(screen.getByRole('button', { name: 'Thinking' }));
+    expect(screen.getByText('Private thought')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('search'));
     expect(screen.getByText(/sensitive argument/)).toBeInTheDocument();
-  });
-
-  it('keeps the agent workspace open when the live row is replaced by canonical history', async () => {
-    // The row is a placeholder that disappears on handoff; the drawer the reader opened must not
-    // disappear with it.
-    fetchMock.mockImplementation(async (input) => String(input).includes('/children')
-      ? jsonResponse({ items: [] })
-      : jsonResponse({ items: [], has_older: false, has_newer: false, oldest_id: null, newest_id: null }));
-    const view = render(
-      <Transcript
-        sessionId="s1"
-        liveTurn={{ userText: 'Question', answer: '', reasoning: '', events: [{ kind: 'tool', data: { name: 'search_files' } }], state: 'running' }}
-      />,
-      { route: '/chats/s1' },
-    );
-    await screen.findByText('Question');
-    fireEvent.click(screen.getByRole('button', { name: /Agent workspace/i }));
-    expect(screen.getByRole('dialog', { name: /Agent workspace/i })).toBeInTheDocument();
-
-    view.rerender(<Transcript sessionId="s1" liveTurn={null} />);
-
-    expect(screen.getByRole('dialog', { name: /Agent workspace/i })).toHaveTextContent('tool: search_files');
   });
 
   it('shows a mid-turn reload as the durable user turn followed by the partial answer', async () => {
