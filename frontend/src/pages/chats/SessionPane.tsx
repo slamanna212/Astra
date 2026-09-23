@@ -143,6 +143,18 @@ export default function SessionPane() {
   const setProvider = (value: string | null) => setModelChoice((prev) => ({ ...(prev.sessionId === sessionId ? prev : { sessionId }), provider: value }));
 
   useEffect(() => {
+    if (!running || !sessionId) return;
+    // Child sessions may be saved after the delegation callback; some Hermes
+    // versions do not emit subagent callbacks at all. Discover them during the turn.
+    console.log("INTERVAL", running, String(window.setInterval).slice(0,60));
+    const timer = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.children(sessionId), exact: true });
+    }, 3_000);
+    return () => window.clearInterval(timer);
+  }, [running, sessionId, queryClient]);
+
+  useEffect(() => {
     let disposed = false;
     let source: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -488,6 +500,8 @@ export default function SessionPane() {
       }));
       currentSource.addEventListener('subagent', tracked((event) => {
         pendingLiveEvents.current.push({ kind: 'subagent', data: parseLiveActivityData((event as MessageEvent).data) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.lists() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.messages.children(sessionId), exact: true });
         schedule();
       }));
       currentSource.addEventListener('status', tracked((event) => {

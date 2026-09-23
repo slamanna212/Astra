@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router';
 import { jsonResponse, render } from '../../test/render';
 import type { SessionDetail } from '../../api/types';
+import { queryKeys } from '../../api/queryKeys';
 import { loadChatRecovery, saveChatRecovery } from '../../lib/chatRecovery';
 import SessionPane from './SessionPane';
 
@@ -86,6 +87,35 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('conversation stream updates', () => {
+  it('refreshes sub-agent discovery during a running turn without requiring stream callbacks', async () => {
+    const { stream, queryClient, unmount } = await mount();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    vi.useFakeTimers();
+    try {
+      act(() => stream.emit('started', { operation: 'chat' }));
+      invalidate.mockClear();
+      await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.sessions.lists() });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.messages.children('s1'), exact: true });
+
+      await act(async () => { stream.emit('done', {}); });
+      invalidate.mockClear();
+      await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+      expect(invalidate).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('refreshes sub-agent discovery immediately on a subagent event', async () => {
+    const { stream, queryClient } = await mount(true);
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    act(() => stream.emit('subagent', { name: 'researcher' }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.sessions.lists() });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.messages.children('s1'), exact: true });
+  });
+
   it('marks the live turn as reconnecting when the stream drops', async () => {
     const { stream } = await mount();
     act(() => stream.emit('started', { operation: 'chat' }));
