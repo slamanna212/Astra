@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChildSession, SessionDetail, SessionSummary } from '../../api/types';
 import { jsonResponse, render } from '../../test/render';
-import { SESSION_CHILD_ROW_HEIGHT, SESSION_ROW_HEIGHT, SessionList } from './SessionList';
+import { formatGroupDate } from '../../lib/format';
+import { SESSION_CHILD_ROW_HEIGHT, SESSION_GROUP_HEADER_HEIGHT, SESSION_ROW_HEIGHT, SessionList } from './SessionList';
 
 /** Path (no query string) a mocked fetch call was made against, e.g. "/api/sessions/child-a". */
 function pathOf(input: Parameters<typeof fetch>[0]): string {
@@ -89,9 +90,11 @@ describe('SessionList', () => {
     expect(rows.length).toBeLessThanOrEqual(visibleRows + 2 * 8 + 2);
     expect(rows.length).toBeLessThan(500);
 
-    // Total scroll height still represents the full list.
+    // Total scroll height still represents the full list, plus the "Pinned" header and one
+    // header per activity date (the unpinned rows can span midnight depending on when this runs).
+    const dateHeaders = new Set(items.filter((s) => !s.pinned).map((s) => formatGroupDate(s.last_activity_at!))).size;
     const list = screen.getByRole('list', { name: 'Sessions' });
-    expect(list).toHaveStyle({ height: `${500 * SESSION_ROW_HEIGHT}px` });
+    expect(list).toHaveStyle({ height: `${500 * SESSION_ROW_HEIGHT + (1 + dateHeaders) * SESSION_GROUP_HEADER_HEIGHT}px` });
 
     // Title fallbacks and pin indicator.
     expect(screen.getByText('Display 3')).toBeInTheDocument();

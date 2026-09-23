@@ -37,8 +37,26 @@ function remarkHermesMedia(sessionId?: string) {
     const visit = (node: MarkdownNode) => {
       if (!node.children || node.type === 'code' || node.type === 'image') return;
       const next: MarkdownNode[] = [];
-      for (const child of node.children) {
-        if (child.type === 'text' && child.value?.includes('MEDIA:')) {
+      const children = node.children;
+      for (let index = 0; index < children.length; index++) {
+        const child = children[index]!;
+        // GFM autolink-literal parses `MEDIA:https://…` into text `…MEDIA:` + a link node, so
+        // rejoin the bare URL with its prefix before scanning for tokens.
+        const linked = children[index + 1];
+        if (
+          child.type === 'text' &&
+          /(?:^|\s)MEDIA:\s*$/.test(child.value ?? '') &&
+          linked?.type === 'link' &&
+          linked.url &&
+          linked.children?.length === 1 &&
+          linked.children[0]?.type === 'text' &&
+          linked.children[0].value === linked.url
+        ) {
+          const value = (child.value ?? '').replace(/MEDIA:\s*$/, '');
+          if (value) next.push({ type: 'text', value });
+          next.push({ type: 'image', url: mediaImageUrl(linked.url, sessionId), alt: mediaAlt(linked.url) });
+          index++;
+        } else if (child.type === 'text' && child.value?.includes('MEDIA:')) {
           const value = child.value;
           let cursor = 0;
           for (const match of value.matchAll(MEDIA_TOKEN_RE)) {

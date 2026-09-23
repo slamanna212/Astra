@@ -146,7 +146,6 @@ export default function SessionPane() {
     if (!running || !sessionId) return;
     // Child sessions may be saved after the delegation callback; some Hermes
     // versions do not emit subagent callbacks at all. Discover them during the turn.
-    console.log("INTERVAL", running, String(window.setInterval).slice(0,60));
     const timer = window.setInterval(() => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.lists() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.messages.children(sessionId), exact: true });
