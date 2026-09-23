@@ -258,6 +258,28 @@ async def test_stop_interrupts_the_agent(base_settings, fake_hermes):
 
 
 @pytest.mark.anyio
+async def test_returned_provider_failure_is_reported_as_an_error(base_settings, fake_hermes, monkeypatch):
+    # Hermes returns (does not raise) non-retryable provider failures such as a 402 billing wall.
+    def billing_failure(self, user_message: str, conversation_history=None, **_kwargs):
+        return {
+            "final_response": "Insufficient Balance\n\nTop up your provider account.",
+            "completed": False,
+            "failed": True,
+            "error": "Error code: 402",
+            "failure_reason": "billing",
+        }
+
+    monkeypatch.setattr(FakeAgent, "run_conversation", billing_failure)
+    manager = ChatManager(base_settings, max_workers=1)
+    await manager.start("session-1", "go", model=None, provider=None)
+    subscriber, _ = await manager.subscribe("session-1")
+    error = await next_named(subscriber, "error")
+    assert error.data["message"] == "Insufficient Balance\n\nTop up your provider account."
+    assert error.data["error_type"] == "billing"
+    await manager.close()
+
+
+@pytest.mark.anyio
 async def test_commit_idle_is_a_non_request_thread_session_boundary(base_settings, fake_hermes):
     manager = ChatManager(base_settings, max_workers=1)
     FakeAgent.release.set()

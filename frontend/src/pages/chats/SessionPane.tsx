@@ -887,7 +887,7 @@ export default function SessionPane() {
         {turnError && (
           <Alert m="sm" color="red" title={turnError.recoveryAvailable ? 'Context compression exhausted' : 'Turn failed'}>
             <Group justify="space-between" align="center" wrap="wrap">
-              <Text size="sm">{turnError.message}</Text>
+              <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{turnError.message}</Text>
               {turnError.recoveryAvailable && (
                 <Button size="xs" leftSection={<IconGitBranch size={14} />} loading={recoveringContext} onClick={() => void recoverContext()}>
                   Start focused continuation

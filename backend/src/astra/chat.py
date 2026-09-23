@@ -567,6 +567,11 @@ class ChatManager:
                 })
             elif turn.cancel.is_set():
                 self._emit(turn, "cancel", {"reason": "Cancelled by user", "late_steer": late_steer, **usage})
+            elif (failure := self._returned_failure(result)) is not None:
+                # Hermes reports provider failures (billing, auth, lease timeouts) as a returned
+                # result, not an exception, and does not persist the text. Without this the turn
+                # looks completed and the browser shows nothing.
+                self._emit(turn, "error", {**failure, "late_steer": late_steer, **usage})
             else:
                 self._emit(turn, "done", {"result": {"status": "completed", "has_result": bool(result)}, "late_steer": late_steer, **usage})
         except Exception as exc:
@@ -686,6 +691,17 @@ class ChatManager:
             or ("context length exceeded" in text and "cannot compress further" in text)
             or ("context compression" in text and "max compression attempts" in text)
         )
+
+    @staticmethod
+    def _returned_failure(result: Any) -> dict[str, Any] | None:
+        if not isinstance(result, dict) or not (result.get("failed") or result.get("interrupted")):
+            return None
+        message = result.get("final_response") or result.get("error")
+        message = str(message).strip() if message else ""
+        return {
+            "message": message[:4000] or "The Hermes turn failed. Check server logs for details.",
+            "error_type": str(result.get("failure_reason") or ("interrupted" if result.get("interrupted") else "turn_failed")),
+        }
 
     @staticmethod
     def _drain_late_steer(agent: Any) -> str | None:
