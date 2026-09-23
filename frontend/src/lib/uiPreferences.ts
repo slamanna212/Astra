@@ -23,7 +23,7 @@ const DEFAULTS: UiPreferences = {
   cronAdvancedOpen: true,
   chatFontSize: 'md',
   busyTurnMode: 'steer',
-  activityDisplayMode: 'transparent_stream',
+  activityDisplayMode: 'compact_worklog',
 };
 let current = read();
 const listeners = new Set<() => void>();

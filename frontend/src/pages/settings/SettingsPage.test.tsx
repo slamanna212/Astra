@@ -93,5 +93,6 @@ describe('SettingsPage', () => {
 
     await user.click(screen.getByText('Compact worklog'));
     expect(screen.getByLabelText('Chat activity display')).toBeInTheDocument();
+    expect(screen.getByText(/This setting applies to saved tool calls/)).toBeInTheDocument();
   });
 });

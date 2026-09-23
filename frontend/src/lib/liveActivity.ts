@@ -1,4 +1,4 @@
-export type LiveActivityKind = 'reasoning' | 'assistant' | 'tool' | 'subagent';
+export type LiveActivityKind = 'reasoning' | 'assistant' | 'tool' | 'subagent' | 'status';
 
 export interface LiveActivityEvent {
   kind: LiveActivityKind;
@@ -40,7 +40,8 @@ export function isLiveActivityEvent(value: unknown): value is LiveActivityEvent 
     event.kind === 'reasoning' ||
     event.kind === 'assistant' ||
     event.kind === 'tool' ||
-    event.kind === 'subagent'
+    event.kind === 'subagent' ||
+    event.kind === 'status'
   );
 }
 

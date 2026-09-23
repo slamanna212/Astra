@@ -10,8 +10,13 @@ import { queryKeys } from '../../../api/queryKeys';
 import type { Message } from '../../../api/types';
 import type { SkillCommandExchange } from '../../../lib/skillSlashCommand';
 import { buildToolResultIndex } from '../../../lib/transcript';
+import { scrollBehavior } from '../../../lib/motion';
 import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
 import { MessageRow } from './MessageRow';
+import { isLiveAnswerCanonical, type LiveTurn } from '../../../lib/liveTurn';
+import type { LiveActivityEvent } from '../../../lib/liveActivity';
+import { LiveTurnRow } from './LiveTurnRow';
+import { AgentWorkspaceDrawer } from './AgentWorkspaceDrawer';
 import { SkillCommandResult } from './SkillCommandResult';
 import classes from './Transcript.module.css';
 
@@ -24,6 +29,7 @@ interface PageParam {
 type Row =
   | { key: string; kind: 'loader-top' | 'loader-bottom' }
   | { key: string; kind: 'message'; message: Message }
+  | { key: string; kind: 'live'; turn: LiveTurn }
   | { key: string; kind: 'skill-command'; exchange: SkillCommandExchange };
 
 const NEAR_EDGE_PX = 400;
@@ -39,8 +45,10 @@ export const Transcript = memo(function Transcript({
   reasoningEffort,
   sessionTokens = 0,
   sessionCostUsd = null,
-  activityDisplayMode = 'transparent_stream',
+  activityDisplayMode = 'compact_worklog',
   skillCommands = EMPTY_SKILL_COMMANDS,
+  liveTurn = null,
+  onRetryLiveTurn,
 }: {
   sessionId: string;
   highlightMessageId?: number;
@@ -52,6 +60,8 @@ export const Transcript = memo(function Transcript({
   sessionCostUsd?: number | null;
   activityDisplayMode?: ActivityDisplayMode;
   skillCommands?: SkillCommandExchange[];
+  liveTurn?: LiveTurn | null;
+  onRetryLiveTurn?: () => void;
 }) {
   const navigate = useNavigate();
   const initialParam = useMemo<PageParam>(
@@ -100,8 +110,9 @@ export const Transcript = memo(function Transcript({
     for (const exchange of skillCommands) {
       list.push({ key: `skills-${exchange.id}`, kind: 'skill-command', exchange });
     }
+    if (liveTurn && !hasNextPage && !isLiveAnswerCanonical(messages, liveTurn)) list.push({ key: 'live-turn', kind: 'live', turn: liveTurn });
     return list;
-  }, [messages, hasPreviousPage, hasNextPage, skillCommands]);
+  }, [messages, hasPreviousPage, hasNextPage, skillCommands, liveTurn]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -112,6 +123,33 @@ export const Transcript = memo(function Transcript({
     overscan: 6,
     getItemKey: (index) => rows[index]?.key ?? index,
   });
+
+  // Scroll anchoring. `nearBottom` measures geometry, and geometry cannot express intent: this list
+  // is virtualized, so its height is recomputed as rows are measured and the bottom moves away from
+  // a reader who never scrolled. Reading that as "the reader left the bottom" is what silently
+  // stopped the stream from following. Intent is therefore tracked separately, and the only scroll
+  // offset that does not count as intent is the one this component set itself.
+  const [following, setFollowing] = useState(true);
+  // The offset our own anchoring produced, so the scroll event it triggers is not mistaken for the
+  // reader moving the viewport. Consumed by the first scroll event that observes it.
+  const anchoredScrollTopRef = useRef<number | null>(null);
+
+  const anchorToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 1) el.scrollTop = el.scrollHeight;
+    // Read back the offset the browser actually applied, which clamps to the scrollable range.
+    anchoredScrollTopRef.current = el.scrollTop;
+  }, []);
+
+  // A different conversation starts out following its own tail.
+  const followedSessionRef = useRef(sessionId);
+  useEffect(() => {
+    if (followedSessionRef.current === sessionId) return;
+    followedSessionRef.current = sessionId;
+    anchoredScrollTopRef.current = null;
+    setFollowing(true);
+  }, [sessionId]);
 
   // Prepending older messages must not move the content already on screen: capture the scroll
   // container's height before the fetch, then add back exactly what grew above the fold.
@@ -140,9 +178,8 @@ export const Transcript = memo(function Transcript({
     if (didInitialScrollRef.current || query.isPending) return;
     didInitialScrollRef.current = true;
     if (highlightMessageId) return;
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [query.isPending, highlightMessageId]);
+    anchorToBottom();
+  }, [query.isPending, highlightMessageId, anchorToBottom]);
 
   const didHighlightScrollRef = useRef(false);
   useEffect(() => {
@@ -154,25 +191,41 @@ export const Transcript = memo(function Transcript({
   }, [rows, highlightMessageId, virtualizer]);
 
   const [nearBottom, setNearBottom] = useState(true);
+  const totalSize = virtualizer.getTotalSize();
+  const lastRowKey = rows.at(-1)?.key;
+  const lastRowSize = liveTurn ? `${liveTurn.answer.length}:${liveTurn.reasoning.length}:${liveTurn.events.length}` : '';
+
+  // A following reader stays pinned as the list grows. Anchoring here, rather than only once the
+  // geometry happens to report the bottom, is what keeps a stream following after the list has been
+  // re-measured — before any scroll event has had the chance to report the new height.
+  useLayoutEffect(() => {
+    if (!following || !didInitialScrollRef.current || prependingRef.current || highlightMessageId) return;
+    anchorToBottom();
+  }, [following, lastRowKey, lastRowSize, totalSize, highlightMessageId, anchorToBottom]);
+
   const lastSkillCommandId = skillCommands.at(-1)?.id;
   useEffect(() => {
-    if (lastSkillCommandId === undefined) return;
+    if (lastSkillCommandId === undefined || !following) return;
     requestAnimationFrame(() => {
       const el = scrollRef.current;
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
     });
-  }, [lastSkillCommandId]);
+  }, [lastSkillCommandId, following]);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
-    if (el.scrollTop < NEAR_EDGE_PX) loadOlder();
-    if (
-      el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_EDGE_PX &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
+    const top = el.scrollTop;
+    const distance = el.scrollHeight - top - el.clientHeight;
+    const atBottom = distance < NEAR_BOTTOM_PX;
+    const anchored = anchoredScrollTopRef.current;
+    anchoredScrollTopRef.current = null;
+    // Landing where this component deliberately anchored says nothing about the reader; anywhere
+    // else the viewport went, the reader put it there.
+    if (anchored === null || Math.abs(top - anchored) > 1) setFollowing(atBottom);
+    setNearBottom(atBottom);
+    if (top < NEAR_EDGE_PX) loadOlder();
+    if (distance < NEAR_EDGE_PX && hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
     }
   }, [loadOlder, hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -184,8 +237,33 @@ export const Transcript = memo(function Transcript({
       navigate(`/chats/${encodeURIComponent(sessionId)}`, { replace: true });
       return;
     }
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    // An explicit request to follow, so the stream resumes tracking the tail.
+    setFollowing(true);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
   }, [hasNextPage, navigate, sessionId]);
+
+  // The transcript owns the agent workspace rather than the live row, because the row is a
+  // placeholder that is replaced by canonical history mid-turn. It also retains the last activity
+  // snapshot so the drawer does not empty out under the reader when the turn ends.
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceEvents, setWorkspaceEvents] = useState<LiveActivityEvent[]>([]);
+  const liveTurnEvents = liveTurn?.events;
+  useEffect(() => {
+    if (liveTurnEvents) setWorkspaceEvents(liveTurnEvents);
+  }, [liveTurnEvents]);
+  // Reset only on an actual session change: doing this unconditionally would run after the snapshot
+  // effect above on mount and wipe the activity it just captured.
+  const workspaceSessionRef = useRef(sessionId);
+  useEffect(() => {
+    if (workspaceSessionRef.current === sessionId) return;
+    workspaceSessionRef.current = sessionId;
+    setWorkspaceOpen(false);
+    setWorkspaceEvents([]);
+  }, [sessionId]);
+  const workspace = (
+    <AgentWorkspaceDrawer opened={workspaceOpen} onClose={() => setWorkspaceOpen(false)} events={workspaceEvents} />
+  );
 
   if (query.isPending) {
     return (
@@ -203,13 +281,16 @@ export const Transcript = memo(function Transcript({
       </Center>
     );
   }
-  if (messages.length === 0 && skillCommands.length === 0) {
+  if (messages.length === 0 && skillCommands.length === 0 && !liveTurn) {
     return (
-      <Center h="100%">
-        <Text c="dimmed" size="sm">
-          No messages in this conversation.
-        </Text>
-      </Center>
+      <>
+        <Center h="100%">
+          <Text c="dimmed" size="sm">
+            No messages in this conversation.
+          </Text>
+        </Center>
+        {workspace}
+      </>
     );
   }
 
@@ -257,6 +338,14 @@ export const Transcript = memo(function Transcript({
                   />
                 )}
                 {row.kind === 'skill-command' && <SkillCommandResult exchange={row.exchange} />}
+                {row.kind === 'live' && (
+                  <LiveTurnRow
+                    turn={row.turn}
+                    workspaceOpen={workspaceOpen}
+                    onOpenWorkspace={() => setWorkspaceOpen(true)}
+                    onRetry={onRetryLiveTurn}
+                  />
+                )}
               </div>
             </div>
           );
@@ -276,6 +365,7 @@ export const Transcript = memo(function Transcript({
           </ActionIcon>
         </Tooltip>
       )}
+      {workspace}
     </div>
   );
 });

@@ -155,6 +155,35 @@
   padding: var(--mantine-spacing-sm);
 }
 
+.liveDetails button,
+.workspaceTrigger {
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.workspaceTrigger {
+  min-height: 40px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--astra-border);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--astra-surface-sunk);
+  color: inherit;
+  cursor: pointer;
+}
+
+.liveDetails {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--astra-border);
+  border-radius: var(--mantine-radius-sm);
+}
+
+@media (max-width: 48em) {
+  .rowWrapper { padding: 8px 12px; }
+  .userBubble, .userMessage, .assistantContent { max-width: 100%; }
+}
+
 .jumpToLatest {
   position: absolute;
   bottom: var(--mantine-spacing-md);
