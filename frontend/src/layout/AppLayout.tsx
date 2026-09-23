@@ -113,7 +113,7 @@ export function AppLayout() {
                   aria-current={active ? 'page' : undefined}
                   onClick={close}
                   className={classes.navItem}
-                  classNames={{ root: active ? classes.navItemActive : undefined, body: classes.navItemBody }}
+                  classNames={{ root: active ? classes.navItemActive : undefined, body: classes.navItemBody, section: classes.navItemSection }}
                 />
               </Tooltip>
             );

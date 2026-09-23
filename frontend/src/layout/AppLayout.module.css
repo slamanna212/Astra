@@ -140,6 +140,10 @@
   .navItemBody {
     display: none;
   }
+
+  .navItemSection {
+    margin-inline: 0;
+  }
 }
 
 .navItem:hover {
