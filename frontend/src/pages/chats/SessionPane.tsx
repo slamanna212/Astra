@@ -65,7 +65,6 @@ export default function SessionPane() {
   const [approval, setApproval] = useState<{ request_id: string; command?: string; description?: string } | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
   const [liveTps, setLiveTps] = useState<number | null>(null);
   const [turnTps, setTurnTps] = useState<{ tps: number; outputTokens: number } | null>(null);
   const [draft, setDraft] = useComposerDraft(sessionId);
@@ -172,7 +171,6 @@ export default function SessionPane() {
     pendingTps.current = null;
     // Synchronize React with session-scoped browser recovery state when the route changes.
     setRunning(runningRef.current);
-    setShowRecoveryBanner(recovered !== null);
     setCompaction(null);
     setTurnError(null);
     setRecoveringContext(false);
@@ -246,14 +244,22 @@ export default function SessionPane() {
     };
     const terminal = (reconcile = reconcileTurn) => {
       flush();
+      if (liveTurnRef.current) {
+        // Keep the final streamed text across reloads until durable history confirms it.
+        saveChatRecovery(sessionId, {
+          lastEventId: lastEventIdRef.current,
+          streaming: streamingRef.current,
+          reasoning: reasoningRef.current,
+          activity: [],
+          events: liveEventsRef.current,
+        });
+      }
       setLiveTps(null);
       runningRef.current = false;
       observedIdle = true;
       setRunning(false);
       setClarify(null);
       setApproval(null);
-      clearChatRecovery(sessionId);
-      setShowRecoveryBanner(false);
       if (liveTurnRef.current) {
         liveTurnRef.current = { ...liveTurnRef.current, state: 'finishing' };
         setLiveTurn({ sessionId, turn: liveTurnRef.current });
@@ -270,6 +276,7 @@ export default function SessionPane() {
       void refreshCanonical(reconcile).then((refreshed) => {
         if (!settled()) return;
         if (refreshed) {
+          clearChatRecovery(sessionId);
           retireLiveTurn();
           return;
         }
@@ -282,7 +289,10 @@ export default function SessionPane() {
         }
         retryHistoryRef.current = () => {
           void refreshCanonical(true).then((recovered) => {
-            if (recovered && settled()) retireLiveTurn();
+            if (recovered && settled()) {
+              clearChatRecovery(sessionId);
+              retireLiveTurn();
+            }
           });
         };
       });
@@ -369,7 +379,6 @@ export default function SessionPane() {
         setLiveTurn({ sessionId, turn: liveTurnRef.current });
         pendingTps.current = null;
         setRunning(true);
-        setShowRecoveryBanner(false);
         setLiveTps(null);
         setTurnTps(null);
         setTurnError(null);
@@ -477,7 +486,6 @@ export default function SessionPane() {
 
   const start = useCallback(async (text: string) => {
     clearChatRecovery(sessionId);
-    setShowRecoveryBanner(false);
     sendingRef.current = true;
     streamingRef.current = '';
     reasoningRef.current = '';
@@ -811,6 +819,13 @@ export default function SessionPane() {
         <Group gap="sm" wrap="wrap">
           <SourceBadge source={s.source} size="sm" />
           <Badge size="sm" color={connection === 'live' ? 'green' : 'sand'} variant="light">{connection}</Badge>
+          {connection === 'reconnecting' && (
+            <Tooltip label={`Retry connection now (attempt ${reconnectAttempt}/${CHAT_RECONNECT_DELAYS_MS.length})`}>
+              <ActionIcon size="sm" variant="subtle" color="sand" aria-label="Retry connection" onClick={() => retryNowRef.current()}>
+                <IconRefresh size={14} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           {s.model && (
             <Text fz={11} c="dimmed">
               {s.model}
@@ -843,33 +858,6 @@ export default function SessionPane() {
       </Stack>
 
       <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {(showRecoveryBanner || connection === 'reconnecting') && (
-          <Alert
-            m="sm"
-            color="yellow"
-            title={connection === 'reconnecting' ? 'Connection interrupted' : 'Response restored'}
-            role="status"
-          >
-            <Group justify="space-between" align="center" wrap="wrap">
-              <Text size="sm">
-                {connection === 'reconnecting'
-                  ? `Reconnecting to the live response (attempt ${reconnectAttempt}/${CHAT_RECONNECT_DELAYS_MS.length}). Your partial response is saved in this browser.`
-                  : 'A response was in progress when you last left. The saved partial response is shown while Astra refreshes canonical history.'}
-              </Text>
-              <Group gap="xs">
-                {showRecoveryBanner && (
-                  <Button size="compact-xs" variant="subtle" onClick={() => {
-                    setShowRecoveryBanner(false);
-                    clearChatRecovery(sessionId);
-                  }}>Dismiss</Button>
-                )}
-                <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={13} />} onClick={() => retryNowRef.current()}>
-                  Refresh now
-                </Button>
-              </Group>
-            </Group>
-          </Alert>
-        )}
         <Box style={{ flex: 1, minHeight: 0 }}>
           <Transcript
             sessionId={sessionId}

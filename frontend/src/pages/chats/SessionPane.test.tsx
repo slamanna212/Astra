@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router';
 import { jsonResponse, render } from '../../test/render';
 import type { SessionDetail } from '../../api/types';
+import { loadChatRecovery, saveChatRecovery } from '../../lib/chatRecovery';
 import SessionPane from './SessionPane';
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -92,6 +93,43 @@ describe('conversation stream updates', () => {
     act(flushFrame);
     act(() => stream.dispatchEvent(new Event('error')));
     expect(screen.getByTestId('live-turn')).toHaveTextContent('reconnecting');
+    expect(screen.getByRole('button', { name: 'Retry connection' })).toBeInTheDocument();
+    expect(screen.queryByText('Connection interrupted')).not.toBeInTheDocument();
+  });
+
+  it('silently restores a response while reconnecting to an active turn', async () => {
+    saveChatRecovery('s1', { lastEventId: 7, streaming: 'Saved partial', reasoning: '', activity: [], events: [] });
+    const { stream } = await mount(true);
+    expect(stream.url).toContain('7');
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Saved partial');
+    expect(screen.queryByText('Response restored')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry connection' })).not.toBeInTheDocument();
+    expect(loadChatRecovery('s1')?.streaming).toBe('Saved partial');
+  });
+
+  it('keeps a restored response until finished history is refreshed', async () => {
+    let finishRefresh!: () => void;
+    refresh.mockImplementationOnce(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    saveChatRecovery('s1', { lastEventId: 7, streaming: 'Saved answer', reasoning: '', activity: [], events: [] });
+    await mount(false);
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('live-turn')).toHaveTextContent('Saved answer');
+    expect(loadChatRecovery('s1')?.streaming).toBe('Saved answer');
+    expect(screen.queryByText('Response restored')).not.toBeInTheDocument();
+    await act(async () => finishRefresh());
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
+    expect(loadChatRecovery('s1')).toBeNull();
+  });
+
+  it('retains saved text when finished history refresh fails, then clears it after retry', async () => {
+    refresh.mockRejectedValueOnce(new Error('offline'));
+    saveChatRecovery('s1', { lastEventId: 7, streaming: 'Saved answer', reasoning: '', activity: [], events: [] });
+    await mount(false);
+    await waitFor(() => expect(screen.getByTestId('live-turn')).toHaveTextContent('unreconciled'));
+    expect(loadChatRecovery('s1')?.streaming).toBe('Saved answer');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry history refresh' }));
+    await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
+    expect(loadChatRecovery('s1')).toBeNull();
   });
 
   it('keeps a cancelled partial response until canonical history replaces it', async () => {
@@ -201,11 +239,13 @@ describe('conversation stream updates', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.getByTestId('live-turn')).toHaveTextContent('unreconciled'));
     expect(screen.getByTestId('live-turn')).toHaveTextContent('Streamed answer');
+    expect(loadChatRecovery('s1')?.streaming).toBe('Streamed answer');
 
     refresh.mockImplementationOnce(() => Promise.resolve(undefined));
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByTestId('live-turn')).not.toBeInTheDocument());
+    expect(loadChatRecovery('s1')).toBeNull();
   });
 
   it('reports the turn as finishing while the canonical refresh is still in flight', async () => {
@@ -287,7 +327,7 @@ describe('conversation stream updates', () => {
     const { stream, queryClient } = await mount();
     act(() => stream.dispatchEvent(new Event('error')));
     expect(refresh).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry connection' }));
     act(() => Stream.instances[1]!.open(false));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
     expect(refresh).toHaveBeenCalledWith(queryClient, 's1', expect.objectContaining({ reconcile: true }));
