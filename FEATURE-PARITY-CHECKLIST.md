@@ -223,15 +223,6 @@ Local evidence: [`AppLayout.tsx`](frontend/src/layout/AppLayout.tsx), responsive
 ## MCP, extensions, and distribution
 
 - [ ] MCP server management UI (add/edit/delete)
-- [ ] Opt-in local extension loader
-- [ ] One-click vetted extension gallery
-- [ ] Extension themes, TTS engines, nav actions, sidecars, iframe tabs, settings, and owned storage
-- [ ] Extension diagnostics and consented sidecar proxy
-- [ ] Subpath/reverse-proxy mount support explicitly tested/documented
-- [ ] Dockerfile/Compose packaging in this repository
-- [ ] Multi-architecture GHCR release pipeline
-- [ ] Nix package/NixOS module
-- [ ] Native macOS/Windows/Linux/Android/iOS wrapper integrations (upstream wrappers are separate projects)
 
 ## Astra capabilities beyond the upstream checklist
 
