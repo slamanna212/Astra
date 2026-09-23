@@ -1,5 +1,5 @@
-import { ActionIcon, Badge, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
-import { IconArrowUp, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStop, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
+import { ActionIcon, Badge, Box, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
+import { IconArrowUp, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
@@ -66,7 +66,6 @@ export function ChatComposer({
   onAttach,
   liveTps,
   busyTurnMode,
-  onBusyTurnModeChange,
   contextTokens,
   contextLength,
   contextEstimated,
@@ -93,7 +92,6 @@ export function ChatComposer({
   onAttach: (file: File) => Promise<string>;
   liveTps: number | null;
   busyTurnMode: BusyTurnMode;
-  onBusyTurnModeChange: (value: BusyTurnMode) => void;
   contextTokens: number;
   contextLength: number | null;
   contextEstimated: boolean;
@@ -181,6 +179,10 @@ export function ChatComposer({
     onDraftChange('');
     setAttachments([]);
   };
+
+  // While running, the action button is Stop until something is typed, then it sends via the busy-turn mode from settings.
+  const showStop = running && !draft.trim() && attachments.length === 0;
+  const actionLabel = showStop ? 'Stop' : running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message';
 
   return (
     <Box className={classes.wrapper}>
@@ -315,22 +317,6 @@ export function ChatComposer({
 
           {running && (
             <>
-              <Menu position="top-start" offset={8} radius="md">
-                <Menu.Target>
-                  <button type="button" className={`${classes.pill} ${classes.effortPill}`} aria-label="Busy turn mode">
-                    <span className={classes.pillModel}>{BUSY_MODE_LABELS[busyTurnMode]}</span>
-                    <IconChevronDown size={13} className={classes.pillChevron} />
-                  </button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Label>Send while responding</Menu.Label>
-                  <Menu.RadioGroup value={busyTurnMode} onChange={(value) => onBusyTurnModeChange(value as BusyTurnMode)}>
-                    <Menu.RadioItem value="queue">Queue — send next</Menu.RadioItem>
-                    <Menu.RadioItem value="interrupt">Interrupt — stop and send</Menu.RadioItem>
-                    <Menu.RadioItem value="steer">Steer — guide this turn</Menu.RadioItem>
-                  </Menu.RadioGroup>
-                </Menu.Dropdown>
-              </Menu>
               <Group gap={6} wrap="nowrap">
                 <span className={classes.runningDot} />
                 <Text component="span" ff="monospace" fz={11} c="var(--astra-accent)">
@@ -354,21 +340,17 @@ export function ChatComposer({
               </ActionIcon>
             </Tooltip>
           )}
-          {running && (
-            <Button size="xs" h={30} color="red" variant="light" leftSection={<IconPlayerStop size={14} />} onClick={() => void onStop()}>
-              Stop
-            </Button>
-          )}
           <ContextRing tokens={contextTokens} contextLength={contextLength} estimated={contextEstimated} />
-          <Tooltip label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}>
+          <Tooltip label={actionLabel}>
             <ActionIcon
               size={32}
               radius="xl"
               variant="filled"
-              onClick={() => void submit()}
-              aria-label={running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message'}
+              color={showStop ? 'red' : running ? 'yellow' : undefined}
+              onClick={() => void (showStop ? onStop() : submit())}
+              aria-label={actionLabel}
             >
-              <IconArrowUp size={18} stroke={2.2} />
+              {showStop ? <IconPlayerStopFilled size={14} /> : <IconArrowUp size={18} stroke={2.2} />}
             </ActionIcon>
           </Tooltip>
         </Group>

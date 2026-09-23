@@ -15,6 +15,7 @@ function Harness({
   onQueue = vi.fn(async () => undefined),
   onInterrupt = vi.fn(async () => undefined),
   onSteer = vi.fn(async () => undefined),
+  onStop = vi.fn(async () => undefined),
 }: {
   onSend: (text: string) => Promise<void>;
   onAttach: (file: File) => Promise<string>;
@@ -25,6 +26,7 @@ function Harness({
   onQueue?: (text: string) => Promise<void>;
   onInterrupt?: (text: string) => Promise<void>;
   onSteer?: (text: string) => Promise<void>;
+  onStop?: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
   const [model, setModel] = useState<string | null>('model-a');
@@ -34,7 +36,7 @@ function Harness({
     <ChatComposer
       running={running}
       onSend={onSend}
-      onStop={vi.fn()}
+      onStop={onStop}
       onSteer={onSteer}
       onQueue={onQueue}
       onInterrupt={onInterrupt}
@@ -57,7 +59,6 @@ function Harness({
       onAttach={onAttach}
       liveTps={null}
       busyTurnMode={busyTurnMode}
-      onBusyTurnModeChange={vi.fn()}
       contextTokens={0}
       contextLength={null}
       contextEstimated={false}
@@ -157,5 +158,22 @@ describe('ChatComposer', () => {
     await user.click(screen.getByLabelText(buttonName));
 
     expect(handlers[expectedHandler]).toHaveBeenCalledWith('change course');
+  });
+
+  it('shows Stop while running with an empty draft and swaps back once typing', async () => {
+    const user = userEvent.setup();
+    const onStop = vi.fn(async () => undefined);
+    const onSteer = vi.fn(async () => undefined);
+    render(<Harness running onStop={onStop} onSteer={onSteer} onSend={vi.fn(async () => undefined)} onAttach={vi.fn(async () => 'file')} />);
+
+    await user.click(screen.getByLabelText('Stop'));
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Steer message')).not.toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('Steer while Hermes is responding…'), 'x');
+    expect(screen.queryByLabelText('Stop')).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText('Steer message'));
+    expect(onSteer).toHaveBeenCalledWith('x');
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 });

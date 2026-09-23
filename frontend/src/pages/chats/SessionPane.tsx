@@ -43,7 +43,7 @@ import {
 } from '../../lib/chatRecovery';
 import { saveComposerDraft, useComposerDraft } from '../../lib/composerDrafts';
 import { clearBusyTurnQueue, enqueueBusyTurnMessage, loadBusyTurnQueue, removeBusyTurnMessage, type QueuedTurnMessage } from '../../lib/busyTurnQueue';
-import { updateUiPreferences, useUiPreferences } from '../../lib/uiPreferences';
+import { useUiPreferences } from '../../lib/uiPreferences';
 import { appendLiveActivity, parseLiveActivityData, type LiveActivityEvent } from '../../lib/liveActivity';
 import { filterAndGroupSkills, type SkillCommandExchange } from '../../lib/skillSlashCommand';
 import { refreshMessages } from '../../lib/refreshMessages';
@@ -985,7 +985,6 @@ export default function SessionPane() {
         onAttach={async (file) => (await uploadFile({ directory: '', file })).path}
         liveTps={liveTps}
         busyTurnMode={prefs.busyTurnMode}
-        onBusyTurnModeChange={(busyTurnMode) => updateUiPreferences({ busyTurnMode })}
         contextTokens={s.context_tokens}
         contextLength={s.context_length}
         contextEstimated={s.context_tokens_estimated}
