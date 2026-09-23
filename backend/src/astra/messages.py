@@ -31,8 +31,15 @@ makes id-keyset paging an index range scan either direction.
 Truncation: any ``content``/``reasoning`` value over 64 KB is cut to a UTF-8-safe prefix and
 flagged ``truncated``; the full row is available via ``get_message``. Tool-call ``arguments`` are
 truncated independently at a much smaller threshold (they inflate the *window* response, not the
-single-message one). ``api_content`` and the ``codex_*`` columns are internal transport blobs
+single-message one). ``api_content`` and ``codex_reasoning_items`` are internal transport blobs
 (raw provider payloads / codex reasoning items) and are never read or exposed, full row included.
+
+Codex commentary: Codex Responses models keep user-facing mid-turn narration ("PR #128 is open,
+checking CI…") as ``phase=commentary`` message items in ``codex_message_items`` while ``content``
+stays empty on those tool-call turns (1,372 such rows in the real DB). That column is read only to
+extract that visible text, using Hermes' own rule (``AIAgent._extract_codex_commentary_messages``:
+``type=message``, ``phase=commentary``, ``output_text`` parts; ``analysis`` stays hidden) and
+Hermes' redactor, exposed as ``commentary``. The raw items are never returned.
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from astra.db import Schema
+from astra.hermes_bridge import redact_sensitive_text
 from astra.models import ChildSession, Message, MessagePage, ToolCallOut
 
 DEFAULT_LIMIT = 200
@@ -51,8 +59,8 @@ MAX_LIMIT = 500
 MAX_INLINE_BYTES = 64 * 1024
 MAX_TOOL_ARG_CHARS = 4096
 
-# Columns we ever read. Deliberately excludes api_content, codex_reasoning_items,
-# codex_message_items (internal transport blobs), reasoning_details (redundant — see module
+# Columns we ever read. Deliberately excludes api_content, codex_reasoning_items (internal
+# transport blobs), reasoning_details (redundant — see module
 # docstring in the evidence trail: it never appears without reasoning/reasoning_content),
 # observed (always 0, unused), platform_message_id and _compressed_summary (implementation
 # bookkeeping, not conversation content).
@@ -69,6 +77,7 @@ CANDIDATE_COLUMNS: tuple[str, ...] = (
     "finish_reason",
     "reasoning",
     "reasoning_content",
+    "codex_message_items",
     "active",
     "compacted",
     "display_kind",
@@ -179,6 +188,38 @@ def _parse_tool_calls(raw: str | None) -> list[ToolCallOut] | None:
     return out or None
 
 
+def _extract_commentary(raw: str | None) -> str | None:
+    """Visible Codex commentary text from ``codex_message_items`` (see module docstring)."""
+    if not raw:
+        return None
+    try:
+        items = json.loads(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(items, list):
+        return None
+    texts: list[str] = []
+    for item in items:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        phase = item.get("phase")
+        if not isinstance(phase, str) or phase.strip().lower() != "commentary":
+            continue
+        parts = item.get("content")
+        if not isinstance(parts, list):
+            continue
+        visible = "".join(
+            part["text"]
+            for part in parts
+            if isinstance(part, dict) and part.get("type") == "output_text" and isinstance(part.get("text"), str)
+        ).strip()
+        if visible:
+            texts.append(visible)
+    if not texts:
+        return None
+    return redact_sensitive_text("\n\n".join(texts))
+
+
 def _row_to_message(row: sqlite3.Row, *, truncate: bool) -> Message:
     keys = set(row.keys())
 
@@ -202,6 +243,7 @@ def _row_to_message(row: sqlite3.Row, *, truncate: bool) -> Message:
         token_count=get("token_count"),
         finish_reason=get("finish_reason"),
         reasoning=reasoning,
+        commentary=_extract_commentary(get("codex_message_items")) if row["role"] == "assistant" else None,
         display_kind=get("display_kind") or None,
         display_metadata=_parse_display_metadata(get("display_metadata")),
         effect_disposition=get("effect_disposition"),

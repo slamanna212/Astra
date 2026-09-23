@@ -92,6 +92,8 @@ export interface Message {
   token_count: number | null;
   finish_reason: string | null;
   reasoning: string | null;
+  /** Codex mid-turn narration shown between tool calls (content is empty on those turns). */
+  commentary?: string | null;
   display_kind: string | null;
   display_metadata: Record<string, unknown> | null;
   effect_disposition: string | null;

@@ -19,6 +19,11 @@ export function createConversationExport(session: SessionDetail, messages: Messa
   };
 }
 
+/** Commentary (Codex mid-turn narration) precedes the message body, as in the transcript. */
+function visibleText(message: Message): string {
+  return [message.commentary ?? '', contentText(message.content)].filter(Boolean).join('\n\n');
+}
+
 function contentText(content: MessageContent): string {
   if (typeof content === 'string') return content;
   if (content === null) return '';
@@ -54,7 +59,7 @@ export function conversationToMarkdown(data: ConversationExport): string {
   for (const message of data.messages) {
     const timestamp = formatTimestamp(message.timestamp);
     lines.push(`## ${headingRole(message.role)}${timestamp ? ` — ${timestamp}` : ''}`, '');
-    const text = contentText(message.content);
+    const text = visibleText(message);
     if (text) lines.push(text, '');
     if (message.reasoning) {
       lines.push('<details>', '<summary>Reasoning</summary>', '', message.reasoning, '', '</details>', '');
@@ -153,7 +158,7 @@ function messagePdfLines(message: Message, width: number): PdfLine[] {
       for (const line of wrapLine(sourceLine, width)) output.push({ text: line, tone, mono, label });
     }
   };
-  const content = contentText(message.content);
+  const content = visibleText(message);
   if (content) add(content, 'body');
   if (message.reasoning) {
     if (output.length) output.push({ text: '', tone: 'muted' });

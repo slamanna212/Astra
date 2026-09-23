@@ -343,6 +343,8 @@ class Message(BaseModel):
     token_count: int | None = None
     finish_reason: str | None = None
     reasoning: str | None = None
+    # Codex mid-turn narration (``phase=commentary`` items); see astra/messages.py.
+    commentary: str | None = None
     display_kind: str | None = None
     display_metadata: dict[str, Any] | None = None
     effect_disposition: str | None = None

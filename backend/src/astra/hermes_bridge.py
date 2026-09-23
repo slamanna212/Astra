@@ -134,5 +134,13 @@ def redact_approval_command(command: object) -> str | None:
         return None
 
 
+def redact_sensitive_text(text: str) -> str | None:
+    """Hermes' own secret redactor (``agent.redact``), forced on; fail closed."""
+    try:
+        return str(_import("agent.redact").redact_sensitive_text(text, force=True))
+    except Exception:
+        return None
+
+
 class HermesImportError(RuntimeError):
     """Raised when a required Hermes module cannot be imported."""

@@ -129,7 +129,7 @@ def test_message_shape(authed: TestClient) -> None:
     item = body["items"][0]
     assert set(item) == {
         "id", "role", "content", "truncated", "tool_calls", "tool_call_id", "tool_name",
-        "timestamp", "token_count", "finish_reason", "reasoning", "display_kind",
+        "timestamp", "token_count", "finish_reason", "reasoning", "commentary", "display_kind",
         "display_metadata", "effect_disposition", "active", "compacted",
     }
     for forbidden in ("api_content", "codex_reasoning_items", "codex_message_items", "session_id"):
@@ -279,3 +279,26 @@ def test_query_plan_uses_index(fixture_db_path: Path) -> None:
     db.close()
     assert any("USING INDEX idx_messages_session_id" in p for p in plan), plan
     assert not any(p.startswith("SCAN") for p in plan), plan
+
+
+
+def test_codex_commentary_extracted_and_redacted(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    from astra import messages
+
+    monkeypatch.setattr(messages, "redact_sensitive_text", lambda text: text.replace("SECRET", "***"))
+    items = [
+        {"type": "reasoning", "summary": []},
+        {"type": "message", "phase": "analysis", "content": [{"type": "output_text", "text": "scratchpad"}]},
+        {"type": "message", "phase": "commentary", "content": [{"type": "output_text", "text": "PR #128 is open."}]},
+        {"type": "message", "phase": "Commentary ", "content": [{"type": "output_text", "text": "Token SECRET set."}]},
+    ]
+    assert messages._extract_commentary(json.dumps(items)) == "PR #128 is open.\n\nToken *** set."
+    assert messages._extract_commentary(None) is None
+    assert messages._extract_commentary("not json") is None
+    assert messages._extract_commentary(json.dumps([{"type": "message", "phase": "final_answer", "content": []}])) is None
+
+    # Fail closed: no redactor available means no commentary, never unredacted text.
+    monkeypatch.setattr(messages, "redact_sensitive_text", lambda text: None)
+    assert messages._extract_commentary(json.dumps(items)) is None

@@ -74,6 +74,7 @@ export function AssistantMessage({
       <BrandMark size={24} />
       <Stack gap={8} className={classes.assistantContent}>
         {message.reasoning && <ReasoningBlock reasoning={message.reasoning} />}
+        {message.commentary && <Markdown sessionId={sessionId}>{message.commentary}</Markdown>}
         {activityDisplayMode === 'transparent_stream' && toolCards}
         {text && <Markdown sessionId={sessionId}>{text}</Markdown>}
         {parts && <ContentParts parts={parts} />}
