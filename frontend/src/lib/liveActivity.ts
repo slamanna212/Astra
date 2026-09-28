@@ -1,4 +1,6 @@
-export type LiveActivityKind = 'reasoning' | 'assistant' | 'tool' | 'subagent' | 'status';
+/** `phase` is a coarse progress marker (preparing, waiting for the model, …) that feeds the live
+ * status line; it never renders as its own block. */
+export type LiveActivityKind = 'reasoning' | 'assistant' | 'tool' | 'subagent' | 'status' | 'phase';
 
 export interface LiveActivityEvent {
   kind: LiveActivityKind;
@@ -26,6 +28,9 @@ export function appendLiveActivity(
       previous.kind === addition.kind
     ) {
       next[next.length - 1] = { ...previous, text: `${previous.text ?? ''}${addition.text ?? ''}` };
+    } else if (previous && addition.kind === 'phase' && previous.kind === 'phase') {
+      // Only the latest phase matters; don't let a chatty sequence crowd out real activity.
+      next[next.length - 1] = { ...addition };
     } else {
       next.push({ ...addition });
     }
@@ -41,7 +46,8 @@ export function isLiveActivityEvent(value: unknown): value is LiveActivityEvent 
     event.kind === 'assistant' ||
     event.kind === 'tool' ||
     event.kind === 'subagent' ||
-    event.kind === 'status'
+    event.kind === 'status' ||
+    event.kind === 'phase'
   );
 }
 

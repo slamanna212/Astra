@@ -177,3 +177,37 @@ describe('ChatComposer', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ChatComposer on a phone', () => {
+  function phoneViewport() {
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  }
+
+  it('shows model and effort as icons that open pickers', async () => {
+    phoneViewport();
+    const user = userEvent.setup();
+    render(<Harness onSend={vi.fn(async () => undefined)} onAttach={vi.fn(async () => 'x')} />);
+
+    // The pill labels are gone; the controls are icon buttons.
+    expect(screen.queryByText('Default effort')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Model' }));
+    await user.click(await screen.findByRole('button', { name: 'model-b' }));
+    await user.click(screen.getByRole('button', { name: 'Model' }));
+    expect(await screen.findByRole('button', { name: 'model-b', pressed: true })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Reasoning effort' }));
+    await user.click(await screen.findByRole('button', { name: 'High' }));
+    await user.click(screen.getByRole('button', { name: 'Reasoning effort' }));
+    expect(await screen.findByRole('button', { name: 'High', pressed: true })).toBeInTheDocument();
+  });
+});

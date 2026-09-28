@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Code, Divider, Group, Loader, Menu, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Divider, Group, Loader, Menu, Stack, Text, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   IconArchive,
@@ -18,7 +18,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { answerChat, approveChat, chatStreamUrl, compactChat, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
 import { uploadFile } from '../../api/files';
@@ -49,6 +49,7 @@ import { filterAndGroupSkills, type SkillCommandExchange } from '../../lib/skill
 import { refreshMessages } from '../../lib/refreshMessages';
 import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
+import { ApprovalCard, ClarifyCard } from './transcript/InlinePrompts';
 import type { LiveTurn } from '../../lib/liveTurn';
 
 const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
@@ -61,7 +62,6 @@ export default function SessionPane() {
   const [running, setRunning] = useState(false);
   const [turnState, setTurnState] = useState<{ sessionId: string; known: boolean }>({ sessionId, known: false });
   const [clarify, setClarify] = useState<{ id: number; question: string; choices: unknown[] | null } | null>(null);
-  const [clarifyText, setClarifyText] = useState('');
   const [approval, setApproval] = useState<{ request_id: string; command?: string; description?: string } | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -453,7 +453,14 @@ export default function SessionPane() {
           pendingReasoning.current = '';
           pendingLiveEvents.current = [];
         }
-        liveTurnRef.current = { userText: liveTurnRef.current?.userText ?? null, answer: streamingRef.current, reasoning: reasoningRef.current, events: liveEventsRef.current, state: 'running' };
+        liveTurnRef.current = {
+          userText: liveTurnRef.current?.userText ?? null,
+          answer: streamingRef.current,
+          reasoning: reasoningRef.current,
+          events: liveEventsRef.current,
+          state: 'running',
+          startedAt: liveTurnRef.current?.startedAt ?? Date.now(),
+        };
         setLiveTurn({ sessionId, turn: liveTurnRef.current });
         pendingTps.current = null;
         setRunning(true);
@@ -477,6 +484,10 @@ export default function SessionPane() {
         pendingReasoning.current += data.text;
         pendingLiveEvents.current.push({ kind: 'reasoning', text: data.text });
         if (data.tps !== undefined) pendingTps.current = data.tps;
+        schedule();
+      }));
+      currentSource.addEventListener('phase', tracked((event) => {
+        pendingLiveEvents.current.push({ kind: 'phase', data: parseLiveActivityData((event as MessageEvent).data) });
         schedule();
       }));
       currentSource.addEventListener('clarify', tracked((event) => {
@@ -577,6 +588,32 @@ export default function SessionPane() {
     };
   }, [sessionId, queryClient, setDraft]);
 
+  const livePrompts = useMemo(() => {
+    if (!clarify && !approval) return null;
+    return (
+      <Stack gap="xs">
+        {clarify && (
+          <ClarifyCard
+            key={clarify.id}
+            prompt={clarify}
+            onAnswer={(answer) => answerChat(sessionId, clarify.id, answer)}
+          />
+        )}
+        {approval && (
+          <ApprovalCard
+            key={approval.request_id}
+            prompt={approval}
+            onChoose={(choice) => approveChat(sessionId, approval.request_id, choice)}
+          />
+        )}
+      </Stack>
+    );
+  }, [clarify, approval, sessionId]);
+
+  // Prompts sit inside the live turn where it paused; without a visible live row (a reload that
+  // had nothing to restore, or a deep link into older history) they stay above the composer.
+  const promptsInTranscript = liveTurn?.sessionId === sessionId && highlightMessageId === undefined;
+
   const start = useCallback(async (text: string) => {
     clearChatRecovery(sessionId);
     sendingRef.current = true;
@@ -586,7 +623,7 @@ export default function SessionPane() {
     pendingText.current = '';
     pendingReasoning.current = '';
     pendingLiveEvents.current = [];
-    liveTurnRef.current = { userText: text, answer: '', reasoning: '', events: [], state: 'sending' };
+    liveTurnRef.current = { userText: text, answer: '', reasoning: '', events: [], state: 'sending', startedAt: Date.now() };
     setLiveTurn({ sessionId, turn: liveTurnRef.current });
     try {
       await sendChat(sessionId, {
@@ -964,6 +1001,7 @@ export default function SessionPane() {
             activityDisplayMode={prefs.activityDisplayMode}
             skillCommands={skillCommands}
             liveTurn={liveTurn?.sessionId === sessionId ? liveTurn.turn : null}
+            livePrompts={promptsInTranscript ? livePrompts : null}
             onRetryLiveTurn={() => retryHistoryRef.current()}
           />
         </Box>
@@ -999,30 +1037,7 @@ export default function SessionPane() {
             {formatTps(turnTps.tps)} · {formatCount(turnTps.outputTokens)} tokens
           </Text>
         )}
-        {clarify && (
-          <Alert m="sm" title={clarify.question}>
-            <Group mt="xs">
-              {(clarify.choices ?? []).map((choice) => (
-                <Button key={String(choice)} size="xs" onClick={() => void answerChat(sessionId, clarify.id, String(choice))}>{String(choice)}</Button>
-              ))}
-              <TextInput value={clarifyText} onChange={(event) => setClarifyText(event.currentTarget.value)} placeholder="Type another answer" style={{ flex: 1 }} />
-              <Button size="xs" disabled={!clarifyText.trim()} onClick={() => { void answerChat(sessionId, clarify.id, clarifyText.trim()); setClarifyText(''); }}>Answer</Button>
-            </Group>
-          </Alert>
-        )}
-        {approval && (
-          <Alert m="sm" color="sand" title="Approval required">
-            <Text size="sm">{approval.description ?? 'Hermes needs permission to continue.'}</Text>
-            {approval.command && <Code block mt="xs">{approval.command}</Code>}
-            <Group mt="xs">
-              {(['once', 'session', 'always', 'deny'] as const).map((choice) => (
-                <Button key={choice} size="xs" color={choice === 'deny' ? 'red' : undefined} variant={choice === 'deny' ? 'light' : 'filled'} onClick={() => void approveChat(sessionId, approval.request_id, choice)}>
-                  {choice === 'once' ? 'Approve once' : choice === 'session' ? 'Approve session' : choice === 'always' ? 'Always approve' : 'Deny'}
-                </Button>
-              ))}
-            </Group>
-          </Alert>
-        )}
+        {!promptsInTranscript && livePrompts}
         {queuedMessages.length > 0 && (
           <Alert m="sm" color="blue" title={`${queuedMessages.length} message${queuedMessages.length === 1 ? '' : 's'} queued`} role="status">
             <Group justify="space-between" align="center" wrap="wrap">

@@ -39,7 +39,9 @@
 }
 
 .assistantContent {
-  max-width: 78%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
   flex: 1;
 }
@@ -91,91 +93,124 @@
   }
 }
 
-.reasoningToggle {
-  padding: 2px 4px;
-  border-radius: var(--astra-radius);
+.rowWrapper[data-continued] {
+  padding-top: 0;
 }
 
-.reasoningToggle:hover {
-  background-color: var(--astra-hover);
+/* A new exchange starts with a little air and a hairline, so turns read as separate. */
+.rowWrapper[data-user] {
+  padding-top: 18px;
 }
 
-.reasoningBody {
-  white-space: pre-wrap;
-  border-left: 2px solid var(--astra-border);
-  margin-left: 6px;
-  padding: 4px 0 4px 10px;
+.rowWrapper[data-user] .rowInner {
+  position: relative;
 }
 
-.toolCard {
-  /* Collapsed cards hug their content; an opened card takes the column for args/results. */
-  width: fit-content;
+.rowWrapper[data-user] .rowInner::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 34px;
+  right: 0;
+  border-top: 1px solid var(--astra-divider);
+}
+
+.rowWrapper[data-index='0'] .rowInner::before {
+  display: none;
+}
+
+.assistantFrame {
+  min-width: 0;
+}
+
+.avatarGutter {
+  flex: 0 0 24px;
+  width: 24px;
+  min-height: 1px;
+  padding-top: 2px;
+}
+
+.dim { color: var(--astra-text-dim); }
+.ok { color: var(--astra-ok); }
+.danger { color: var(--astra-danger); }
+.warn { color: var(--astra-warn); }
+
+/* ---- Activity: tool rows, thoughts, groups ---- */
+
+.activitySingle,
+.activityGroup {
   max-width: 100%;
   min-width: 0;
+}
+
+.toolRow,
+.activityGroup {
   border: 1px solid var(--astra-border);
   border-radius: var(--astra-radius);
-  background-color: var(--astra-surface-sunk);
+  background: var(--astra-surface-sunk);
+  transition: border-color var(--astra-transition);
 }
 
-.toolCard[data-opened] {
-  width: 100%;
+.timelineBody .toolRow {
+  border-color: transparent;
+  background: transparent;
 }
 
-.toolCard[data-status='error'] {
+.timelineBody .toolRow[data-opened] {
+  border-color: var(--astra-border);
+  background: var(--astra-surface);
+}
+
+.toolRow[data-status='error'],
+.timelineBody .toolRow[data-status='error'] {
   border-color: var(--astra-danger-soft);
 }
 
-.toolCardHeader {
+.toolHeader,
+.groupHeader {
   display: flex;
   align-items: center;
   width: 100%;
   min-width: 0;
-  padding: 5px 10px 5px 8px;
+  min-height: 30px;
+  padding: 4px 10px;
   gap: 8px;
   border-radius: var(--astra-radius);
 }
 
-.toolCardHeader:hover {
+.toolHeader:hover,
+.groupHeader:hover {
   background-color: var(--astra-hover);
 }
 
-.toolChevron {
-  flex-shrink: 0;
-  color: var(--astra-text-dim);
-  transition: transform var(--astra-transition);
-}
-
-.toolChevron[data-opened] {
-  transform: rotate(90deg);
-}
-
 .toolIcon {
+  display: inline-flex;
   flex-shrink: 0;
   color: var(--astra-text-dim);
 }
 
-.toolCardBody {
-  padding: 0 10px 10px;
-  border-top: 1px solid var(--astra-divider);
-}
-
-.toolName {
+.toolTitle {
   flex-shrink: 0;
-  font-family: var(--astra-font-mono);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--astra-text-body);
   white-space: nowrap;
 }
 
-.toolArgs {
+.toolTarget,
+.thoughtPreview {
   min-width: 0;
-  font-family: var(--astra-font-mono);
-  font-size: 11.5px;
+  flex: 1 1 auto;
+  font-size: 12px;
   color: var(--astra-text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.toolTarget {
+  font-family: var(--astra-font-mono);
+  font-size: 11.5px;
 }
 
 .toolMeta {
@@ -191,51 +226,213 @@
   font-family: var(--astra-font-mono);
   font-size: 11px;
   color: var(--astra-text-dim);
+  white-space: nowrap;
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--astra-text-dim);
+  transition: transform var(--astra-transition);
+}
+
+.chevron[data-opened] {
+  transform: rotate(90deg);
+}
+
+.toolBody {
+  padding: 4px 10px 10px;
+  border-top: 1px solid var(--astra-divider);
+}
+
+.toolSection {
+  margin-top: 4px;
 }
 
 .toolCode {
   max-height: 320px;
+  margin: var(--mantine-spacing-xs) 0;
+  padding: 10px 14px;
   overflow: auto;
+  font-family: var(--astra-font-mono);
   font-size: 11.5px;
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: var(--astra-surface-sunk);
+  border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
+  background: var(--astra-code-bg);
 }
 
-.centerLoader {
+.toolError {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.linkList {
+  padding: 6px 0 2px;
+}
+
+.thoughtBody {
+  margin: 0 10px 10px 32px;
+  padding-left: 10px;
+  border-left: 2px solid var(--astra-border);
+  color: var(--astra-text-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.timelineBody .thoughtBody {
+  margin-left: 10px;
+}
+
+.noticeRow {
+  padding: 5px 10px;
+}
+
+.noticeDetail {
+  margin: 4px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A group's summary is the part that gives way on a narrow screen. */
+.groupHeader .toolTitle {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activityGroup[data-running] .groupHeader .toolTitle {
+  color: var(--astra-text);
+}
+
+.timeline {
+  padding: 6px 10px 8px 12px;
+  border-top: 1px solid var(--astra-divider);
+}
+
+.timelineItem {
+  min-width: 0;
+}
+
+.timelineItem:not(:first-of-type) {
+  margin-top: 4px;
+}
+
+.timelineBullet {
+  background: var(--astra-surface);
+  color: var(--astra-text-dim);
+  border-width: 1px;
+  border-color: var(--astra-border-strong);
+}
+
+.timelineBody {
+  min-width: 0;
+  margin-top: -5px;
+}
+
+.subagentCard {
+  background: var(--astra-surface);
+}
+
+.subagentCard[data-status='running'] {
+  border-color: var(--astra-primary-soft);
+}
+
+.subagentLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ---- Live turn ---- */
+
+.thinking {
+  max-width: 100%;
+}
+
+.thinkingHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 2px;
+  border-radius: var(--astra-radius);
+}
+
+.thinkingHeader:hover {
+  background-color: var(--astra-hover);
+}
+
+.thinkingIcon {
+  color: var(--astra-primary);
+}
+
+.shimmer {
+  background: linear-gradient(90deg, var(--astra-text-dim) 0%, var(--astra-text) 45%, var(--astra-text-dim) 90%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.2s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* The newest reasoning shows through a short window that fades out upward. */
+.thinkingPreview {
+  max-height: 4.8em;
+  margin: 4px 0 0 22px;
+  overflow: hidden;
   display: flex;
-  justify-content: center;
-  padding: var(--mantine-spacing-sm);
+  flex-direction: column-reverse;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--astra-text-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 60%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 60%);
 }
 
-.liveDetails button,
-.workspaceTrigger {
-  min-height: 36px;
-  cursor: pointer;
+.liveStatus {
+  min-height: 22px;
 }
 
-.workspaceTrigger {
-  min-height: 40px;
-  margin-top: 8px;
-  padding: 6px 10px;
+.promptCard {
+  background: var(--astra-surface);
+}
+
+.promptCard[data-kind='approval'] {
+  border-color: var(--astra-warn);
+}
+
+.endChip {
+  align-self: flex-start;
+}
+
+.unknownRow {
   border: 1px solid var(--astra-border);
-  border-radius: var(--mantine-radius-sm);
-  background: var(--astra-surface-sunk);
-  color: inherit;
-  cursor: pointer;
+  border-radius: var(--astra-radius);
 }
 
-.liveDetails {
-  margin: 8px 0;
-  padding: 8px;
-  border: 1px solid var(--astra-border);
-  border-radius: var(--mantine-radius-sm);
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; }
+  .shimmer { color: var(--astra-text-dim); background: none; }
 }
 
 @media (max-width: 48em) {
   .rowWrapper { padding: 8px 12px; }
-  .userBubble, .userMessage, .assistantContent { max-width: 100%; }
+  .userBubble, .userMessage { max-width: 100%; }
+  .rowWrapper[data-user] .rowInner::before { left: 0; }
+  /* Every pixel of width goes to content on a phone; the avatar is decoration. */
+  .avatarGutter { display: none; }
+
 }
 
 .jumpToLatest {

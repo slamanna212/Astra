@@ -115,20 +115,53 @@ describe('Transcript', () => {
     expect(screen.getByText('Partial answer')).toBeInTheDocument();
   });
 
-  it('keeps live reasoning and tool activity inline, collapsed by default', async () => {
+  it('keeps live tool activity inline and collapsed, between the prose around it', async () => {
     fetchMock.mockImplementation(async (input) => String(input).includes('/children')
       ? jsonResponse({ items: [] })
       : jsonResponse({ items: [], has_older: false, has_newer: false, oldest_id: null, newest_id: null }));
-    render(<Transcript sessionId="s1" liveTurn={{ userText: 'Question', answer: 'Only answer', reasoning: 'Private thought', events: [{ kind: 'tool', data: { name: 'search', args: ['sensitive argument'] } }], state: 'running' }} />, { route: '/chats/s1' });
+    render(<Transcript sessionId="s1" liveTurn={{
+      userText: 'Question',
+      answer: 'Only answer',
+      reasoning: 'Private thought',
+      events: [
+        { kind: 'reasoning', text: 'Private thought' },
+        { kind: 'tool', data: { event: 'tool.started', name: 'search', arguments: { q: 'sensitive argument' } } },
+        { kind: 'assistant', text: 'Only answer' },
+      ],
+      state: 'running',
+    }} />, { route: '/chats/s1' });
     await screen.findByText('Only answer');
+    const activity = screen.getByLabelText('Current turn activity');
+    expect(activity).toHaveTextContent('search');
     expect(screen.queryByText('Private thought')).not.toBeInTheDocument();
-    expect(screen.queryByText('sensitive argument')).not.toBeInTheDocument();
-    // The tool card is inline in the transcript, not behind a separate drawer.
-    expect(screen.getByLabelText('Current turn activity')).toHaveTextContent('search');
-    fireEvent.click(screen.getByRole('button', { name: 'Thinking' }));
-    expect(screen.getByText('Private thought')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('search'));
-    expect(screen.getByText(/sensitive argument/)).toBeInTheDocument();
+    expect(screen.queryByText('Arguments')).not.toBeInTheDocument();
+    // The thought and the call form one collapsed group; the answer follows it.
+    const text = activity.textContent ?? '';
+    expect(text.indexOf('search')).toBeLessThan(text.indexOf('Only answer'));
+    fireEvent.click(screen.getByRole('button', { name: /search/ }));
+    // The opened group's rows sit inside a collapse that jsdom never finishes animating.
+    fireEvent.click(screen.getAllByRole('button', { name: /search/, hidden: true }).at(-1)!);
+    expect(screen.getByText('Arguments')).toBeInTheDocument();
+  });
+
+  it('renders a saved agentic turn with one avatar-led block sequence and tools where they happened', async () => {
+    const base = makeMessage(1);
+    const items: Message[] = [
+      { ...base, id: 1, role: 'user', content: 'Fix it' },
+      { ...base, id: 2, role: 'assistant', content: 'Checking first.', tool_calls: [{ id: 'c1', name: 'terminal', arguments: { command: 'npm test' }, arguments_truncated: false }] },
+      { ...base, id: 3, role: 'tool', content: '{"output":"ok","exit_code":0}', tool_call_id: 'c1' },
+      { ...base, id: 4, role: 'assistant', content: 'All green.' },
+    ];
+    fetchMock.mockImplementation(async (input) => String(input).includes('/children')
+      ? jsonResponse({ items: [] })
+      : jsonResponse({ items, has_older: false, has_newer: false, oldest_id: 1, newest_id: 4 }));
+    render(<Transcript sessionId="s1" />, { route: '/chats/s1' });
+    await screen.findByText('All green.');
+    const text = screen.getByTestId('transcript-scroller').textContent ?? '';
+    expect(text.indexOf('Checking first.')).toBeLessThan(text.indexOf('Ran command'));
+    expect(text.indexOf('Ran command')).toBeLessThan(text.indexOf('All green.'));
+    // One turn: a single set of assistant actions.
+    expect(screen.getAllByRole('button', { name: 'Regenerate response' })).toHaveLength(1);
   });
 
   it('shows a mid-turn reload as the durable user turn followed by the partial answer', async () => {

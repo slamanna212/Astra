@@ -70,9 +70,14 @@ class FakeAgent:
         self.commits: list[list[dict[str, str]]] = []
         FakeAgent.instances.append(self)
 
+    thinking_callback = None
+
     def run_conversation(self, user_message: str, conversation_history=None, **_kwargs):
         assert user_message
         assert conversation_history
+        if self.thinking_callback:
+            self.thinking_callback("(｡◕‿◕｡) pondering...")
+            self.thinking_callback("")
         self.stream_delta_callback("hello")
         answer = self.clarify_callback("Which environment?", ["dev", "prod"])
         if FakeAgent.interrupted.is_set():
@@ -636,6 +641,60 @@ async def test_tool_progress_is_emitted_as_structured_fields(base_settings, monk
     assert isinstance(emitted[2][1]["arguments"], str) and len(emitted[2][1]["arguments"]) <= 4097
     assert emitted[3] == ("tool", {"args": ["something.new", "42"]})
     assert len(emitted) == 4
+
+
+@pytest.mark.anyio
+async def test_subagent_progress_is_structured_and_streamed_text_is_dropped(base_settings, monkeypatch):
+    manager = ChatManager(base_settings)
+    turn = chatmod.Turn("tool-session", "go", None, None)
+    emitted: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(manager, "_emit", lambda _turn, name, data: emitted.append((name, data)))
+    identity = {"subagent_id": "sa-1", "goal": "Audit logs", "task_index": 0, "task_count": 2, "tool_count": 0}
+    try:
+        manager._tool_callback(turn, "subagent.start", None, "Audit logs", None, **identity)
+        manager._tool_callback(turn, "subagent.text", None, "partial tok", None, **identity)
+        manager._tool_callback(turn, "subagent.progress", None, "🔀 terminal", None, **identity)
+        manager._tool_callback(
+            turn, "subagent.tool", "terminal", "grep ERROR", {"command": "grep ERROR"},
+            **{**identity, "tool_count": 1, "child_session_id": "child-9"},
+        )
+        manager._tool_callback(
+            turn, "subagent.complete", None, "done", None,
+            **{**identity, "status": "completed", "duration_seconds": 4.5, "summary": "No errors"},
+        )
+    finally:
+        await manager.close()
+
+    assert [name for name, _ in emitted] == ["subagent", "subagent", "subagent"]
+    assert emitted[0][1] == {
+        "event": "subagent.start", "preview": "Audit logs", "subagent_id": "sa-1", "goal": "Audit logs",
+        "task_index": 0, "task_count": 2, "tool_count": 0,
+    }
+    assert emitted[1][1]["tool_name"] == "terminal"
+    assert emitted[1][1]["child_session_id"] == "child-9"
+    assert emitted[2][1]["status"] == "completed"
+    assert emitted[2][1]["duration_seconds"] == 4.5
+
+
+@pytest.mark.anyio
+async def test_turn_reports_startup_phases_and_model_wait(base_settings, fake_hermes):
+    FakeAgent.release.set()
+    manager = ChatManager(base_settings, max_workers=1)
+    await manager.start("session-1", "go", model=None, provider=None)
+    subscriber, _ = await manager.subscribe("session-1")
+    phases = []
+    while True:
+        event = await asyncio.wait_for(subscriber.get(), 2)
+        if event.name == "phase":
+            phases.append(event.data["phase"])
+        if event.name == "clarify":
+            await manager.answer("session-1", event.data["id"], "dev")
+        if event.name == "approval":
+            await manager.approve("session-1", "approval-1", "once", None)
+        if event.name == "done":
+            break
+    await manager.close()
+    assert phases == ["preparing", "history", "context", "model", "model_done"]
 
 
 def test_options_report_the_sessions_latest_main_loop_route(authed):

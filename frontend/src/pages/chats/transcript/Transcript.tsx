@@ -2,19 +2,20 @@ import { ActionIcon, Alert, Center, Loader, Text, Tooltip } from '@mantine/core'
 import { IconArrowDown } from '@tabler/icons-react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { getChildSessions, listMessages, MESSAGE_PAGE_SIZE } from '../../../api/messages';
 import type { ReasoningEffort } from '../../../api/chat';
 import { queryKeys } from '../../../api/queryKeys';
-import type { Message } from '../../../api/types';
 import type { SkillCommandExchange } from '../../../lib/skillSlashCommand';
 import { buildToolResultIndex } from '../../../lib/transcript';
 import { scrollBehavior } from '../../../lib/motion';
 import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
+import { buildTranscriptEntries, type ActivityBlock, type TranscriptEntry } from '../../../lib/turnBlocks';
 import { MessageRow } from './MessageRow';
 import { isLiveAnswerCanonical, type LiveTurn } from '../../../lib/liveTurn';
 import { LiveTurnRow } from './LiveTurnRow';
+import { AssistantBlockRow, type BlockContext } from './AssistantBlockRow';
 import { SkillCommandResult } from './SkillCommandResult';
 import classes from './Transcript.module.css';
 
@@ -26,8 +27,8 @@ interface PageParam {
 
 type Row =
   | { key: string; kind: 'loader-top' | 'loader-bottom' }
-  | { key: string; kind: 'message'; message: Message }
-  | { key: string; kind: 'live'; turn: LiveTurn }
+  | { key: string; kind: 'entry'; entry: TranscriptEntry; last: boolean; continued: boolean }
+  | { key: string; kind: 'live'; turn: LiveTurn; avatar: boolean; leading: ActivityBlock | null }
   | { key: string; kind: 'skill-command'; exchange: SkillCommandExchange };
 
 const NEAR_EDGE_PX = 400;
@@ -46,6 +47,7 @@ export const Transcript = memo(function Transcript({
   activityDisplayMode = 'compact_worklog',
   skillCommands = EMPTY_SKILL_COMMANDS,
   liveTurn = null,
+  livePrompts = null,
   onRetryLiveTurn,
 }: {
   sessionId: string;
@@ -59,6 +61,8 @@ export const Transcript = memo(function Transcript({
   activityDisplayMode?: ActivityDisplayMode;
   skillCommands?: SkillCommandExchange[];
   liveTurn?: LiveTurn | null;
+  /** Clarify/approval cards for the live turn, rendered where the turn paused. */
+  livePrompts?: ReactNode;
   onRetryLiveTurn?: () => void;
 }) {
   const navigate = useNavigate();
@@ -87,30 +91,57 @@ export const Transcript = memo(function Transcript({
 
   const messages = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
   const toolResults = useMemo(() => buildToolResultIndex(messages), [messages]);
-  const consumedToolCallIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const m of messages) {
-      if (m.role === 'assistant' && m.tool_calls) {
-        for (const call of m.tool_calls) if (call.id) set.add(call.id);
-      }
-    }
-    return set;
-  }, [messages]);
+  const entries = useMemo(() => buildTranscriptEntries(messages, toolResults), [messages, toolResults]);
+  const blockContext = useMemo<BlockContext>(
+    () => ({ sessionId, childSessions, activityDisplayMode }),
+    [sessionId, childSessions, activityDisplayMode],
+  );
 
   const { hasPreviousPage, hasNextPage, isFetchingPreviousPage, isFetchingNextPage, fetchPreviousPage, fetchNextPage } =
     query;
 
-  const rows = useMemo<Row[]>(() => {
+  const liveVisible = !!liveTurn && !hasNextPage && !isLiveAnswerCanonical(messages, liveTurn);
+  // A live turn with no user text of its own continues the saved turn above it (the saved rows
+  // are the durable part of the same turn): one avatar, one activity group, actions only at the end.
+  const lastEntry = entries.at(-1);
+  const liveContinues = liveVisible && liveTurn?.userText === null && lastEntry?.kind === 'block';
+
+  const canonicalRows = useMemo<Row[]>(() => {
     const list: Row[] = [];
     if (hasPreviousPage) list.push({ key: 'loader-top', kind: 'loader-top' });
-    for (const m of messages) list.push({ key: `m-${m.id}`, kind: 'message', message: m });
+    let previous: TranscriptEntry | null = null;
+    for (const entry of entries) {
+      const continued = entry.kind === 'block' && !entry.first && previous?.kind === 'block';
+      list.push({ key: entry.key, kind: 'entry', entry, last: entry.kind === 'block' && entry.last, continued });
+      previous = entry;
+    }
     if (hasNextPage) list.push({ key: 'loader-bottom', kind: 'loader-bottom' });
+    return list;
+  }, [entries, hasPreviousPage, hasNextPage]);
+
+  // While the live turn continues the saved one, the saved turn has not ended yet, and a trailing
+  // saved activity group is handed to the live row so its steps and the live steps form one group.
+  const continuation = useMemo(() => {
+    const tail = canonicalRows.at(-1);
+    if (!liveContinues || tail?.kind !== 'entry' || tail.entry.kind !== 'block') {
+      return { rows: canonicalRows, leading: null as ActivityBlock | null, avatar: !liveContinues };
+    }
+    if (tail.entry.block.kind === 'activity') {
+      return { rows: canonicalRows.slice(0, -1), leading: tail.entry.block, avatar: tail.entry.first };
+    }
+    return { rows: [...canonicalRows.slice(0, -1), { ...tail, last: false }], leading: null, avatar: false };
+  }, [canonicalRows, liveContinues]);
+
+  const rows = useMemo<Row[]>(() => {
+    const list = continuation.rows.slice();
     for (const exchange of skillCommands) {
       list.push({ key: `skills-${exchange.id}`, kind: 'skill-command', exchange });
     }
-    if (liveTurn && !hasNextPage && !isLiveAnswerCanonical(messages, liveTurn)) list.push({ key: 'live-turn', kind: 'live', turn: liveTurn });
+    if (liveVisible && liveTurn) {
+      list.push({ key: 'live-turn', kind: 'live', turn: liveTurn, avatar: continuation.avatar, leading: continuation.leading });
+    }
     return list;
-  }, [messages, hasPreviousPage, hasNextPage, skillCommands, liveTurn]);
+  }, [continuation, skillCommands, liveVisible, liveTurn]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -182,7 +213,9 @@ export const Transcript = memo(function Transcript({
   const didHighlightScrollRef = useRef(false);
   useEffect(() => {
     if (!highlightMessageId || didHighlightScrollRef.current) return;
-    const index = rows.findIndex((r) => r.kind === 'message' && r.message.id === highlightMessageId);
+    const index = rows.findIndex((r) => r.kind === 'entry' && (r.entry.kind === 'message'
+      ? r.entry.message.id === highlightMessageId
+      : r.entry.messageIds.includes(highlightMessageId)));
     if (index < 0) return;
     virtualizer.scrollToIndex(index, { align: 'center' });
     didHighlightScrollRef.current = true;
@@ -286,6 +319,8 @@ export const Transcript = memo(function Transcript({
                 transform: `translateY(${item.start}px)`,
               }}
               className={classes.rowWrapper}
+              data-continued={row.kind === 'entry' && row.continued ? true : undefined}
+              data-user={row.kind === 'entry' && row.entry.kind === 'message' && row.entry.message.role === 'user' ? true : undefined}
             >
               <div className={classes.rowInner}>
                 {(row.kind === 'loader-top' || row.kind === 'loader-bottom') && (
@@ -293,26 +328,43 @@ export const Transcript = memo(function Transcript({
                     <Loader size="xs" />
                   </div>
                 )}
-                {row.kind === 'message' && (
+                {row.kind === 'entry' && row.entry.kind === 'message' && (
                   <MessageRow
-                    message={row.message}
+                    message={row.entry.message}
                     sessionId={sessionId}
-                    toolResults={toolResults}
-                    consumedToolCallIds={consumedToolCallIds}
-                    childSessions={childSessions}
-                    highlighted={row.message.id === highlightMessageId}
+                    highlighted={row.entry.message.id === highlightMessageId}
                     running={running}
                     model={model}
                     provider={provider}
                     reasoningEffort={reasoningEffort}
                     sessionTokens={sessionTokens}
                     sessionCostUsd={sessionCostUsd}
-                    activityDisplayMode={activityDisplayMode}
+                  />
+                )}
+                {row.kind === 'entry' && row.entry.kind === 'block' && (
+                  <AssistantBlockRow
+                    entry={row.entry}
+                    last={row.last}
+                    context={blockContext}
+                    highlighted={highlightMessageId !== undefined && row.entry.messageIds.includes(highlightMessageId)}
+                    running={running}
+                    model={model}
+                    provider={provider}
+                    reasoningEffort={reasoningEffort}
+                    sessionTokens={sessionTokens}
+                    sessionCostUsd={sessionCostUsd}
                   />
                 )}
                 {row.kind === 'skill-command' && <SkillCommandResult exchange={row.exchange} />}
                 {row.kind === 'live' && (
-                  <LiveTurnRow turn={row.turn} onRetry={onRetryLiveTurn} />
+                  <LiveTurnRow
+                    turn={row.turn}
+                    context={blockContext}
+                    avatar={row.avatar}
+                    leading={row.leading}
+                    prompts={livePrompts}
+                    onRetry={onRetryLiveTurn}
+                  />
                 )}
               </div>
             </div>

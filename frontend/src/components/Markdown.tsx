@@ -163,16 +163,27 @@ const baseComponents: Components = {
   ),
 };
 
+/** While a block is still streaming its code changes every frame: show it plainly rather than
+ * re-highlighting (or re-drawing a Mermaid diagram) on each token. */
+function PlainPre({ children }: { children?: ReactNode }) {
+  const { code } = extractCodeBlock(children);
+  return <Code block>{code.slice(0, CODE_PAGE_CHARS)}</Code>;
+}
+
 const components: Components = { ...baseComponents, pre: RichPre };
+const streamingComponents: Components = { ...baseComponents, pre: PlainPre };
 const rehypePlugins = [rehypeKatex];
 
 export const Markdown = memo(function Markdown({
   children,
   sessionId,
+  streaming = false,
 }: {
   children: string;
   /** Session used to authorize absolute local paths emitted in Hermes MEDIA tokens. */
   sessionId?: string;
+  /** The text is still being written; code blocks render unhighlighted until it settles. */
+  streaming?: boolean;
 }) {
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath, remarkHermesMedia(sessionId)], [sessionId]);
   return (
@@ -180,7 +191,7 @@ export const Markdown = memo(function Markdown({
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
-        components={components}
+        components={streaming ? streamingComponents : components}
       >
         {children}
       </ReactMarkdown>
