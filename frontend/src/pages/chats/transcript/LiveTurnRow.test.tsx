@@ -21,6 +21,13 @@ describe('LiveTurnRow', () => {
     expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
+  it('renders streaming text as Markdown', () => {
+    const text = 'Here is **bold** text.\n\n- one\n- tw';
+    render(<LiveTurnRow context={context} turn={turn({ answer: text, events: [{ kind: 'assistant', text }] })} />, { route: '/chats/s1' });
+    expect(screen.getByText('bold').tagName).toBe('STRONG');
+    expect(screen.getByText('tw').tagName).toBe('LI');
+  });
+
   it('says what the turn is waiting on before any text arrives', () => {
     render(<LiveTurnRow context={context} turn={turn({ events: [{ kind: 'phase', data: { phase: 'model' } }] })} />, { route: '/chats/s1' });
     expect(screen.getByRole('status')).toHaveTextContent('Waiting for the model');

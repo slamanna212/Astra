@@ -130,28 +130,6 @@
   padding-top: 2px;
 }
 
-.liveText {
-  font-size: var(--astra-chat-font-size, 14px);
-  line-height: 1.65;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.cursor {
-  display: inline-block;
-  width: 7px;
-  height: 1.05em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-  background: var(--astra-primary);
-  animation: blink 1s steps(2, start) infinite;
-}
-
-@keyframes blink {
-  to { visibility: hidden; }
-}
-
 .dim { color: var(--astra-text-dim); }
 .ok { color: var(--astra-ok); }
 .danger { color: var(--astra-danger); }
@@ -436,7 +414,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cursor, .shimmer { animation: none; }
+  .shimmer { animation: none; }
   .shimmer { color: var(--astra-text-dim); background: none; }
 }
 

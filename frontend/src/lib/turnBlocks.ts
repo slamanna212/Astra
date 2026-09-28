@@ -57,7 +57,7 @@ export interface NoticeItem {
 export type ActivityItem = ToolItem | ThoughtItem | NoticeItem;
 
 export type TurnBlock =
-  | { kind: 'text'; key: string; text: string; markdown: boolean }
+  | { kind: 'text'; key: string; text: string }
   | { kind: 'parts'; key: string; parts: MessageContentPart[] }
   | { kind: 'activity'; key: string; items: ActivityItem[] }
   /** Reasoning that is streaming right now, shown open until something else happens. */
@@ -229,11 +229,11 @@ export function buildTranscriptEntries(messages: Message[], toolResults: Map<str
     if (message.reasoning?.trim()) addItem({ kind: 'thought', key: `r-${message.id}`, text: message.reasoning }, message.id);
     if (message.commentary?.trim()) {
       group = null;
-      pushBlock({ kind: 'text', key: `c-${message.id}`, text: message.commentary, markdown: true }, message.id);
+      pushBlock({ kind: 'text', key: `c-${message.id}`, text: message.commentary }, message.id);
     }
     if (typeof message.content === 'string' && message.content.trim()) {
       group = null;
-      pushBlock({ kind: 'text', key: `t-${message.id}`, text: message.content, markdown: true }, message.id);
+      pushBlock({ kind: 'text', key: `t-${message.id}`, text: message.content }, message.id);
       lastWithText = message;
     } else if (Array.isArray(message.content) && message.content.length > 0) {
       group = null;
@@ -369,7 +369,7 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
       group = null;
       const previous = blocks.at(-1);
       if (previous?.kind === 'text') blocks[blocks.length - 1] = { ...previous, text: previous.text + text };
-      else blocks.push({ kind: 'text', key: `live-t-${blocks.length}`, text, markdown: false });
+      else blocks.push({ kind: 'text', key: `live-t-${blocks.length}`, text });
       return;
     }
     if (event.kind === 'reasoning') {
@@ -461,7 +461,7 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
     const missing = turn.answer.slice(0, turn.answer.length - streamedText.length);
     const first = blocks[0];
     if (first?.kind === 'text') blocks[0] = { ...first, text: missing + first.text };
-    else blocks.unshift({ kind: 'text', key: 'live-t-head', text: missing, markdown: false });
+    else blocks.unshift({ kind: 'text', key: 'live-t-head', text: missing });
   }
 
   // Reasoning that is still streaming stays open on its own until anything else happens.

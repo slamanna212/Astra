@@ -1,9 +1,10 @@
-import { Badge, Box, Group, Text } from '@mantine/core';
+import { Badge, Box, Group } from '@mantine/core';
 import { memo, useState, type ReactNode } from 'react';
 import type { ReasoningEffort } from '../../../api/chat';
 import type { ChildSession, Message } from '../../../api/types';
 import { BrandMark } from '../../../components/BrandMark';
 import { Markdown } from '../../../components/Markdown';
+import { StreamingMarkdown } from '../../../components/StreamingMarkdown';
 import type { ActivityDisplayMode } from '../../../lib/uiPreferences';
 import type { BlockEntry, TurnBlock } from '../../../lib/turnBlocks';
 import { ActivityGroup } from './ActivityGroup';
@@ -28,17 +29,12 @@ export function BlockView({
   block: TurnBlock;
   context: BlockContext;
   pendingIsRunning: boolean;
-  /** The text block the model is still writing: show a cursor at its end. */
+  /** The text block the model is still writing: re-parse only its last block, with a caret. */
   streaming?: boolean;
 }) {
   if (block.kind === 'text') {
-    if (block.markdown) return <Markdown sessionId={context.sessionId}>{block.text}</Markdown>;
-    return (
-      <Text className={classes.liveText}>
-        {block.text}
-        {streaming && <span className={classes.cursor} aria-hidden />}
-      </Text>
-    );
+    if (streaming) return <StreamingMarkdown text={block.text} sessionId={context.sessionId} />;
+    return <Markdown sessionId={context.sessionId}>{block.text}</Markdown>;
   }
   if (block.kind === 'parts') return <ContentParts parts={block.parts} />;
   if (block.kind === 'thinking') return <ThinkingBlock text={block.text} />;

@@ -1,0 +1,30 @@
+.root {
+  min-width: 0;
+}
+
+/* A caret at the end of whatever is being written. */
+.tail > div > :last-child:not(pre)::after,
+.tail > div > :is(ul, ol):last-child > li:last-child::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--astra-primary);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+.tail > div > :is(ul, ol):last-child::after {
+  content: none;
+}
+
+@keyframes blink {
+  to { visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tail > div > :last-child::after,
+  .tail > div > :is(ul, ol):last-child > li:last-child::after { animation: none; }
+}
