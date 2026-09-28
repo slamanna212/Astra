@@ -9,7 +9,21 @@ export type ChatStreamEvent =
   | { type: 'approval'; request_id: string; command?: string; description?: string; pattern_keys?: string[] }
   | { type: 'status'; kind: 'status' | 'compacting' | 'compacted'; message: string }
   | { type: 'compaction'; phase: 'done'; before_messages?: number; after_messages?: number; focus_topic?: string | null }
-  | { type: 'subagent'; [key: string]: unknown }
+  /** Coarse progress before and between model calls; `model`/`model_done` bracket each request. */
+  | { type: 'phase'; phase: 'preparing' | 'history' | 'context' | 'model' | 'model_done'; label: string }
+  | {
+      type: 'subagent';
+      event: string;
+      subagent_id?: string;
+      child_session_id?: string;
+      goal?: string;
+      tool_name?: string;
+      preview?: string;
+      status?: string;
+      summary?: string;
+      tool_count?: number;
+      duration_seconds?: number;
+    }
   | { type: 'done' | 'cancel' | 'error'; message?: string; error_type?: string; recovery_available?: boolean; late_steer?: string | null; tps?: number; output_tokens?: number };
 
 export interface ChatModelOption {

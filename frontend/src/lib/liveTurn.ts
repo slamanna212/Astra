@@ -1,5 +1,7 @@
 import type { LiveActivityEvent } from './liveActivity';
 import type { Message } from '../api/types';
+import { toolTitle } from './toolDisplay';
+import type { TurnBlock } from './turnBlocks';
 
 /** Client-side placeholder for the turn currently streaming into the transcript. It exists so the
  * reader sees their own message and the forming answer in the chronological position those rows
@@ -14,26 +16,57 @@ export interface LiveTurn {
    * so the text on screen is real but unconfirmed against saved history.
    */
   state: 'sending' | 'running' | 'reconnecting' | 'finishing' | 'unreconciled' | 'failed';
+  /** When this browser first saw the turn start (ms since epoch), for the elapsed timer. */
+  startedAt?: number;
 }
 
-const ACTIVITY_KINDS = new Set(['tool', 'subagent', 'status']);
-
-/** Activity kinds rendered as inline tool/subagent cards. Reasoning and answer text render separately. */
-export function isWorkspaceActivity(event: LiveActivityEvent): boolean {
-  return ACTIVITY_KINDS.has(event.kind);
+export interface LiveStatus {
+  label: string;
+  tone: 'active' | 'error';
 }
 
-/** One coarse, screen-reader-stable label per turn phase — never one announcement per token. */
-export function deriveLivePhase(turn: LiveTurn): string {
-  if (turn.state === 'sending') return 'Sending';
-  if (turn.state === 'reconnecting') return 'Reconnecting';
-  if (turn.state === 'failed') return 'Error';
-  if (turn.state === 'unreconciled') return 'Refresh failed';
-  if (turn.state === 'finishing') return 'Finishing';
-  if (turn.answer) return 'Writing';
-  if (turn.events.some((event) => ACTIVITY_KINDS.has(event.kind))) return 'Working';
-  if (turn.reasoning) return 'Thinking';
-  return 'Working';
+function lastRunningTool(blocks: TurnBlock[]): string | null | undefined {
+  for (let b = blocks.length - 1; b >= 0; b -= 1) {
+    const block = blocks[b]!;
+    if (block.kind !== 'activity') continue;
+    for (let i = block.items.length - 1; i >= 0; i -= 1) {
+      const item = block.items[i]!;
+      if (item.kind === 'tool' && item.status === 'running') return item.name;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * One coarse, screen-reader-stable label for what the turn is doing right now — never one
+ * announcement per token. Built from the most recent event, so it reflects the actual step
+ * (waiting on the model, running a command, writing) rather than just "waiting".
+ */
+export function deriveLiveStatus(turn: LiveTurn, blocks: TurnBlock[]): LiveStatus {
+  if (turn.state === 'sending') return { label: 'Sending', tone: 'active' };
+  if (turn.state === 'reconnecting') return { label: 'Reconnecting', tone: 'active' };
+  if (turn.state === 'failed') return { label: 'Stopped with an error', tone: 'error' };
+  if (turn.state === 'unreconciled') return { label: 'Could not refresh saved history', tone: 'error' };
+  if (turn.state === 'finishing') return { label: 'Finishing', tone: 'active' };
+
+  const running = lastRunningTool(blocks);
+  if (running !== undefined) return { label: toolTitle(running, true), tone: 'active' };
+  for (let i = turn.events.length - 1; i >= 0; i -= 1) {
+    const event = turn.events[i]!;
+    if (event.kind === 'phase') {
+      const phase = event.data?.phase;
+      // The model call returned and Hermes is acting on it (running tools, saving).
+      if (phase === 'model_done') return { label: 'Working', tone: 'active' };
+      if (phase === 'model') return { label: 'Waiting for the model', tone: 'active' };
+      const label = typeof event.data?.label === 'string' && event.data.label ? event.data.label : 'Working';
+      return { label, tone: 'active' };
+    }
+    if (event.kind === 'reasoning') return { label: 'Thinking', tone: 'active' };
+    if (event.kind === 'assistant') return { label: 'Writing', tone: 'active' };
+    if (event.kind === 'subagent') return { label: 'Subagents working', tone: 'active' };
+    return { label: 'Working', tone: 'active' };
+  }
+  return { label: 'Starting', tone: 'active' };
 }
 
 /** The live row is a placeholder for an answer that is not durable yet. Once the canonical window
@@ -44,73 +77,4 @@ export function isLiveAnswerCanonical(messages: Message[], liveTurn: LiveTurn | 
   if (last?.role !== 'assistant' || typeof last.content !== 'string') return false;
   const canonical = last.content.trim();
   return canonical.length > 0 && liveTurn.answer.startsWith(canonical);
-}
-
-/** A live `tool.started` event merged with its `tool.completed` / `tool.output_risk` follow-ups. */
-export interface LiveToolItem {
-  type: 'tool';
-  name: string | null;
-  preview: string;
-  arguments: unknown;
-  status: 'running' | 'done' | 'error';
-  duration: number | null;
-  result: string | null;
-  risk: unknown;
-}
-
-export type LiveActivityItem = LiveToolItem | { type: 'event'; event: LiveActivityEvent };
-
-function str(value: unknown): string | null {
-  return typeof value === 'string' && value ? value : null;
-}
-
-/**
- * Hermes reports each tool as separate start/complete callbacks. Pair them FIFO per tool name
- * (parallel same-name calls complete in order) so the reader sees one card per call with a status.
- * Events that are not structured tool lifecycle events pass through unchanged.
- */
-export function groupLiveActivity(events: LiveActivityEvent[]): LiveActivityItem[] {
-  const items: LiveActivityItem[] = [];
-  const open = new Map<string, LiveToolItem[]>();
-  const lastByName = new Map<string, LiveToolItem>();
-  for (const event of events) {
-    const data = event.data ?? {};
-    const phase = event.kind === 'tool' ? str(data.event) : null;
-    const name = str(data.name);
-    if (phase === 'tool.started') {
-      const item: LiveToolItem = {
-        type: 'tool',
-        name,
-        preview: str(data.preview) ?? '',
-        arguments: data.arguments,
-        status: 'running',
-        duration: null,
-        result: null,
-        risk: null,
-      };
-      items.push(item);
-      const key = name ?? '';
-      open.set(key, [...(open.get(key) ?? []), item]);
-      lastByName.set(key, item);
-      continue;
-    }
-    if (phase === 'tool.completed') {
-      const queue = open.get(name ?? '');
-      const item = queue?.shift();
-      if (item) {
-        item.status = data.is_error === true ? 'error' : 'done';
-        item.duration = typeof data.duration === 'number' ? data.duration : null;
-        item.result = str(data.result);
-      }
-      // Unmatched: its start was trimmed because saved history already shows the call.
-      continue;
-    }
-    if (phase === 'tool.output_risk') {
-      const item = lastByName.get(name ?? '');
-      if (item) item.risk = data.risk ?? true;
-      continue;
-    }
-    items.push({ type: 'event', event });
-  }
-  return items;
 }

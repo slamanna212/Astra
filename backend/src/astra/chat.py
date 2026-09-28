@@ -482,6 +482,7 @@ class ChatManager:
             "clarify_callback": lambda question, choices=None, *args: self._clarify_callback(turn, question, choices),
             "event_callback": lambda name, data=None: self._agent_event_callback(turn, name, data),
             "status_callback": lambda status, *args, **kwargs: self._status_callback(turn, status, *args),
+            "thinking_callback": lambda text=None, *args, **kwargs: self._thinking_callback(turn, text),
         }
         for name, callback in callbacks.items():
             if hasattr(agent, name):
@@ -583,12 +584,17 @@ class ChatManager:
 
     def _run_turn(self, turn: Turn) -> None:
         try:
+            # Everything before Hermes's first model call is otherwise silent on the wire; these
+            # coarse phases let the browser say what the turn is doing instead of just waiting.
+            self._emit_phase(turn, "preparing", "Preparing agent")
             agent = self._build_agent(turn)
             with turn.lock:
                 turn.agent = agent
             turn.start_output_tokens = getattr(agent, "session_completion_tokens", 0) or 0
             self._register_approvals(turn)
+            self._emit_phase(turn, "history", "Loading conversation")
             history = turn.session_db.get_messages_as_conversation(turn.session_id)
+            self._emit_phase(turn, "context", "Building context")
             run_kwargs = _supported(
                 agent.run_conversation,
                 {"user_message": turn.message, "conversation_history": history, "task_id": turn.session_id,
@@ -790,6 +796,17 @@ class ChatManager:
         if text:
             self._emit(turn, "delta", self._live_payload(turn, text))
 
+    def _emit_phase(self, turn: Turn, phase: str, label: str) -> None:
+        self._emit(turn, "phase", {"phase": phase, "label": label})
+
+    def _thinking_callback(self, turn: Turn, text: Any) -> None:
+        # Hermes drives its quiet-mode spinner with this: a non-empty value when a model request
+        # starts and "" when it returns. The spinner text itself is decorative (random kaomoji).
+        if text:
+            self._emit_phase(turn, "model", "Waiting for the model")
+        else:
+            self._emit_phase(turn, "model_done", "")
+
     @staticmethod
     def _final_usage(turn: Turn) -> dict[str, Any]:
         agent = turn.agent
@@ -833,6 +850,9 @@ class ChatManager:
         event = str(args[0]) if args else ""
         if event in {"_thinking", "reasoning.available"}:
             return  # reasoning already streams through its own callback
+        if event.startswith("subagent"):
+            self._subagent_progress(turn, event, args, kwargs)
+            return
         if not event.startswith("tool."):
             payload: dict[str, Any] = {"args": [str(item)[:4096] for item in args]}
             payload.update({key: str(value)[:4096] for key, value in kwargs.items()})
@@ -856,6 +876,29 @@ class ChatManager:
         if kwargs.get("risk_metadata") is not None:
             payload["risk"] = _json_safe_preview(kwargs["risk_metadata"])
         self._emit(turn, "tool", payload)
+
+    def _subagent_progress(self, turn: Turn, event: str, args: tuple[Any, ...], kwargs: dict[str, Any]) -> None:
+        # Hermes relays delegated children through the parent's tool progress callback as
+        # (event, tool_name, preview, args, **identity). Child reply text arrives one streamed
+        # fragment per call and batched progress repeats the per-tool events, so both are dropped:
+        # the browser only needs lifecycle, the child's current tool, and its thinking line.
+        if event in {"subagent.text", "subagent.progress", "subagent_progress", "subagent.spawn_requested"}:
+            return
+        tool_name, preview = (list(args[1:3]) + [None, None])[:2]
+        payload: dict[str, Any] = {"event": event}
+        if tool_name:
+            payload["tool_name"] = str(tool_name)[:256]
+        if preview:
+            payload["preview"] = str(preview)[:1024]
+        for key in ("subagent_id", "child_session_id", "goal", "status", "summary"):
+            value = kwargs.get(key)
+            if value is not None and value != "":
+                payload[key] = str(value)[:1024]
+        for key in ("task_index", "task_count", "tool_count", "duration_seconds"):
+            value = kwargs.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                payload[key] = value
+        self._emit(turn, "subagent", payload)
 
     def _agent_event_callback(self, turn: Turn, name: Any, data: Any) -> None:
         event_name = str(name)

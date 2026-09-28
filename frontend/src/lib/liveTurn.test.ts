@@ -1,34 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { groupLiveActivity, type LiveToolItem } from './liveTurn';
+import { deriveLiveStatus, type LiveTurn } from './liveTurn';
+import { buildLiveBlocks } from './turnBlocks';
 
-const started = (name: string, preview = '') => ({ kind: 'tool' as const, data: { event: 'tool.started', name, preview } });
-const completed = (name: string, extra: Record<string, unknown> = {}) =>
-  ({ kind: 'tool' as const, data: { event: 'tool.completed', name, ...extra } });
+function turn(overrides: Partial<LiveTurn> = {}): LiveTurn {
+  return { userText: 'Question', answer: '', reasoning: '', events: [], state: 'running', ...overrides };
+}
 
-describe('groupLiveActivity', () => {
-  it('merges start and completion into one card per call, FIFO per tool name', () => {
-    const items = groupLiveActivity([
-      started('terminal', 'ls'),
-      started('terminal', 'pwd'),
-      started('web_extract'),
-      completed('terminal', { duration: 0.5, result: 'files' }),
-      completed('web_extract', { is_error: true }),
-    ]) as LiveToolItem[];
-    expect(items.map((item) => [item.name, item.preview, item.status])).toEqual([
-      ['terminal', 'ls', 'done'],
-      ['terminal', 'pwd', 'running'],
-      ['web_extract', '', 'error'],
-    ]);
-    expect(items[0]!.duration).toBe(0.5);
-    expect(items[0]!.result).toBe('files');
+const status = (value: LiveTurn) => deriveLiveStatus(value, buildLiveBlocks(value)).label;
+
+describe('deriveLiveStatus', () => {
+  it.each([
+    ['Sending', turn({ state: 'sending' })],
+    ['Reconnecting', turn({ state: 'reconnecting' })],
+    ['Stopped with an error', turn({ state: 'failed' })],
+    ['Finishing', turn({ state: 'finishing' })],
+    ['Could not refresh saved history', turn({ state: 'unreconciled' })],
+    ['Starting', turn({})],
+    ['Preparing agent', turn({ events: [{ kind: 'phase', data: { phase: 'preparing', label: 'Preparing agent' } }] })],
+    ['Waiting for the model', turn({ events: [{ kind: 'phase', data: { phase: 'model', label: '' } }] })],
+    ['Thinking', turn({ events: [{ kind: 'reasoning', text: 'hmm' }] })],
+    ['Writing', turn({ events: [{ kind: 'reasoning', text: 'hmm' }, { kind: 'assistant', text: 'Hi' }] })],
+    ['Running command', turn({ events: [{ kind: 'tool', data: { event: 'tool.started', name: 'terminal' } }] })],
+    ['Working', turn({ events: [{ kind: 'phase', data: { phase: 'model_done', label: '' } }] })],
+  ])('reports %s', (expected, value) => {
+    expect(status(value)).toBe(expected);
   });
 
-  it('drops completions whose start was already handed over to saved history', () => {
-    expect(groupLiveActivity([completed('terminal')])).toEqual([]);
-  });
-
-  it('passes through non-lifecycle events untouched', () => {
-    const event = { kind: 'subagent' as const, data: { message: 'spawned' } };
-    expect(groupLiveActivity([event])).toEqual([{ type: 'event', event }]);
+  it('marks failures as errors so they are not shown with a spinner', () => {
+    expect(deriveLiveStatus(turn({ state: 'failed' }), []).tone).toBe('error');
+    expect(deriveLiveStatus(turn(), []).tone).toBe('active');
   });
 });
