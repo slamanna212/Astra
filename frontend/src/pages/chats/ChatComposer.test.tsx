@@ -57,7 +57,6 @@ function Harness({
       draft={draft}
       onDraftChange={setDraft}
       onAttach={onAttach}
-      liveTps={null}
       busyTurnMode={busyTurnMode}
       contextTokens={0}
       contextLength={null}

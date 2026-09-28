@@ -20,8 +20,8 @@ vi.mock('./transcript/Transcript', () => ({
   ),
 }));
 vi.mock('./ChatComposer', () => ({
-  ChatComposer: ({ draft, onDraftChange, onSend, liveTps }: { draft: string; onDraftChange: (text: string) => void; onSend: (text: string) => Promise<void>; liveTps: number | null }) => (
-    <><input aria-label="Draft" value={draft} onChange={(event) => onDraftChange(event.target.value)} /><button onClick={() => void onSend(draft).catch(() => {})}>Send</button><output data-testid="tps">{liveTps ?? 'none'}</output></>
+  ChatComposer: ({ draft, onDraftChange, onSend }: { draft: string; onDraftChange: (text: string) => void; onSend: (text: string) => Promise<void> }) => (
+    <><input aria-label="Draft" value={draft} onChange={(event) => onDraftChange(event.target.value)} /><button onClick={() => void onSend(draft).catch(() => {})}>Send</button></>
   ),
 }));
 
@@ -313,7 +313,7 @@ describe('conversation stream updates', () => {
     act(() => stream.emit('started', { running: true, operation: 'chat' }));
     act(() => stream.emit('reasoning', { text: 'Thinking', tps: 42 }));
     act(flushFrame);
-    expect(screen.getByTestId('tps')).toHaveTextContent('42');
+    expect(screen.getByTestId('live-tps')).toHaveTextContent('42');
   });
 
   it('batches text and TPS together and incrementally refreshes an observed chat turn', async () => {
@@ -323,16 +323,16 @@ describe('conversation stream updates', () => {
     act(() => stream.emit('started', { running: true, operation: 'chat' }));
     act(() => stream.emit('delta', { text: 'Hello ', tps: 10 }));
     act(() => stream.emit('delta', { text: 'world', tps: 20 }));
-    expect(screen.getByTestId('tps')).toHaveTextContent('none');
+    expect(screen.queryByTestId('live-tps')).not.toBeInTheDocument();
     expect(frames.size).toBe(1);
     act(flushFrame);
     expect(screen.getByTestId('live-turn')).toHaveTextContent('Hello world');
-    expect(screen.getByTestId('tps')).toHaveTextContent('20');
+    expect(screen.getByTestId('live-tps')).toHaveTextContent('20');
     act(() => stream.emit('delta', { text: '!', tps: 30 }));
     act(() => stream.emit('done', {}));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
     expect(refresh).toHaveBeenCalledWith(queryClient, 's1', expect.objectContaining({ reconcile: false }));
-    expect(screen.getByTestId('tps')).toHaveTextContent('none');
+    expect(screen.queryByTestId('live-tps')).not.toBeInTheDocument();
     expect(frames.size).toBe(0);
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
       ['chat', 'active'], ['chat', 'active'], ['sessions', 'detail', 's1'], ['sessions', 'list'],

@@ -3,7 +3,6 @@ import { useMediaQuery } from '@mantine/hooks';
 import { IconArrowUp, IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCpu, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
-import { formatTps } from '../../lib/format';
 import type { BusyTurnMode } from '../../lib/uiPreferences';
 import { ContextRing } from './ContextRing';
 import { EffortPickerModal, ModelPickerModal, type ModelGroup } from './ComposerPickers';
@@ -61,7 +60,6 @@ export function ChatComposer({
   draft,
   onDraftChange,
   onAttach,
-  liveTps,
   busyTurnMode,
   contextTokens,
   contextLength,
@@ -87,7 +85,6 @@ export function ChatComposer({
   draft: string;
   onDraftChange: (value: string) => void;
   onAttach: (file: File) => Promise<string>;
-  liveTps: number | null;
   busyTurnMode: BusyTurnMode;
   contextTokens: number;
   contextLength: number | null;
@@ -193,7 +190,7 @@ export function ChatComposer({
           value={draft}
           onChange={(event) => onDraftChange(event.currentTarget.value)}
           autosize
-          minRows={2}
+          minRows={compact ? 1 : 2}
           maxRows={8}
           placeholder={running ? `${BUSY_MODE_LABELS[busyTurnMode]} while Hermes is responding…` : 'Message Hermes…'}
           classNames={{ input: classes.textarea }}
@@ -355,17 +352,6 @@ export function ChatComposer({
             </Menu.Dropdown>
           </Menu>
           </Box>
-          )}
-
-          {running && (
-            <>
-              <Group gap={6} wrap="nowrap">
-                <span className={classes.runningDot} />
-                <Text component="span" ff="monospace" fz={11} c="var(--astra-accent)">
-                  {formatTps(liveTps)}
-                </Text>
-              </Group>
-            </>
           )}
 
           <Box style={{ flex: 1 }} />

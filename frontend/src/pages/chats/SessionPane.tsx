@@ -1028,7 +1028,7 @@ export default function SessionPane() {
           </Alert>
         )}
         {liveTps !== null && (
-          <Text fz={11} c="dimmed" ff="monospace" px="sm">
+          <Text fz={11} c="dimmed" ff="monospace" px="sm" data-testid="live-tps">
             {formatTps(liveTps)}
           </Text>
         )}
@@ -1091,7 +1091,6 @@ export default function SessionPane() {
         draft={draft}
         onDraftChange={setDraft}
         onAttach={async (file) => (await uploadFile({ directory: '', file })).path}
-        liveTps={liveTps}
         busyTurnMode={prefs.busyTurnMode}
         contextTokens={s.context_tokens}
         contextLength={s.context_length}
