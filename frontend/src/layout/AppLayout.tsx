@@ -15,7 +15,8 @@ import { CHAT_FONT_SIZES, useUiPreferences } from '../lib/uiPreferences';
 import classes from './AppLayout.module.css';
 import { NAV_ITEMS } from './navItems';
 
-export const HEADER_HEIGHT = 48;
+/** Shorter on phones, where vertical space goes to the conversation. */
+const HEADER_HEIGHT = { base: 40, sm: 48 };
 
 export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure(false);
@@ -65,7 +66,7 @@ export function AppLayout() {
         <div className={`${classes.headerInner} ${classes.headerGrid}`}>
           <Group gap="sm" wrap="nowrap">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
-            <BrandMark size={24} />
+            <BrandMark size={22} />
             <span className={classes.brandTitle}>Astra</span>
             {activeNavItem && (
               <>
@@ -140,7 +141,7 @@ export function AppLayout() {
         <div className={classes.contentShell}>
           <Suspense
             fallback={
-              <Center h={`calc(100dvh - ${HEADER_HEIGHT}px)`}>
+              <Center h="calc(100dvh - var(--app-shell-header-offset, 0rem))">
                 <Loader />
               </Center>
             }

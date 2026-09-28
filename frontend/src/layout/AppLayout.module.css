@@ -99,11 +99,22 @@
 }
 
 @media (max-width: 47.99em) {
+  .headerGrid {
+    padding: 0 var(--mantine-spacing-sm);
+  }
+
+  .brandTitle {
+    font-size: 16px;
+  }
+
   .searchTrigger {
-    width: 36px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     justify-content: center;
     gap: 0;
+    border-color: transparent;
+    background: transparent;
   }
 
   .searchLabel,
