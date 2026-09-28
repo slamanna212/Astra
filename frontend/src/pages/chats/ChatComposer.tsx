@@ -1,16 +1,13 @@
 import { ActionIcon, Badge, Box, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
-import { IconArrowUp, IconCheck, IconChevronDown, IconChevronRight, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
+import { useMediaQuery } from '@mantine/hooks';
+import { IconArrowUp, IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCpu, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import { formatTps } from '../../lib/format';
 import type { BusyTurnMode } from '../../lib/uiPreferences';
 import { ContextRing } from './ContextRing';
+import { EffortPickerModal, ModelPickerModal, type ModelGroup } from './ComposerPickers';
 import classes from './ChatComposer.module.css';
-
-interface ModelGroup {
-  provider: string | null; // null = models with no known provider ("other")
-  models: ChatModelOption[];
-}
 
 const REASONING_EFFORTS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const BUSY_MODE_LABELS: Record<BusyTurnMode, string> = {
@@ -102,6 +99,10 @@ export function ChatComposer({
   const [menuOpened, setMenuOpened] = useState(false);
   const [filter, setFilter] = useState('');
   const [expandedGroup, setExpandedGroup] = useState<string | null | undefined>(undefined);
+  // On a phone the model and effort pills become icons that open full pickers, so the whole
+  // control row fits on one line.
+  const compact = useMediaQuery('(max-width: 48em)') ?? false;
+  const [sheet, setSheet] = useState<'model' | 'effort' | null>(null);
 
   const groups = useMemo(() => groupModels(models, providers), [models, providers]);
   const trimmedFilter = filter.trim().toLowerCase();
@@ -213,7 +214,7 @@ export function ChatComposer({
           </Group>
         )}
         {uploadError && <Text c="red" fz="xs">{uploadError}</Text>}
-        <Group gap={8} wrap="wrap" className={classes.controlRow}>
+        <Group gap={compact ? 4 : 8} wrap={compact ? 'nowrap' : 'wrap'} className={classes.controlRow}>
           <FileButton onChange={handleAttach}>
             {(props) => (
               <Tooltip label="Attach a workspace file">
@@ -224,6 +225,46 @@ export function ChatComposer({
             )}
           </FileButton>
 
+          {compact ? (
+            <>
+              <Tooltip label={model ? `Model: ${model}` : 'Model'}>
+                <ActionIcon variant="subtle" size={30} radius={6} aria-label="Model" disabled={running} onClick={() => setSheet('model')} c="var(--astra-text-dim)">
+                  <IconCpu size={17} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label={reasoningEffort ? `Effort: ${reasoningEffort}` : 'Default effort'}>
+                <ActionIcon
+                  variant="subtle"
+                  size={30}
+                  radius={6}
+                  aria-label="Reasoning effort"
+                  disabled={running}
+                  onClick={() => setSheet('effort')}
+                  c={reasoningEffort ? 'var(--astra-primary)' : 'var(--astra-text-dim)'}
+                >
+                  <IconBrain size={17} />
+                </ActionIcon>
+              </Tooltip>
+              <ModelPickerModal
+                opened={sheet === 'model'}
+                onClose={() => setSheet(null)}
+                groups={groups}
+                model={model}
+                defaultModel={defaultModel}
+                onSelect={(option) => {
+                  onModelChange(option?.name ?? null);
+                  onProviderChange(option?.provider ?? null);
+                }}
+              />
+              <EffortPickerModal
+                opened={sheet === 'effort'}
+                onClose={() => setSheet(null)}
+                efforts={REASONING_EFFORTS}
+                value={reasoningEffort}
+                onChange={onReasoningEffortChange}
+              />
+            </>
+          ) : (
           <Box className={classes.pillGroup}>
           <Menu opened={menuOpened} onChange={(opened) => (opened ? openMenu() : closeMenu())} position="top-start" offset={8} radius="md" trapFocus>
             <Menu.Target>
@@ -314,6 +355,7 @@ export function ChatComposer({
             </Menu.Dropdown>
           </Menu>
           </Box>
+          )}
 
           {running && (
             <>

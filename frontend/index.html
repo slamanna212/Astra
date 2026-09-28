@@ -3,9 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, user-scalable=no" />
+    <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, user-scalable=no, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <title>Astra</title>
+    <!-- Installable app (Add to Home Screen). iOS reads the apple-* tags, not the manifest. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0F7885" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Astra" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!-- Equivalent of Mantine's <ColorSchemeScript defaultColorScheme="auto" />: sets the
          color scheme attribute before first paint to avoid a light/dark flash. -->
     <script data-mantine-script>

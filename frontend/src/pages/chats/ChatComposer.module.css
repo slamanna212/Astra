@@ -1,5 +1,6 @@
 .wrapper {
-  padding: 0 12px 14px;
+  /* Installed on a phone the app runs edge to edge: keep the composer above the home indicator. */
+  padding: 0 12px calc(14px + env(safe-area-inset-bottom, 0px));
 }
 
 .card {
@@ -252,4 +253,24 @@
   font-family: var(--astra-font-mono);
   font-size: 10.5px;
   color: var(--astra-text-dim);
+}
+
+/* ---- phone pickers ---- */
+
+.sheetOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: var(--astra-radius);
+}
+
+.sheetOption:hover {
+  background: var(--astra-hover);
+}
+
+.sheetOption[data-selected] {
+  background: var(--astra-primary-soft);
 }

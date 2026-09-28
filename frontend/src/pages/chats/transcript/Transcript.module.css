@@ -297,6 +297,14 @@
   overflow-wrap: anywhere;
 }
 
+/* A group's summary is the part that gives way on a narrow screen. */
+.groupHeader .toolTitle {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .activityGroup[data-running] .groupHeader .toolTitle {
   color: var(--astra-text);
 }
@@ -422,6 +430,9 @@
   .rowWrapper { padding: 8px 12px; }
   .userBubble, .userMessage { max-width: 100%; }
   .rowWrapper[data-user] .rowInner::before { left: 0; }
+  /* Every pixel of width goes to content on a phone; the avatar is decoration. */
+  .avatarGutter { display: none; }
+
 }
 
 .jumpToLatest {
