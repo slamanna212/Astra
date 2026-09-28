@@ -98,8 +98,11 @@ export function ChatComposer({
   const [expandedGroup, setExpandedGroup] = useState<string | null | undefined>(undefined);
   // On a phone the model and effort pills become icons that open full pickers, so the whole
   // control row fits on one line.
-  const compact = useMediaQuery('(max-width: 48em)') ?? false;
+  const compact = useMediaQuery('(max-width: 48em)', undefined, { getInitialValueInEffect: false }) ?? false;
   const [sheet, setSheet] = useState<'model' | 'effort' | null>(null);
+  // On a touchscreen keyboard Enter adds a new line and the button sends; with a real keyboard
+  // Enter sends and Shift+Enter adds a new line.
+  const touch = useMediaQuery('(hover: none) and (pointer: coarse)', undefined, { getInitialValueInEffect: false }) ?? false;
 
   const groups = useMemo(() => groupModels(models, providers), [models, providers]);
   const trimmedFilter = filter.trim().toLowerCase();
@@ -194,8 +197,9 @@ export function ChatComposer({
           maxRows={8}
           placeholder={running ? `${BUSY_MODE_LABELS[busyTurnMode]} while Hermes is responding…` : 'Message Hermes…'}
           classNames={{ input: classes.textarea }}
+          enterKeyHint={touch ? 'enter' : 'send'}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
+            if (event.key === 'Enter' && !event.shiftKey && !touch && !event.nativeEvent.isComposing) {
               event.preventDefault();
               void submit();
             }

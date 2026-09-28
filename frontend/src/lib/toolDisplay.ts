@@ -28,6 +28,11 @@ export function toolArgumentPreview(args: unknown): string {
   }
   const firstString = Object.values(record).find((item) => typeof item === 'string' && item.trim());
   if (typeof firstString === 'string') return firstString.replace(/\s+/g, ' ').trim();
+  // A list of targets (e.g. web_extract's `urls`): the first one, and how many more.
+  const list = Object.values(record).find((item): item is string[] => (
+    Array.isArray(item) && item.length > 0 && item.every((entry) => typeof entry === 'string' && entry.trim())
+  ));
+  if (list) return `${list[0]!.replace(/\s+/g, ' ').trim()}${list.length > 1 ? ` +${list.length - 1}` : ''}`;
   return formatToolArguments(value).replace(/\s+/g, ' ');
 }
 

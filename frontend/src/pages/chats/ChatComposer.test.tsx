@@ -209,4 +209,29 @@ describe('ChatComposer on a phone', () => {
     await user.click(screen.getByRole('button', { name: 'Reasoning effort' }));
     expect(await screen.findByRole('button', { name: 'High', pressed: true })).toBeInTheDocument();
   });
+
+  it('sends on Enter with a keyboard, but adds a new line on Enter with a touchscreen keyboard', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn(async () => undefined);
+    const { unmount } = render(<Harness onSend={onSend} onAttach={vi.fn()} />);
+    await user.type(screen.getByPlaceholderText('Message Hermes…'), 'hi{Enter}');
+    expect(onSend).toHaveBeenCalledWith('hi');
+    unmount();
+    onSend.mockClear();
+
+    const matchMedia = vi.mocked(window.matchMedia);
+    const original = matchMedia.getMockImplementation();
+    matchMedia.mockImplementation((query: string) => ({ ...original!(query), matches: query.includes('pointer: coarse') }));
+    try {
+      render(<Harness onSend={onSend} onAttach={vi.fn()} />);
+      const input = screen.getByPlaceholderText('Message Hermes…');
+      await user.type(input, 'line one{Enter}line two');
+      expect(onSend).not.toHaveBeenCalled();
+      expect(input).toHaveValue('line one\nline two');
+      await user.click(screen.getByRole('button', { name: 'Send message' }));
+      expect(onSend).toHaveBeenCalledWith('line one\nline two');
+    } finally {
+      matchMedia.mockImplementation(original!);
+    }
+  });
 });
