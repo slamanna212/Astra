@@ -1,6 +1,22 @@
 .wrapper {
-  /* Installed on a phone the app runs edge to edge: keep the composer above the home indicator. */
-  padding: 0 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 0 12px 14px;
+}
+
+@mixin smaller-than $mantine-breakpoint-sm {
+  /* Installed on a phone the app runs edge to edge. The home indicator only needs the lower part
+     of the safe area, so the composer sits in the rest of it instead of stacking on top. */
+  .wrapper {
+    padding: 0 8px max(8px, calc(env(safe-area-inset-bottom, 0px) - 16px));
+  }
+
+  .card {
+    padding: 8px 10px 6px;
+    gap: 6px;
+  }
+
+  .textarea {
+    min-height: 0;
+  }
 }
 
 .card {
@@ -91,16 +107,6 @@
 .pillChevron {
   color: var(--astra-text-dim);
   flex-shrink: 0;
-}
-
-/* ---- running readout ---- */
-
-.runningDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--astra-accent);
-  display: inline-block;
 }
 
 /* ---- model menu ---- */

@@ -39,4 +39,21 @@
   .root:not([data-has-selection]) .detail {
     display: none;
   }
+
+  /* Swiping back from a chat: the list shows underneath the panel as it slides away. */
+  .root {
+    position: relative;
+  }
+
+  .root[data-swiping] .list {
+    display: flex;
+    position: absolute;
+    inset: 0;
+  }
+
+  .root[data-swiping] .detail {
+    position: relative;
+    z-index: 1;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+  }
 }

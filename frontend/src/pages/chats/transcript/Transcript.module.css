@@ -297,12 +297,9 @@
   overflow-wrap: anywhere;
 }
 
-/* A group's summary is the part that gives way on a narrow screen. */
+/* A group's summary always shows in full; its target (a URL, a path) takes the rest and gives way. */
 .groupHeader .toolTitle {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .activityGroup[data-running] .groupHeader .toolTitle {

@@ -18,7 +18,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { answerChat, approveChat, chatStreamUrl, compactChat, getChatOptions, sendChat, steerChat, stopChat, type ChatStreamEvent, type ReasoningEffort } from '../../api/chat';
 import { uploadFile } from '../../api/files';
@@ -53,6 +53,23 @@ import { ApprovalCard, ClarifyCard } from './transcript/InlinePrompts';
 import type { LiveTurn } from '../../lib/liveTurn';
 
 const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
+
+/** The conversation's metadata as label/value rows, for the phone header menu. */
+function SessionDetails({ source, rows, parent }: { source: ReactNode; rows: [string, string][]; parent: ReactNode }) {
+  const row = (label: string, value: ReactNode) => (
+    <Group key={label} gap="xs" wrap="nowrap" justify="space-between" px="sm" py={3}>
+      <Text fz={12} c="dimmed" style={{ flexShrink: 0 }}>{label}</Text>
+      <Text component="div" fz={12} ta="right" truncate="end" style={{ minWidth: 0 }}>{value}</Text>
+    </Group>
+  );
+  return (
+    <Box pb={4}>
+      {row('Source', source)}
+      {rows.map(([label, value]) => row(label, value))}
+      {parent && row('Parent', parent)}
+    </Box>
+  );
+}
 
 export default function SessionPane() {
   const { sessionId = '' } = useParams();
@@ -812,8 +829,9 @@ export default function SessionPane() {
     <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <Stack
         gap={6}
-        p="md"
-        pb="sm"
+        px={{ base: 'sm', sm: 'md' }}
+        pt={{ base: 'xs', sm: 'md' }}
+        pb={{ base: 'xs', sm: 'sm' }}
         style={{ flexShrink: 0, borderBottom: '1px solid var(--astra-border)', background: 'var(--astra-bg-chrome)' }}
       >
         <Group gap="xs" wrap="nowrap" align="center">
@@ -824,6 +842,22 @@ export default function SessionPane() {
           <Text fz={14} fw={600} truncate="end" style={{ minWidth: 0, flex: 1 }}>
             {sessionTitle(s)}
           </Text>
+          {connection === 'reconnecting' && (
+            <Tooltip label={`Retry connection now (attempt ${reconnectAttempt}/${CHAT_RECONNECT_DELAYS_MS.length})`}>
+              <ActionIcon variant="subtle" color="sand" aria-label="Retry connection" onClick={() => retryNowRef.current()}>
+                <IconRefresh size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <Box
+            hiddenFrom="sm"
+            role="img"
+            aria-label={`Connection: ${connection}`}
+            w={8}
+            h={8}
+            mx={4}
+            style={{ borderRadius: 999, flexShrink: 0, background: connection === 'live' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-sand-6)' }}
+          />
           <Group gap={4} wrap="nowrap" justify="flex-end" visibleFrom="sm">
             <Tooltip label="Rename">
               <ActionIcon
@@ -880,7 +914,7 @@ export default function SessionPane() {
             </Menu>
           </Group>
           <Divider orientation="vertical" mx={2} visibleFrom="sm" />
-          <Menu position="bottom-end" shadow="md" width={200}>
+          <Menu position="bottom-end" shadow="md" width={240}>
             <Menu.Target>
               <ActionIcon aria-label="More conversation actions">
                 <IconDotsVertical size={17} stroke={1.7} />
@@ -888,6 +922,24 @@ export default function SessionPane() {
             </Menu.Target>
             <Menu.Dropdown>
               <Box hiddenFrom="sm">
+                <Menu.Label>Details</Menu.Label>
+                <SessionDetails
+                  source={<SourceBadge source={s.source} size="xs" />}
+                  rows={[
+                    ['Connection', connection],
+                    ['Model', s.model ?? '—'],
+                    ['Messages', formatCount(s.message_count)],
+                    ['Tokens', `${formatTokens(s.input_tokens)} in · ${formatTokens(s.output_tokens)} out`],
+                    ['Cost', formatCost(s.estimated_cost_usd)],
+                    ...(s.archived || s.hidden ? [['Status', [s.archived && 'archived', s.hidden && 'hidden'].filter(Boolean).join(', ')] as [string, string]] : []),
+                  ]}
+                  parent={s.parent_session_id && (
+                    <Anchor component={Link} to={`/chats/${encodeURIComponent(s.parent_session_id)}`} ff="monospace" fz={11}>
+                      {s.parent_session_id}
+                    </Anchor>
+                  )}
+                />
+                <Menu.Divider />
                 <Menu.Item
                   leftSection={<IconPencil size={15} />}
                   onClick={() => {
@@ -946,16 +998,9 @@ export default function SessionPane() {
             </Menu.Dropdown>
           </Menu>
         </Group>
-        <Group gap="sm" wrap="wrap">
+        <Group gap="sm" wrap="wrap" visibleFrom="sm">
           <SourceBadge source={s.source} size="sm" />
           <Badge size="sm" color={connection === 'live' ? 'green' : 'sand'} variant="light">{connection}</Badge>
-          {connection === 'reconnecting' && (
-            <Tooltip label={`Retry connection now (attempt ${reconnectAttempt}/${CHAT_RECONNECT_DELAYS_MS.length})`}>
-              <ActionIcon size="sm" variant="subtle" color="sand" aria-label="Retry connection" onClick={() => retryNowRef.current()}>
-                <IconRefresh size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
           {s.model && (
             <Text fz={11} c="dimmed">
               {s.model}
@@ -1028,7 +1073,7 @@ export default function SessionPane() {
           </Alert>
         )}
         {liveTps !== null && (
-          <Text fz={11} c="dimmed" ff="monospace" px="sm">
+          <Text fz={11} c="dimmed" ff="monospace" px="sm" data-testid="live-tps">
             {formatTps(liveTps)}
           </Text>
         )}
@@ -1091,7 +1136,6 @@ export default function SessionPane() {
         draft={draft}
         onDraftChange={setDraft}
         onAttach={async (file) => (await uploadFile({ directory: '', file })).path}
-        liveTps={liveTps}
         busyTurnMode={prefs.busyTurnMode}
         contextTokens={s.context_tokens}
         contextLength={s.context_length}
