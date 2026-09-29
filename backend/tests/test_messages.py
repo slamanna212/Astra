@@ -282,23 +282,75 @@ def test_query_plan_uses_index(fixture_db_path: Path) -> None:
 
 
 
-def test_codex_commentary_extracted_and_redacted(monkeypatch: pytest.MonkeyPatch) -> None:
+_CODEX_ITEMS = [
+    {"type": "reasoning", "summary": []},
+    {"type": "message", "role": "assistant", "phase": "analysis", "content": [{"type": "output_text", "text": "scratchpad"}]},
+    {"type": "message", "role": "assistant", "phase": "commentary", "content": [{"type": "output_text", "text": "PR #128 is open."}]},
+    {"type": "message", "role": "assistant", "phase": "Commentary ", "content": [{"type": "output_text", "text": "Token SECRET set."}]},
+]
+
+
+def _codex_rows(reasoning: str | None) -> list[sqlite3.Row]:
     import json
 
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE messages (id INTEGER PRIMARY KEY, role TEXT, content TEXT, reasoning TEXT, "
+        "codex_message_items TEXT, timestamp REAL, display_kind TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO messages VALUES (1, 'assistant', '', ?, ?, 1.0, NULL)", (reasoning, json.dumps(_CODEX_ITEMS))
+    )
+    conn.execute("INSERT INTO messages VALUES (2, 'assistant', 'Done.', 'plain', NULL, 2.0, NULL)")
+    return conn.execute("SELECT * FROM messages ORDER BY id").fetchall()
+
+
+def test_codex_commentary_uses_hermes_projection_and_redacts(monkeypatch: pytest.MonkeyPatch) -> None:
     from astra import messages
 
-    monkeypatch.setattr(messages, "redact_sensitive_text", lambda text: text.replace("SECRET", "***"))
-    items = [
-        {"type": "reasoning", "summary": []},
-        {"type": "message", "phase": "analysis", "content": [{"type": "output_text", "text": "scratchpad"}]},
-        {"type": "message", "phase": "commentary", "content": [{"type": "output_text", "text": "PR #128 is open."}]},
-        {"type": "message", "phase": "Commentary ", "content": [{"type": "output_text", "text": "Token SECRET set."}]},
-    ]
-    assert messages._extract_commentary(json.dumps(items)) == "PR #128 is open.\n\nToken *** set."
-    assert messages._extract_commentary(None) is None
-    assert messages._extract_commentary("not json") is None
-    assert messages._extract_commentary(json.dumps([{"type": "message", "phase": "final_answer", "content": []}])) is None
+    seen: list[list[dict[str, Any]]] = []
 
-    # Fail closed: no redactor available means no commentary, never unredacted text.
+    def project(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen.append(batch)
+        return [
+            {**m, "display_commentary": ["PR #128 is open.", "Token SECRET set."], "display_reasoning": "Checking CI."}
+            for m in batch
+        ]
+
+    monkeypatch.setattr(messages, "project_history_commentary", project)
+    monkeypatch.setattr(messages, "redact_sensitive_text", lambda text: text.replace("SECRET", "***"))
+    codex, plain = messages._rows_to_messages(_codex_rows("Checking CI.\n\nPR #128 is open."), truncate=True)
+
+    assert len(seen) == 1 and len(seen[0]) == 1  # one batch, only rows carrying Codex items
+    assert codex.commentary == "PR #128 is open.\n\nToken *** set."
+    assert codex.reasoning == "Checking CI."  # the flattened copy of the commentary is gone
+    assert plain.commentary is None and plain.reasoning == "plain" and plain.content == "Done."
+
+
+def test_codex_commentary_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from astra import messages
+
+    # No projection available: no commentary, never raw provider items.
+    monkeypatch.setattr(messages, "project_history_commentary", lambda batch: None)
+    codex, _ = messages._rows_to_messages(_codex_rows("thinking"), truncate=True)
+    assert codex.commentary is None and codex.reasoning == "thinking"
+
+    # No redactor available: no commentary, never unredacted text.
+    monkeypatch.setattr(
+        messages, "project_history_commentary", lambda batch: [{**m, "display_commentary": ["x"]} for m in batch]
+    )
     monkeypatch.setattr(messages, "redact_sensitive_text", lambda text: None)
-    assert messages._extract_commentary(json.dumps(items)) is None
+    codex, _ = messages._rows_to_messages(_codex_rows(None), truncate=True)
+    assert codex.commentary is None
+
+
+def test_codex_commentary_against_real_hermes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    pytest.importorskip("agent.history_commentary")
+    from astra import messages
+
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    codex, _ = messages._rows_to_messages(_codex_rows("Checking CI.\n\nPR #128 is open.\n\nToken SECRET set."), truncate=True)
+    assert codex.commentary is not None and codex.commentary.startswith("PR #128 is open.")
+    assert "scratchpad" not in codex.commentary
+    assert codex.reasoning == "Checking CI."

@@ -714,3 +714,29 @@ def test_options_report_the_sessions_latest_main_loop_route(authed):
     payload = authed.get(f"/api/chat/{session_id}/options").json()
     assert (payload["session_model"], payload["session_provider"]) == ("latest-model", "new-provider")
     assert {"name": "latest-model", "provider": "new-provider"} in payload["models"]
+
+
+@pytest.mark.anyio
+async def test_interim_commentary_streams_as_its_own_event(base_settings, monkeypatch):
+    manager = ChatManager(base_settings, max_workers=1)
+    turn = chatmod.Turn("session-x", "go", None, None)
+    monkeypatch.setattr(chatmod, "redact_sensitive_text", lambda text: text.replace("SECRET", "***"))
+
+    agent = types.SimpleNamespace(interim_assistant_callback=None)
+    manager._wire_agent_callbacks(agent, turn)
+    # Hermes calls this with Codex commentary and with interim answers; text that already
+    # streamed as deltas is on screen and must not repeat.
+    agent.interim_assistant_callback("Checking CI, token SECRET.", already_streamed=False)
+    agent.interim_assistant_callback("Already shown.", already_streamed=True)
+    agent.interim_assistant_callback("   ", already_streamed=False)
+    event = turn.events.get_nowait()
+    assert (event.name, event.data) == ("commentary", {"text": "Checking CI, token ***."})
+    assert turn.events.empty()
+
+    # display.interim_assistant_messages: false clears the callback, as Hermes' own surfaces do.
+    manager._wire_agent_callbacks(agent, turn, interim_messages=False)
+    assert agent.interim_assistant_callback is None
+    assert chatmod._interim_messages_enabled({"display": {"interim_assistant_messages": "off"}}) is False
+    assert chatmod._interim_messages_enabled({}) is True
+
+    await manager.close()

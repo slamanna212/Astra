@@ -3,7 +3,7 @@ import type { Message } from '../api/types';
 import type { LiveActivityEvent } from './liveActivity';
 import type { LiveTurn } from './liveTurn';
 import { buildToolResultIndex } from './transcript';
-import { buildLiveBlocks, buildTranscriptEntries, resultLooksFailed, type ActivityBlock, type ToolItem } from './turnBlocks';
+import { buildLiveBlocks, buildTranscriptEntries, resultLooksFailed, type ActivityBlock, type ToolItem, type TurnBlock } from './turnBlocks';
 
 function message(id: number, overrides: Partial<Message>): Message {
   return {
@@ -166,6 +166,25 @@ describe('buildLiveBlocks', () => {
     expect(delegate.subagents).toEqual([expect.objectContaining({
       goal: 'Audit logs', status: 'running', activity: 'terminal · grep', toolCount: 1, childSessionId: 'c1',
     })]);
+  });
+
+  it('renders Codex commentary as prose, the same shape saved history gives the turn', () => {
+    const liveBlocks = buildLiveBlocks(live([
+      { kind: 'reasoning', text: 'Plan' },
+      { kind: 'commentary', text: 'Checking CI.' },
+      started('terminal'),
+      completed('terminal', { result: 'ok' }),
+      { kind: 'commentary', text: 'CI is green.' },
+      { kind: 'assistant', text: 'Done.' },
+    ], { state: 'finishing' }));
+    const saved = entries([
+      message(1, { reasoning: 'Plan', commentary: 'Checking CI.', tool_calls: [call('t1', 'terminal')] }),
+      message(2, { role: 'tool', tool_call_id: 't1', content: 'ok' }),
+      message(3, { commentary: 'CI is green.', content: 'Done.' }),
+    ]).map((entry) => (entry.kind === 'block' ? entry.block : null));
+    const shape = (blocks: (TurnBlock | null)[]) => blocks.map((block) => (block?.kind === 'text' ? block.text : block?.kind));
+    expect(shape(liveBlocks)).toEqual(['activity', 'Checking CI.', 'activity', 'CI is green.', 'Done.']);
+    expect(shape(saved)).toEqual(shape(liveBlocks));
   });
 
   it('ignores phase markers and restores prose that fell off the capped event log', () => {

@@ -1,6 +1,7 @@
 /** `phase` is a coarse progress marker (preparing, waiting for the model, …) that feeds the live
- * status line; it never renders as its own block. */
-export type LiveActivityKind = 'reasoning' | 'assistant' | 'tool' | 'subagent' | 'status' | 'phase';
+ * status line; it never renders as its own block. `commentary` is one complete narration message
+ * that arrives whole, so it is never coalesced with a neighbour. */
+export type LiveActivityKind = 'reasoning' | 'assistant' | 'commentary' | 'tool' | 'subagent' | 'status' | 'phase';
 
 export interface LiveActivityEvent {
   kind: LiveActivityKind;
@@ -44,6 +45,7 @@ export function isLiveActivityEvent(value: unknown): value is LiveActivityEvent 
   return (
     event.kind === 'reasoning' ||
     event.kind === 'assistant' ||
+    event.kind === 'commentary' ||
     event.kind === 'tool' ||
     event.kind === 'subagent' ||
     event.kind === 'status' ||

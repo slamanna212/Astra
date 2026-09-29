@@ -338,6 +338,8 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
   const subagents = new Map<string, SubagentItem>();
   let streamedText = '';
   let lastMeaningful: LiveActivityEvent | null = null;
+  // Commentary blocks are finished messages; answer text never merges into one.
+  const commentary = new Set<TurnBlock>();
 
   const addItem = (item: ActivityItem) => {
     if (!group) {
@@ -368,8 +370,18 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
       streamedText += text;
       group = null;
       const previous = blocks.at(-1);
-      if (previous?.kind === 'text') blocks[blocks.length - 1] = { ...previous, text: previous.text + text };
+      if (previous?.kind === 'text' && !commentary.has(previous)) blocks[blocks.length - 1] = { ...previous, text: previous.text + text };
       else blocks.push({ kind: 'text', key: `live-t-${blocks.length}`, text });
+      return;
+    }
+    if (event.kind === 'commentary') {
+      // Mid-turn narration (Codex commentary) is prose, exactly as saved history renders it.
+      const text = event.text ?? '';
+      if (!text.trim()) return;
+      group = null;
+      const block: TurnBlock = { kind: 'text', key: `live-c-${index}`, text };
+      commentary.add(block);
+      blocks.push(block);
       return;
     }
     if (event.kind === 'reasoning') {
@@ -460,7 +472,7 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
   if (turn.answer && streamedText !== turn.answer && turn.answer.endsWith(streamedText)) {
     const missing = turn.answer.slice(0, turn.answer.length - streamedText.length);
     const first = blocks[0];
-    if (first?.kind === 'text') blocks[0] = { ...first, text: missing + first.text };
+    if (first?.kind === 'text' && !commentary.has(first)) blocks[0] = { ...first, text: missing + first.text };
     else blocks.unshift({ kind: 'text', key: 'live-t-head', text: missing });
   }
 

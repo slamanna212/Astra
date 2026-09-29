@@ -36,10 +36,14 @@ single-message one). ``api_content`` and ``codex_reasoning_items`` are internal 
 
 Codex commentary: Codex Responses models keep user-facing mid-turn narration ("PR #128 is open,
 checking CI…") as ``phase=commentary`` message items in ``codex_message_items`` while ``content``
-stays empty on those tool-call turns (1,372 such rows in the real DB). That column is read only to
-extract that visible text, using Hermes' own rule (``AIAgent._extract_codex_commentary_messages``:
-``type=message``, ``phase=commentary``, ``output_text`` parts; ``analysis`` stays hidden) and
-Hermes' redactor, exposed as ``commentary``. The raw items are never returned.
+stays empty on those tool-call turns (1,372 such rows in the real DB). Hermes also flattens that
+same text into ``reasoning``, so reading the columns directly shows it twice. That column is read
+only to hand each window to Hermes' own display projection (``agent.history_commentary``, what its
+REST and TUI history use): visible commentary becomes ``commentary`` (then force-redacted), and
+its ``display_reasoning``/``display_content`` copies replace ``reasoning``/``content`` so nothing
+is duplicated. Hermes' ``display.show_commentary`` / ``display.interim_assistant_messages`` gates
+apply. If the projection is unavailable, commentary is dropped (fail closed). The raw items are
+never returned.
 """
 
 from __future__ import annotations
@@ -50,7 +54,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from astra.db import Schema
-from astra.hermes_bridge import redact_sensitive_text
+from astra.hermes_bridge import project_history_commentary, redact_sensitive_text
 from astra.models import ChildSession, Message, MessagePage, ToolCallOut
 
 DEFAULT_LIMIT = 200
@@ -188,46 +192,58 @@ def _parse_tool_calls(raw: str | None) -> list[ToolCallOut] | None:
     return out or None
 
 
-def _extract_commentary(raw: str | None) -> str | None:
-    """Visible Codex commentary text from ``codex_message_items`` (see module docstring)."""
-    if not raw:
-        return None
-    try:
-        items = json.loads(raw)
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return None
-    if not isinstance(items, list):
-        return None
-    texts: list[str] = []
-    for item in items:
-        if not isinstance(item, dict) or item.get("type") != "message":
-            continue
-        phase = item.get("phase")
-        if not isinstance(phase, str) or phase.strip().lower() != "commentary":
-            continue
-        parts = item.get("content")
-        if not isinstance(parts, list):
-            continue
-        visible = "".join(
-            part["text"]
-            for part in parts
-            if isinstance(part, dict) and part.get("type") == "output_text" and isinstance(part.get("text"), str)
-        ).strip()
-        if visible:
-            texts.append(visible)
-    if not texts:
-        return None
-    return redact_sensitive_text("\n\n".join(texts))
+def _col(row: sqlite3.Row, name: str) -> Any:
+    """A column that may be absent from this Hermes build's schema."""
+    return row[name] if name in row.keys() else None  # noqa: SIM118 - Row's `in` tests values
 
 
-def _row_to_message(row: sqlite3.Row, *, truncate: bool) -> Message:
+def _raw_reasoning(row: sqlite3.Row) -> str | None:
+    return _col(row, "reasoning_content") or _col(row, "reasoning")
+
+
+def _commentary_display(rows: list[sqlite3.Row]) -> dict[int, dict[str, Any]]:
+    """Display overrides for assistant rows carrying Codex message items (see module docstring),
+    keyed by message id: ``commentary`` plus, when Hermes projected them, ``content``/``reasoning``."""
+    candidates = [row for row in rows if row["role"] == "assistant" and _col(row, "codex_message_items")]
+    if not candidates:
+        return {}
+    projected = project_history_commentary([
+        {
+            "role": "assistant",
+            "display_kind": _col(row, "display_kind"),
+            "content": _col(row, "content"),
+            "reasoning": _raw_reasoning(row),
+            "codex_message_items": row["codex_message_items"],
+        }
+        for row in candidates
+    ])
+    if projected is None or len(projected) != len(candidates):
+        return {}
+    overrides: dict[int, dict[str, Any]] = {}
+    for row, item in zip(candidates, projected, strict=True):
+        if not isinstance(item, dict):
+            continue
+        display: dict[str, Any] = {}
+        parts = [part for part in item.get("display_commentary") or [] if isinstance(part, str) and part.strip()]
+        if parts:
+            display["commentary"] = redact_sensitive_text("\n\n".join(parts))
+        if isinstance(item.get("display_reasoning"), str):
+            display["reasoning"] = item["display_reasoning"].strip() or None
+        if isinstance(item.get("display_content"), str):
+            display["content"] = item["display_content"]
+        overrides[int(row["id"])] = display
+    return overrides
+
+
+def _row_to_message(row: sqlite3.Row, *, truncate: bool, display: dict[str, Any] | None = None) -> Message:
     keys = set(row.keys())
+    display = display or {}
 
     def get(name: str) -> Any:
         return row[name] if name in keys else None
 
-    reasoning_raw = get("reasoning_content") or get("reasoning")
-    content, content_truncated = _parse_content(get("content"), truncate=truncate)
+    reasoning_raw = display["reasoning"] if "reasoning" in display else _raw_reasoning(row)
+    content, content_truncated = _parse_content(display.get("content", get("content")), truncate=truncate)
     reasoning, reasoning_truncated = (
         _truncate_text(reasoning_raw) if truncate else (reasoning_raw, False)
     )
@@ -243,13 +259,18 @@ def _row_to_message(row: sqlite3.Row, *, truncate: bool) -> Message:
         token_count=get("token_count"),
         finish_reason=get("finish_reason"),
         reasoning=reasoning,
-        commentary=_extract_commentary(get("codex_message_items")) if row["role"] == "assistant" else None,
+        commentary=display.get("commentary"),
         display_kind=get("display_kind") or None,
         display_metadata=_parse_display_metadata(get("display_metadata")),
         effect_disposition=get("effect_disposition"),
         active=bool(get("active")) if "active" in keys and get("active") is not None else True,
         compacted=bool(get("compacted")) if "compacted" in keys else False,
     )
+
+
+def _rows_to_messages(rows: list[sqlite3.Row], *, truncate: bool) -> list[Message]:
+    display = _commentary_display(rows)
+    return [_row_to_message(row, truncate=truncate, display=display.get(int(row["id"]))) for row in rows]
 
 
 def session_exists(conn: sqlite3.Connection, session_id: str) -> bool:
@@ -315,7 +336,7 @@ def get_window(
             )
         )
 
-    items = [_row_to_message(r, truncate=True) for r in rows]
+    items = _rows_to_messages(rows, truncate=True)
     oldest_id = items[0].id if items else None
     newest_id = items[-1].id if items else None
     has_older = False
@@ -351,7 +372,7 @@ def get_message(
     ).fetchone()
     if row is None:
         raise MessageNotFound(message_id)
-    return _row_to_message(row, truncate=False)
+    return _rows_to_messages([row], truncate=False)[0]
 
 
 def list_child_sessions(conn: sqlite3.Connection, schema: Schema, session_id: str) -> list[ChildSession]:
