@@ -32,6 +32,7 @@ from astra.hermes_bridge import (
     agent_class,
     approval_module,
     redact_approval_command,
+    redact_sensitive_text,
     resolve_runtime_provider,
     session_db_class,
 )
@@ -139,6 +140,15 @@ def _load_chat_config(path: Path) -> dict[str, Any]:
     except (OSError, yaml.YAMLError):
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _interim_messages_enabled(config: dict[str, Any]) -> bool:
+    """Hermes' ``display.interim_assistant_messages`` gate (default on), also applied to history."""
+    display = config.get("display")
+    value = display.get("interim_assistant_messages", True) if isinstance(display, dict) else True
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return value is not False
 
 
 def _webui_toolsets(config: dict[str, Any]) -> list[str] | None:
@@ -474,7 +484,7 @@ class ChatManager:
             self._event_seq[turn.session_id] = seq
         turn.events.put(ChatEvent(name, data, seq))
 
-    def _wire_agent_callbacks(self, agent: Any, turn: Turn) -> None:
+    def _wire_agent_callbacks(self, agent: Any, turn: Turn, *, interim_messages: bool = True) -> None:
         callbacks = {
             "stream_delta_callback": lambda text: self._token_callback(turn, text),
             "reasoning_callback": lambda text: self._reasoning_callback(turn, text),
@@ -483,6 +493,12 @@ class ChatManager:
             "event_callback": lambda name, data=None: self._agent_event_callback(turn, name, data),
             "status_callback": lambda status, *args, **kwargs: self._status_callback(turn, status, *args),
             "thinking_callback": lambda text=None, *args, **kwargs: self._thinking_callback(turn, text),
+            # Without this Hermes routes Codex commentary (mid-turn narration) to the reasoning
+            # stream, so it shows as thinking live but as prose in saved history.
+            "interim_assistant_callback": (
+                (lambda text, *args, already_streamed=False, **kwargs: self._interim_callback(turn, text, already_streamed))
+                if interim_messages else None
+            ),
         }
         for name, callback in callbacks.items():
             if hasattr(agent, name):
@@ -521,6 +537,7 @@ class ChatManager:
             provider = None
         runtime = resolve_runtime_provider()(requested=provider, target_model=model)
         toolsets = _webui_toolsets(config)
+        interim_messages = _interim_messages_enabled(config)
         key_sig = hashlib.sha256(str(runtime.get("api_key") or "").encode()).hexdigest()
         reasoning_config = None
         if turn.reasoning_effort == "none":
@@ -538,7 +555,7 @@ class ChatManager:
             clear_interrupt = getattr(agent, "clear_interrupt", None)
             if callable(clear_interrupt):
                 clear_interrupt()
-            self._wire_agent_callbacks(agent, turn)
+            self._wire_agent_callbacks(agent, turn, interim_messages=interim_messages)
             with self._cache_lock:
                 self._agents.move_to_end(turn.session_id)
             turn.session_db = cached.session_db
@@ -568,7 +585,7 @@ class ChatManager:
             "gateway_session_key": turn.session_id,
         }
         agent = agent_class()(**_supported(agent_class().__init__, agent_kwargs))
-        self._wire_agent_callbacks(agent, turn)
+        self._wire_agent_callbacks(agent, turn, interim_messages=interim_messages)
         evicted: CachedAgent | None = None
         with self._cache_lock:
             self._agents[turn.session_id] = CachedAgent(
@@ -795,6 +812,15 @@ class ChatManager:
     def _token_callback(self, turn: Turn, text: Any) -> None:
         if text:
             self._emit(turn, "delta", self._live_payload(turn, text))
+
+    def _interim_callback(self, turn: Turn, text: Any, already_streamed: bool) -> None:
+        # Text that already streamed as answer deltas is on screen. What remains is narration that
+        # never streamed (Codex commentary, a non-streamed interim answer); it is its own block.
+        if already_streamed or not isinstance(text, str) or not text.strip():
+            return
+        visible = redact_sensitive_text(text)
+        if visible:
+            self._emit(turn, "commentary", {"text": visible})
 
     def _emit_phase(self, turn: Turn, phase: str, label: str) -> None:
         self._emit(turn, "phase", {"phase": phase, "label": label})

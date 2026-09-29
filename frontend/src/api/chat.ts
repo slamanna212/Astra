@@ -4,6 +4,8 @@ export type ChatStreamEvent =
   | { type: 'state' | 'started'; running: boolean; recovery_available?: boolean; operation?: 'chat' | 'compact' | 'regenerate' }
   | { type: 'delta'; text: string; tps?: number }
   | { type: 'reasoning'; text: string; tps?: number }
+  /** A complete mid-turn narration message (Codex commentary) that did not stream as `delta`. */
+  | { type: 'commentary'; text: string }
   | { type: 'tool'; args: string[] }
   | { type: 'clarify'; id: number; question: string; choices: unknown[] | null }
   | { type: 'approval'; request_id: string; command?: string; description?: string; pattern_keys?: string[] }

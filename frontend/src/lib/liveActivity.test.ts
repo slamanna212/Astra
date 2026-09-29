@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendLiveActivity, MAX_LIVE_ACTIVITY_EVENTS, parseLiveActivityData, type LiveActivityEvent } from './liveActivity';
+import { appendLiveActivity, isLiveActivityEvent, MAX_LIVE_ACTIVITY_EVENTS, parseLiveActivityData, type LiveActivityEvent } from './liveActivity';
 
 describe('live activity timeline', () => {
   it('preserves completed entries and never mutates the previous tail', () => {
@@ -31,6 +31,15 @@ describe('live activity timeline', () => {
       { kind: 'reasoning', text: 'edit next' },
       { kind: 'assistant', text: 'Done' },
     ]);
+  });
+
+  it('keeps each commentary message whole and separate', () => {
+    const events = appendLiveActivity([], [
+      { kind: 'commentary', text: 'Checking CI.' },
+      { kind: 'commentary', text: 'CI is green.' },
+    ]);
+    expect(events).toHaveLength(2);
+    expect(isLiveActivityEvent(events[0])).toBe(true);
   });
 
   it('keeps every tool event individual and bounds browser recovery', () => {

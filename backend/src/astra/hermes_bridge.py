@@ -142,5 +142,14 @@ def redact_sensitive_text(text: str) -> str | None:
         return None
 
 
+def project_history_commentary(messages: list[dict]) -> list[dict] | None:
+    """Hermes' own display projection of Codex commentary (``agent.history_commentary``), the rule
+    its REST and TUI history use; ``None`` when unavailable so callers fail closed."""
+    try:
+        return list(_import("agent.history_commentary").project_history_commentary(messages))
+    except Exception:
+        return None
+
+
 class HermesImportError(RuntimeError):
     """Raised when a required Hermes module cannot be imported."""

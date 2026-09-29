@@ -503,6 +503,11 @@ export default function SessionPane() {
         if (data.tps !== undefined) pendingTps.current = data.tps;
         schedule();
       }));
+      currentSource.addEventListener('commentary', tracked((event) => {
+        const data = JSON.parse((event as MessageEvent).data) as { text: string };
+        pendingLiveEvents.current.push({ kind: 'commentary', text: data.text });
+        schedule();
+      }));
       currentSource.addEventListener('phase', tracked((event) => {
         pendingLiveEvents.current.push({ kind: 'phase', data: parseLiveActivityData((event as MessageEvent).data) });
         schedule();
