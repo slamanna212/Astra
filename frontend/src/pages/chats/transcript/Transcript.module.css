@@ -297,9 +297,16 @@
   overflow-wrap: anywhere;
 }
 
-/* A group's summary always shows in full; its target (a URL, a path) takes the rest and gives way. */
+/* A group's summary wraps rather than overflowing; its target (a URL, a path) gives way first. */
 .groupHeader .toolTitle {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.groupHeader .toolTarget {
+  flex-shrink: 4;
 }
 
 .activityGroup[data-running] .groupHeader .toolTitle {
@@ -429,7 +436,13 @@
   .rowWrapper[data-user] .rowInner::before { left: 0; }
   /* Every pixel of width goes to content on a phone; the avatar is decoration. */
   .avatarGutter { display: none; }
-
+  /* Narrow lines hold few words, so the reasoning window gets more of them and a shorter fade. */
+  .thinkingPreview {
+    max-height: 9.6em;
+    margin-left: 8px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 30%);
+  }
 }
 
 .jumpToLatest {
