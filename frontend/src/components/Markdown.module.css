@@ -2,10 +2,18 @@
   font-size: var(--astra-chat-font-size, 14px);
   line-height: 1.6;
   color: var(--astra-text-body);
+  min-width: 0;
+  /* A long URL or identifier breaks rather than widening the column; wide blocks scroll in place. */
+  overflow-wrap: break-word;
+}
+
+/* Any code block, including ones nested in lists or quotes, scrolls inside its own box. */
+.root :global(pre) {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .root > :global(pre) {
-  overflow-x: auto;
   padding: var(--mantine-spacing-sm);
   background-color: var(--astra-surface-sunk);
   border: 1px solid var(--astra-border);

@@ -2,6 +2,9 @@
   height: 100%;
   min-height: 0;
   overflow-y: auto;
+  /* Only wide content (code, tables, math) scrolls sideways, inside its own box; the transcript
+     itself never pans horizontally on touch. */
+  overflow-x: hidden;
   position: relative;
   background: var(--astra-recess-bg);
   box-shadow:
