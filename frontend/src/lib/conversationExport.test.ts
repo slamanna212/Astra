@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Message, SessionDetail } from '../api/types';
 import {
   conversationExportBlob,
@@ -48,6 +48,39 @@ describe('conversation exports', () => {
     expect(document).toContain('CONVERSATION EXPORT');
     expect(document).toContain('0.169 0.714 0.769 rg');
     expect(document).toContain('/BaseFont /Helvetica-Bold');
+  });
+
+  it('draws Japanese and Korean with CID fonts instead of question marks', async () => {
+    const text = { ...message, content: '日本語のテスト 안녕하세요' } as Message;
+    const document = await conversationToPdf(createConversationExport(session, [text])).text();
+    expect(document).toMatch(/\/F6 8\.5 Tf [^\n]* Td <65e5672c8a9e306e30c630b930c8> Tj/);
+    expect(document).toMatch(/\/F7 8\.5 Tf [^\n]* Td <c548b155d558c138c694> Tj/);
+    expect(document).toContain('/Encoding /UniJIS-UCS2-H');
+    expect(document).toContain('/Encoding /UniKS-UCS2-H');
+    expect(document).not.toContain('???');
+  });
+
+  it('draws emoji as images', async () => {
+    class FakeCanvas {
+      getContext() {
+        return {
+          fillText: () => {},
+          getImageData: () => ({ data: new Uint8ClampedArray(48 * 48 * 4).fill(255) }),
+        };
+      }
+    }
+    vi.stubGlobal('OffscreenCanvas', FakeCanvas);
+    try {
+      const text = { ...message, content: 'Deployed 🚀 and 👨‍👩‍👧 done' } as Message;
+      const document = await conversationToPdf(createConversationExport(session, [text])).text();
+      const names = Array.from(document.matchAll(/cm \/(E[0-9a-f]{4}) Do Q/g), (match) => match[1]);
+      expect(new Set(names).size).toBe(2);
+      expect(document).toContain('/Subtype /Image /Width 48 /Height 48');
+      expect(document).toContain('/SMask');
+      expect(document).toMatch(new RegExp(`/XObject << /${names[0]} \\d+ 0 R`));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('renders tool activity as compact steps instead of raw data', async () => {

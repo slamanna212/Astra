@@ -47,10 +47,75 @@ export function lineHeight(line: PdfLine): number {
   return 12;
 }
 
-// PDF's built-in fonts use Windows-1252; keep to printable ASCII, mapping common punctuation and
-// replacing anything else rather than emitting a corrupt document.
+// Japanese (kana, kanji, CJK punctuation) and Korean (Hangul) are drawn with predefined Adobe CID
+// fonts that PDF viewers supply themselves; every glyph in these ranges is one em wide.
+const JAPANESE_RANGES = '\u3001-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff';
+const KOREAN_RANGES = '\u1100-\u11ff\u3131-\u318e\ua960-\ua97f\uac00-\ud7a3\ud7b0-\ud7ff';
+// Emoji become private-use placeholders (one per grapheme) that the PDF writer draws as images.
+const EMOJI_FIRST = 0xe000;
+const EMOJI_LAST = 0xf8ff;
+const EMOJI_RANGE = '\ue000-\uf8ff';
+const KOREAN_CHARACTER = new RegExp(`[${KOREAN_RANGES}]`);
+const TEXT_SCRIPT = new RegExp(`[${JAPANESE_RANGES}${KOREAN_RANGES}]`);
+const SCRIPT_SEGMENTS = new RegExp(`([${JAPANESE_RANGES}]+|[${KOREAN_RANGES}]+|[${EMOJI_RANGE}]+)`);
+// Japanese has no spaces, so each Japanese character or emoji is its own breakable piece.
+const BREAK_PIECES = new RegExp(`(\\n|[ \\t]+|[${JAPANESE_RANGES}${EMOJI_RANGE}])`);
+// Closing punctuation and small kana may hang past the margin rather than start a line.
+const NO_LINE_START = /^[、。，．・ー々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ」』）〕】〉》〙〗！？：；]$/;
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3/u;
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+export type PdfScript = 'latin' | 'japanese' | 'korean' | 'emoji';
+
+function isWideCode(code: number): boolean {
+  return (code >= 0x3001 && code <= 0x30ff) || (code >= 0x31f0 && code <= 0x31ff)
+    || (code >= 0x3400 && code <= 0x4dbf) || (code >= 0x4e00 && code <= 0x9fff)
+    || (code >= 0x1100 && code <= 0x11ff) || (code >= 0x3131 && code <= 0x318e)
+    || (code >= 0xa960 && code <= 0xa97f) || (code >= 0xac00 && code <= 0xd7ff)
+    || (code >= EMOJI_FIRST && code <= EMOJI_LAST);
+}
+
+function scriptOf(character: string): PdfScript {
+  const code = character.charCodeAt(0);
+  if (code >= EMOJI_FIRST && code <= EMOJI_LAST) return 'emoji';
+  if (KOREAN_CHARACTER.test(character)) return 'korean';
+  return 'japanese';
+}
+
+/** Split already pdfSafe text into runs per script, for font switching and emoji images. */
+export function scriptSegments(text: string): { text: string; script: PdfScript }[] {
+  return text.split(SCRIPT_SEGMENTS).flatMap((part, index) => {
+    if (!part) return [];
+    return [{ text: part, script: index % 2 === 1 ? scriptOf(part) : 'latin' }];
+  });
+}
+
+// Placeholders are stable for the page's lifetime, so the writer can cache one image per emoji.
+const emojiByPlaceholder = new Map<string, string>();
+const placeholderByEmoji = new Map<string, string>();
+
+function emojiPlaceholder(emoji: string): string {
+  const existing = placeholderByEmoji.get(emoji);
+  if (existing) return existing;
+  const code = EMOJI_FIRST + placeholderByEmoji.size;
+  if (code > EMOJI_LAST) return '?';
+  const placeholder = String.fromCharCode(code);
+  placeholderByEmoji.set(emoji, placeholder);
+  emojiByPlaceholder.set(placeholder, emoji);
+  return placeholder;
+}
+
+/** The emoji grapheme a placeholder stands for. */
+export function emojiFor(placeholder: string): string | undefined {
+  return emojiByPlaceholder.get(placeholder);
+}
+
+// PDF's built-in fonts use Windows-1252; keep to printable ASCII plus Japanese, Korean and emoji,
+// mapping common punctuation and replacing anything else rather than emitting a corrupt document.
 export function pdfSafe(text: string): string {
+  // NFKC first: it keeps kana and Hangul composed (NFKD would decompose them) and folds full-width ASCII.
   const normalized = text
+    .normalize('NFKC')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\u2013\u2014]/g, '-')
@@ -64,14 +129,30 @@ export function pdfSafe(text: string): string {
     .replace(/\u2264/g, '<=')
     .replace(/\u2260/g, '!=')
     .replace(/\u00d7/g, 'x')
-    .replace(/[\u2713\u2714\u2705]/g, '[x]')
-    .replace(/[\u00a0\u2009\u202f]/g, ' ')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '');
-  return Array.from(normalized, (character) => {
-    const code = character.codePointAt(0) ?? 0;
-    return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126) ? character : '?';
-  }).join('');
+    .replace(/\u2713/g, '[x]')
+    .replace(/\u00a9(?!\ufe0f)/g, '(c)')
+    .replace(/\u00ae(?!\ufe0f)/g, '(R)')
+    .replace(/[\u00a0\u2009\u202f]/g, ' ');
+  let out = '';
+  for (const { segment } of graphemes.segment(normalized)) {
+    if (EMOJI.test(segment)) {
+      out += emojiPlaceholder(segment);
+      continue;
+    }
+    for (const character of segment) {
+      if (TEXT_SCRIPT.test(character)) {
+        out += character;
+        continue;
+      }
+      // Strip accents from Latin letters; anything else unprintable becomes "?".
+      for (const part of character.normalize('NFKD')) {
+        const code = part.codePointAt(0) ?? 0;
+        if (code >= 0x300 && code <= 0x36f) continue;
+        out += code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126) ? part : '?';
+      }
+    }
+  }
+  return out;
 }
 
 // Standard Helvetica / Helvetica-Bold advance widths (1/1000 em) for ASCII 32-126.
@@ -92,14 +173,15 @@ const HELVETICA_BOLD = [
   611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
 ];
 
-/** Advance width of already pdfSafe text. Oblique shares Helvetica's metrics; Courier is 0.6em. */
+/** Advance width of already pdfSafe text. Oblique shares Helvetica's metrics; Courier is 0.6em; CJK and emoji are 1em. */
 export function textWidth(text: string, size: number, font: PdfFont): number {
-  if (font === 'mono') return text.length * 0.6 * size;
   const table = font === 'bold' ? HELVETICA_BOLD : HELVETICA;
   let units = 0;
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index);
-    units += table[code - 32] ?? 556;
+    if (isWideCode(code)) units += 1000;
+    else if (font === 'mono') units += 600;
+    else units += table[code - 32] ?? 556;
   }
   return (units / 1000) * size;
 }
@@ -142,7 +224,7 @@ export function wrapRuns(runs: PdfRun[], width: number, size: number): PdfRun[][
     pendingSpace = null;
   };
   for (const run of runs) {
-    const pieces = run.text.split(/(\n|[ \t]+)/);
+    const pieces = run.text.split(BREAK_PIECES);
     for (const piece of pieces) {
       if (!piece) continue;
       if (piece === '\n') {
@@ -157,7 +239,7 @@ export function wrapRuns(runs: PdfRun[], width: number, size: number): PdfRun[][
       let word = piece;
       const spaceWidth = pendingSpace ? textWidth(' ', pieceSize, run.font) : 0;
       let wordWidth = textWidth(word, pieceSize, run.font);
-      if (line.length && used + spaceWidth + wordWidth > width) flush();
+      if (line.length && used + spaceWidth + wordWidth > width && !NO_LINE_START.test(word)) flush();
       if (pendingSpace) {
         append(pendingSpace);
         used += spaceWidth;
@@ -296,15 +378,26 @@ function textBlock(runs: PdfRun[], size: number, context: BlockContext): PdfLine
 
 function codeBlock(value: string, context: BlockContext): PdfLine[] {
   const box = `code-${context.counter.value++}`;
-  const columns = Math.max(10, Math.floor((context.width - context.indent - 16) / (0.6 * CODE_SIZE)));
+  const available = Math.max(6 * CODE_SIZE, context.width - context.indent - 16);
   const lines: PdfLine[] = [];
   for (const source of pdfSafe(value.replace(/\t/g, '    ')).split(/\r?\n/)) {
     if (!source) {
       lines.push({ kind: 'code', text: '', indent: context.indent, box });
       continue;
     }
-    for (let start = 0; start < source.length; start += columns) {
-      lines.push({ kind: 'code', text: source.slice(start, start + columns), indent: context.indent, box });
+    // Hard-wrap by width: CJK characters and emoji are wider than Courier's 0.6em.
+    let start = 0;
+    while (start < source.length) {
+      let end = start;
+      let used = 0;
+      while (end < source.length) {
+        const advance = textWidth(source[end]!, CODE_SIZE, 'mono');
+        if (end > start && used + advance > available) break;
+        used += advance;
+        end += 1;
+      }
+      lines.push({ kind: 'code', text: source.slice(start, end), indent: context.indent, box });
+      start = end;
     }
   }
   return lines;

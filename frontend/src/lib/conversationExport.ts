@@ -5,12 +5,14 @@ import { buildToolResultIndex } from './transcript';
 import {
   CODE_SIZE,
   BODY_SIZE,
+  emojiFor,
   fitText,
   lineHeight,
   markdownLines,
   pdfSafe,
   plainLines,
   runSize,
+  scriptSegments,
   textWidth,
   type PdfLine,
   type PdfRun,
@@ -122,6 +124,60 @@ const PDF_COLORS = {
 
 const FONT_RESOURCES = { regular: 'F1', bold: 'F2', mono: 'F3', symbol: 'F4', italic: 'F5' } as const;
 
+// Non-embedded Adobe CID gothics for Japanese and Korean: viewers substitute an installed font.
+const CID_FONTS = {
+  japanese: {
+    resource: 'F6', name: 'HeiseiKakuGo-W5', encoding: 'UniJIS-UCS2-H', ordering: 'Japan1', supplement: 2,
+    metrics: '/Flags 4 /FontBBox [-92 -250 1010 922] /ItalicAngle 0 /Ascent 752 /Descent -221 /CapHeight 737 /StemV 114',
+  },
+  korean: {
+    resource: 'F7', name: 'HYGoThic-Medium', encoding: 'UniKS-UCS2-H', ordering: 'Korea1', supplement: 1,
+    metrics: '/Flags 4 /FontBBox [-6 -145 1003 880] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 880 /StemV 59',
+  },
+} as const;
+
+// No PDF font has emoji, so each one is drawn with the browser's emoji font into a small RGBA image.
+const EMOJI_PIXELS = 48;
+const HEX_BYTES = Array.from({ length: 256 }, (_, byte) => byte.toString(16).padStart(2, '0'));
+
+interface EmojiImage {
+  name: string;
+  rgb: string;
+  alpha: string;
+}
+
+const emojiImages = new Map<string, EmojiImage | null>();
+
+function rasterizeEmoji(placeholder: string): EmojiImage | null {
+  const emoji = emojiFor(placeholder);
+  if (!emoji || typeof OffscreenCanvas === 'undefined') return null;
+  const context = new OffscreenCanvas(EMOJI_PIXELS, EMOJI_PIXELS).getContext('2d');
+  if (!context) return null;
+  context.font = `${EMOJI_PIXELS * 0.82}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(emoji, EMOJI_PIXELS / 2, EMOJI_PIXELS * 0.54);
+  const { data } = context.getImageData(0, 0, EMOJI_PIXELS, EMOJI_PIXELS);
+  let rgb = '';
+  let alpha = '';
+  let visible = false;
+  for (let index = 0; index < data.length; index += 4) {
+    rgb += HEX_BYTES[data[index]!]! + HEX_BYTES[data[index + 1]!]! + HEX_BYTES[data[index + 2]!]!;
+    alpha += HEX_BYTES[data[index + 3]!]!;
+    if (data[index + 3]) visible = true;
+  }
+  return visible ? { name: `E${placeholder.charCodeAt(0).toString(16)}`, rgb, alpha } : null;
+}
+
+function emojiImage(placeholder: string): EmojiImage | null {
+  if (!emojiImages.has(placeholder)) emojiImages.set(placeholder, rasterizeEmoji(placeholder));
+  return emojiImages.get(placeholder) ?? null;
+}
+
+function utf16Hex(text: string): string {
+  return Array.from(text, (character) => character.charCodeAt(0).toString(16).padStart(4, '0')).join('');
+}
+
 function roundedRect(x: number, y: number, width: number, height: number, radius = 7): string {
   const k = radius * 0.55228475;
   const right = x + width;
@@ -151,7 +207,30 @@ function pdfText(text: string, x: number, y: number, options: {
   font?: keyof typeof FONT_RESOURCES;
   size?: number;
 } = {}): string {
-  return `BT /${FONT_RESOURCES[options.font ?? 'regular']} ${options.size ?? 9} Tf ${options.color ?? PDF_COLORS.body} rg ${x} ${y} Td (${pdfString(text)}) Tj ET`;
+  const font = options.font ?? 'regular';
+  const size = options.size ?? 9;
+  const color = options.color ?? PDF_COLORS.body;
+  // Each script segment is placed at its own measured x, switching to the CID fonts or emoji images.
+  const out: string[] = [];
+  let cursor = x;
+  for (const segment of scriptSegments(text)) {
+    if (segment.script === 'emoji') {
+      for (const placeholder of segment.text) {
+        const image = emojiImage(placeholder);
+        out.push(image
+          ? `q ${size} 0 0 ${size} ${cursor} ${+(y - size * 0.18).toFixed(2)} cm /${image.name} Do Q`
+          : `BT /${FONT_RESOURCES[font]} ${size} Tf ${color} rg ${cursor} ${y} Td (?) Tj ET`);
+        cursor = +(cursor + size).toFixed(2);
+      }
+      continue;
+    }
+    const latin = segment.script === 'latin';
+    const resource = segment.script === 'latin' ? FONT_RESOURCES[font] : CID_FONTS[segment.script].resource;
+    const operand = latin ? `(${pdfString(segment.text)})` : `<${utf16Hex(segment.text)}>`;
+    out.push(`BT /${resource} ${size} Tf ${color} rg ${cursor} ${y} Td ${operand} Tj ET`);
+    cursor = +(cursor + textWidth(segment.text, size, font === 'symbol' ? 'regular' : font)).toFixed(2);
+  }
+  return out.join('\n');
 }
 
 function activityLines(block: ActivityBlock): PdfLine[] {
@@ -445,6 +524,38 @@ export function conversationToPdf(data: ConversationExport): Blob {
   const monoFontObject = regularFontObject + 2;
   const symbolFontObject = regularFontObject + 3;
   const italicFontObject = regularFontObject + 4;
+  const used = pages.flat().join('\n');
+  // Optional objects follow the five base fonts: CID fonts (3 objects each), then emoji images (2 each).
+  let nextObject = regularFontObject + 5;
+  const extraObjects: string[] = [];
+  const extraFonts: string[] = [];
+  for (const font of Object.values(CID_FONTS)) {
+    if (!used.includes(`/${font.resource} `)) continue;
+    extraFonts.push(`/${font.resource} ${nextObject} 0 R`);
+    extraObjects.push(
+      `<< /Type /Font /Subtype /Type0 /BaseFont /${font.name} /Encoding /${font.encoding} /DescendantFonts [${nextObject + 1} 0 R] >>`,
+      `<< /Type /Font /Subtype /CIDFontType0 /BaseFont /${font.name} /CIDSystemInfo << /Registry (Adobe) /Ordering (${font.ordering}) /Supplement ${font.supplement} >> /FontDescriptor ${nextObject + 2} 0 R /DW 1000 >>`,
+      `<< /Type /FontDescriptor /FontName /${font.name} ${font.metrics} >>`,
+    );
+    nextObject += 3;
+  }
+  const xObjects: string[] = [];
+  const usedImages = new Set(Array.from(used.matchAll(/\/(E[0-9a-f]{4}) Do/g), (match) => match[1]));
+  for (const image of emojiImages.values()) {
+    if (!image || !usedImages.has(image.name)) continue;
+    xObjects.push(`/${image.name} ${nextObject} 0 R`);
+    const header = `/Type /XObject /Subtype /Image /Width ${EMOJI_PIXELS} /Height ${EMOJI_PIXELS} /BitsPerComponent 8 /Filter /ASCIIHexDecode`;
+    extraObjects.push(
+      `<< ${header} /ColorSpace /DeviceRGB /SMask ${nextObject + 1} 0 R /Length ${image.rgb.length + 1} >>\nstream\n${image.rgb}>\nendstream`,
+      `<< ${header} /ColorSpace /DeviceGray /Length ${image.alpha.length + 1} >>\nstream\n${image.alpha}>\nendstream`,
+    );
+    nextObject += 2;
+  }
+  const fontResources = [
+    `/F1 ${regularFontObject} 0 R /F2 ${boldFontObject} 0 R /F3 ${monoFontObject} 0 R /F4 ${symbolFontObject} 0 R /F5 ${italicFontObject} 0 R`,
+    ...extraFonts,
+  ].join(' ');
+  const resources = `/Font << ${fontResources} >>${xObjects.length ? ` /XObject << ${xObjects.join(' ')} >>` : ''}`;
   const objects: string[] = [];
   const pageRefs = pages.map((_, index) => `${pageObjectStart + index * 2} 0 R`).join(' ');
   objects.push('<< /Type /Catalog /Pages 2 0 R >>');
@@ -452,7 +563,7 @@ export function conversationToPdf(data: ConversationExport): Blob {
   pages.forEach((page, index) => {
     const pageObject = pageObjectStart + index * 2;
     const contentObject = pageObject + 1;
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${regularFontObject} 0 R /F2 ${boldFontObject} 0 R /F3 ${monoFontObject} 0 R /F4 ${symbolFontObject} 0 R /F5 ${italicFontObject} 0 R >> >> /Contents ${contentObject} 0 R >>`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << ${resources} >> /Contents ${contentObject} 0 R >>`);
     const stream = page.join('\n');
     objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
   });
@@ -461,6 +572,7 @@ export function conversationToPdf(data: ConversationExport): Blob {
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>');
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>');
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>');
+  objects.push(...extraObjects);
 
   let pdf = '%PDF-1.4\n%ASTRA\n';
   const offsets = [0];
