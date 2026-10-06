@@ -1,6 +1,7 @@
 import { ActionIcon, Badge, Box, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
+import { Dropzone } from '@mantine/dropzone';
 import { useMediaQuery } from '@mantine/hooks';
-import { IconArrowUp, IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCpu, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
+import { IconArrowUp, IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCpu, IconFileUpload, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import type { BusyTurnMode } from '../../lib/uiPreferences';
@@ -91,7 +92,8 @@ export function ChatComposer({
   contextEstimated: boolean;
 }) {
   const [attachments, setAttachments] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploadsInFlight, setUploadsInFlight] = useState(0);
+  const uploading = uploadsInFlight > 0;
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [menuOpened, setMenuOpened] = useState(false);
   const [filter, setFilter] = useState('');
@@ -148,14 +150,18 @@ export function ChatComposer({
     closeMenu();
   };
 
-  const handleAttach = (file: File | null) => {
-    if (!file) return;
+  // Files from the paperclip and from drag-and-drop both land here; each uploads to the workspace
+  // and is referenced by its path when the message is sent.
+  const handleAttach = (files: File[]) => {
+    if (files.length === 0) return;
     setUploadError(null);
-    setUploading(true);
-    void onAttach(file)
-      .then((path) => setAttachments((items) => [...items, path]))
-      .catch((error: unknown) => setUploadError(error instanceof Error ? error.message : 'Upload failed'))
-      .finally(() => setUploading(false));
+    for (const file of files) {
+      setUploadsInFlight((count) => count + 1);
+      void onAttach(file)
+        .then((path) => setAttachments((items) => (items.includes(path) ? items : [...items, path])))
+        .catch((error: unknown) => setUploadError(error instanceof Error ? error.message : 'Upload failed'))
+        .finally(() => setUploadsInFlight((count) => count - 1));
+    }
   };
   const submit = async () => {
     const skillsMatch = attachments.length === 0 && draft.trim().match(/^\/skills(?:\s+([\s\S]*))?$/i);
@@ -187,7 +193,22 @@ export function ChatComposer({
 
   return (
     <Box className={classes.wrapper}>
-      <Box className={classes.card}>
+      <Dropzone
+        onDrop={handleAttach}
+        multiple
+        activateOnClick={false}
+        activateOnKeyboard={false}
+        enablePointerEvents
+        unstyled
+        classNames={{ root: classes.card, inner: classes.cardInner }}
+        data-astra-composer
+      >
+        <Dropzone.Accept>
+          <Box className={classes.dropOverlay}>
+            <IconFileUpload size={20} stroke={1.6} />
+            <Text fz="sm" fw={500}>Drop to attach</Text>
+          </Box>
+        </Dropzone.Accept>
         <Textarea
           variant="unstyled"
           value={draft}
@@ -216,7 +237,7 @@ export function ChatComposer({
         )}
         {uploadError && <Text c="red" fz="xs">{uploadError}</Text>}
         <Group gap={compact ? 4 : 8} wrap={compact ? 'nowrap' : 'wrap'} className={classes.controlRow}>
-          <FileButton onChange={handleAttach}>
+          <FileButton multiple onChange={handleAttach}>
             {(props) => (
               <Tooltip label="Attach a workspace file">
                 <ActionIcon {...props} variant="subtle" size={30} radius={6} aria-label="Attach file" loading={uploading} c={running ? 'var(--astra-border-strong)' : 'var(--astra-text-dim)'}>
@@ -386,7 +407,7 @@ export function ChatComposer({
             </ActionIcon>
           </Tooltip>
         </Group>
-      </Box>
+      </Dropzone>
     </Box>
   );
 }

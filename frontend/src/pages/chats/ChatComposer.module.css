@@ -11,6 +11,9 @@
 
   .card {
     padding: 8px 10px 6px;
+  }
+
+  .cardInner {
     gap: 6px;
   }
 
@@ -26,10 +29,32 @@
   border: 1px solid var(--astra-border-strong);
   border-radius: 10px;
   padding: 12px 12px 10px;
+  position: relative;
+}
+
+.card[data-accept] {
+  border-color: var(--astra-primary);
+}
+
+.cardInner {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  position: relative;
+}
+
+/* Shown over the composer while files are dragged onto it. */
+.dropOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--astra-primary);
+  background: color-mix(in srgb, var(--astra-surface) 88%, var(--astra-primary));
+  pointer-events: none;
 }
 
 .textarea {

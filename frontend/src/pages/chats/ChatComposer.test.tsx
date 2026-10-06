@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from '../../test/render';
 import { ChatComposer } from './ChatComposer';
@@ -82,6 +82,24 @@ describe('ChatComposer', () => {
 
     expect(onAttach).toHaveBeenCalledWith(file);
     expect(onSend).toHaveBeenCalledWith('[Attached workspace file: diagram.png]\n\nPlease inspect this');
+  });
+
+  it('uploads files dropped onto the composer', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn(async () => undefined);
+    const onAttach = vi.fn(async (file: File) => file.name);
+    render(<Harness onSend={onSend} onAttach={onAttach} />);
+
+    const first = new File(['a'], 'notes.txt', { type: 'text/plain' });
+    const second = new File(['b'], 'photo.jpg', { type: 'image/jpeg' });
+    const card = screen.getByPlaceholderText('Message Hermes…').closest('[data-astra-composer]') as HTMLElement;
+    const items = [first, second].map((file) => ({ kind: 'file', type: file.type, getAsFile: () => file }));
+    fireEvent.drop(card, { dataTransfer: { files: [first, second], items, types: ['Files'] } });
+
+    expect(await screen.findByText('notes.txt')).toBeInTheDocument();
+    expect(await screen.findByText('photo.jpg')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Send message'));
+    expect(onSend).toHaveBeenCalledWith('[Attached workspace file: notes.txt]\n[Attached workspace file: photo.jpg]');
   });
 
   it('selects a reasoning effort', async () => {
