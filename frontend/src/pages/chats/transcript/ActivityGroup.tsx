@@ -21,7 +21,9 @@ import { memo } from 'react';
 import type { ChildSession } from '../../../api/types';
 import { useRememberedDisclosure } from '../../../lib/disclosureMemory';
 import {
+  firstLine,
   formatToolDuration,
+  shortTarget,
   summarizeToolNames,
   toolArgumentPreview,
   toolCategory,
@@ -34,8 +36,6 @@ import classes from './Transcript.module.css';
 const ICON = { size: 14, stroke: 1.8 };
 
 function ToolIcon({ name }: { name: string | null }) {
-  const n = (name ?? '').toLowerCase();
-  if (n.startsWith('mcp__')) return <IconPlugConnected {...ICON} />;
   switch (toolCategory(name)) {
     case 'command': return <IconTerminal2 {...ICON} />;
     case 'read': return <IconFile {...ICON} />;
@@ -44,6 +44,7 @@ function ToolIcon({ name }: { name: string | null }) {
     case 'web':
     case 'browser': return <IconWorld {...ICON} />;
     case 'delegate': return <IconRobot {...ICON} />;
+    case 'mcp': return <IconPlugConnected {...ICON} />;
     default: return <IconTool {...ICON} />;
   }
 }
@@ -53,17 +54,6 @@ function StatusMark({ status }: { status: ToolStatus }) {
   if (status === 'pending') return <IconClock size={14} className={classes.dim} aria-label="No result" />;
   if (status === 'error') return <IconX size={14} className={classes.danger} aria-label="Failed" />;
   return <IconCheck size={14} className={classes.ok} aria-label="Done" />;
-}
-
-/** File paths read best from the end: keep the last few segments. */
-function shortTarget(item: ToolItem): string {
-  const target = item.preview || toolArgumentPreview(item.arguments);
-  const category = toolCategory(item.name);
-  if ((category === 'read' || category === 'edit') && /^[~./]?[^\s]*\/[^\s]+$/.test(target)) {
-    const parts = target.split('/');
-    if (parts.length > 3) return `…/${parts.slice(-3).join('/')}`;
-  }
-  return target;
 }
 
 export const ToolRow = memo(function ToolRow({
@@ -120,10 +110,6 @@ export const ToolRow = memo(function ToolRow({
     </Box>
   );
 });
-
-function firstLine(text: string): string {
-  return text.trim().split('\n').find((line) => line.trim())?.trim() ?? '';
-}
 
 export function ThoughtRow({ item, withIcon = true }: { item: ThoughtItem; withIcon?: boolean }) {
   const [open, toggle] = useRememberedDisclosure(`thought:${item.key}`, false);

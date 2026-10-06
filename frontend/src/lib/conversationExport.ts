@@ -1,5 +1,21 @@
-import type { Message, MessageContent, SessionDetail } from '../api/types';
+import type { Message, MessageContent, MessageContentPart, SessionDetail } from '../api/types';
 import { sessionTitle } from './format';
+import { firstLine, formatToolDuration, shortTarget, summarizeToolNames, toolTitle } from './toolDisplay';
+import { buildToolResultIndex } from './transcript';
+import {
+  CODE_SIZE,
+  BODY_SIZE,
+  fitText,
+  lineHeight,
+  markdownLines,
+  pdfSafe,
+  plainLines,
+  runSize,
+  textWidth,
+  type PdfLine,
+  type PdfRun,
+} from './pdfLayout';
+import { buildTranscriptEntries, type ActivityBlock, type ToolItem } from './turnBlocks';
 
 export type ConversationExportFormat = 'json' | 'markdown' | 'pdf';
 
@@ -77,43 +93,17 @@ export function conversationToMarkdown(data: ConversationExport): string {
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
-// A small dependency-free PDF writer. PDF's built-in Helvetica font uses Windows-1252, so map
-// common punctuation and replace unsupported glyphs rather than emitting a corrupt document.
-function pdfSafe(text: string): string {
-  const normalized = text
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201c\u201d]/g, '"')
-    .replace(/[\u2013\u2014]/g, '-')
-    .replace(/\u2026/g, '...')
-    .replace(/\u2022/g, '*')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '');
-  return Array.from(normalized, (character) => {
-    const code = character.codePointAt(0) ?? 0;
-    return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126) ? character : '?';
-  }).join('');
-}
-
-function wrapLine(line: string, width = 94): string[] {
-  if (!line) return [''];
-  const output: string[] = [];
-  let rest = line.replace(/\t/g, '    ');
-  while (rest.length > width) {
-    let split = rest.lastIndexOf(' ', width);
-    if (split < Math.floor(width / 2)) split = width;
-    output.push(rest.slice(0, split));
-    rest = rest.slice(split).trimStart();
-  }
-  output.push(rest);
-  return output;
-}
-
+// A small dependency-free PDF writer using the built-in Type 1 fonts; layout is in ./pdfLayout.
 function pdfString(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
-type PdfTone = 'body' | 'muted' | 'reasoning' | 'tool';
-type PdfLine = { text: string; tone: PdfTone; mono?: boolean; label?: boolean };
+interface PdfBubble {
+  role: string;
+  timestamp: number;
+  isUser: boolean;
+  lines: PdfLine[];
+}
 
 const PDF_COLORS = {
   bg: '0.055 0.063 0.075',
@@ -127,7 +117,10 @@ const PDF_COLORS = {
   teal: '0.169 0.714 0.769',
   tealInk: '0.016 0.129 0.165',
   sand: '0.949 0.784 0.475',
+  red: '0.898 0.392 0.392',
 } as const;
+
+const FONT_RESOURCES = { regular: 'F1', bold: 'F2', mono: 'F3', symbol: 'F4', italic: 'F5' } as const;
 
 function roundedRect(x: number, y: number, width: number, height: number, radius = 7): string {
   const k = radius * 0.55228475;
@@ -142,36 +135,210 @@ function roundedRect(x: number, y: number, width: number, height: number, radius
   ].join('\n');
 }
 
-function pdfText(text: string, x: number, y: number, options: {
-  color?: string;
-  font?: 'regular' | 'bold' | 'mono';
-  size?: number;
-} = {}): string {
-  const font = options.font === 'bold' ? 'F2' : options.font === 'mono' ? 'F3' : 'F1';
-  return `BT /${font} ${options.size ?? 9} Tf ${options.color ?? PDF_COLORS.body} rg ${x} ${y} Td (${pdfString(text)}) Tj ET`;
+function circle(cx: number, cy: number, r: number): string {
+  const k = r * 0.55228475;
+  return [
+    `${cx + r} ${cy} m`,
+    `${cx + r} ${cy + k} ${cx + k} ${cy + r} ${cx} ${cy + r} c`,
+    `${cx - k} ${cy + r} ${cx - r} ${cy + k} ${cx - r} ${cy} c`,
+    `${cx - r} ${cy - k} ${cx - k} ${cy - r} ${cx} ${cy - r} c`,
+    `${cx + k} ${cy - r} ${cx + r} ${cy - k} ${cx + r} ${cy} c h`,
+  ].join('\n');
 }
 
-function messagePdfLines(message: Message, width: number): PdfLine[] {
-  const output: PdfLine[] = [];
-  const add = (text: string, tone: PdfTone, mono = false, label = false) => {
-    for (const sourceLine of pdfSafe(text).split(/\r?\n/)) {
-      for (const line of wrapLine(sourceLine, width)) output.push({ text: line, tone, mono, label });
+function pdfText(text: string, x: number, y: number, options: {
+  color?: string;
+  font?: keyof typeof FONT_RESOURCES;
+  size?: number;
+} = {}): string {
+  return `BT /${FONT_RESOURCES[options.font ?? 'regular']} ${options.size ?? 9} Tf ${options.color ?? PDF_COLORS.body} rg ${x} ${y} Td (${pdfString(text)}) Tj ET`;
+}
+
+function activityLines(block: ActivityBlock): PdfLine[] {
+  const box = block.key;
+  const steps: PdfLine[] = block.items.map((item) => {
+    if (item.kind === 'thought') {
+      const preview = firstLine(item.text).replace(/\*\*|__|`/g, '');
+      return { kind: 'step', box, title: 'Thought', detail: pdfSafe(preview), mono: false, status: null };
     }
-  };
-  const content = visibleText(message);
-  if (content) add(content, 'body');
-  if (message.reasoning) {
-    if (output.length) output.push({ text: '', tone: 'muted' });
-    add('REASONING', 'reasoning', true, true);
-    add(message.reasoning, 'muted');
+    if (item.kind === 'notice') {
+      return { kind: 'step', box, title: pdfSafe(item.label), detail: '', mono: false, status: null };
+    }
+    const status = item.status === 'pending' ? null : item.status;
+    return { kind: 'step', box, title: toolTitle(item.name), detail: pdfSafe(shortTarget(item)), mono: true, status };
+  });
+  if (block.items.length === 1) return steps;
+  const tools = block.items.filter((item): item is ToolItem => item.kind === 'tool');
+  const total = tools.reduce((sum, item) => sum + (item.duration ?? 0), 0);
+  const duration = total > 0 ? formatToolDuration(total) : null;
+  return [
+    {
+      kind: 'header',
+      box,
+      summary: tools.length > 0 ? summarizeToolNames(tools.map((item) => item.name)) : 'Thought',
+      meta: `${block.items.length} steps${duration ? ` / ${duration}` : ''}`,
+      failed: tools.filter((item) => item.status === 'error').length,
+    },
+    ...steps,
+  ];
+}
+
+function partsMarkdown(parts: MessageContentPart[]): string {
+  return parts.map((part) => (typeof part.text === 'string' ? part.text : `*[${part.type || 'attachment'}]*`)).join('\n\n');
+}
+
+/** Usable text width inside a bubble. */
+const ASSISTANT_TEXT_WIDTH = 487 - 32;
+const USER_TEXT_WIDTH = 399 - 32;
+
+/**
+ * The bubbles a reader sees in the transcript: one per user/notice message, and one per assistant
+ * turn holding its rendered prose and compact activity steps. Raw tool arguments, tool output and
+ * full reasoning are left to the JSON export.
+ */
+function pdfBubbles(messages: Message[]): PdfBubble[] {
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const bubbles: PdfBubble[] = [];
+  let turn: PdfBubble | null = null;
+  for (const entry of buildTranscriptEntries(messages, buildToolResultIndex(messages))) {
+    if (entry.kind === 'message') {
+      turn = null;
+      const isUser = entry.message.role === 'user';
+      const text = visibleText(entry.message);
+      bubbles.push({
+        role: headingRole(entry.message.role),
+        timestamp: entry.message.timestamp,
+        isUser,
+        lines: text ? plainLines(text, isUser ? USER_TEXT_WIDTH : ASSISTANT_TEXT_WIDTH) : [],
+      });
+      continue;
+    }
+    if (entry.first || !turn) {
+      turn = { role: 'Assistant', timestamp: byId.get(entry.messageIds[0] ?? -1)?.timestamp ?? Number.NaN, isUser: false, lines: [] };
+      bubbles.push(turn);
+    }
+    const { block } = entry;
+    const lines = block.kind === 'activity' ? activityLines(block)
+      : block.kind === 'text' ? markdownLines(block.text, ASSISTANT_TEXT_WIDTH, block.key)
+        : block.kind === 'parts' ? markdownLines(partsMarkdown(block.parts), ASSISTANT_TEXT_WIDTH, block.key)
+          : [];
+    if (lines.length && turn.lines.length) turn.lines.push({ kind: 'gap', height: 8 });
+    turn.lines.push(...lines);
+    if (entry.last) turn = null;
   }
-  for (const call of message.tool_calls ?? []) {
-    if (output.length) output.push({ text: '', tone: 'muted' });
-    add(`TOOL  ${call.name ?? 'Tool'}`, 'tool', true, true);
-    add(JSON.stringify(call.arguments, null, 2), 'muted', true);
+  for (const bubble of bubbles) {
+    if (!bubble.lines.length) bubble.lines.push(...plainLines('(No content)', ASSISTANT_TEXT_WIDTH, 'muted'));
   }
-  if (!output.length) output.push({ text: '(No content)', tone: 'muted' });
-  return output;
+  return bubbles;
+}
+
+/** Draw a row of styled runs starting at `x`. */
+function drawRuns(runs: PdfRun[], x: number, y: number, size: number, isUser: boolean): string[] {
+  const out: string[] = [];
+  let cursor = x;
+  for (const run of runs) {
+    if (!run.text) continue;
+    const runFontSize = runSize(run, size);
+    out.push(pdfText(run.text, cursor, y, {
+      color: isUser ? PDF_COLORS.tealInk : PDF_COLORS[run.ink],
+      font: run.font,
+      size: runFontSize,
+    }));
+    cursor += textWidth(run.text, runFontSize, run.font);
+  }
+  return out;
+}
+
+/** Draw one bubble row whose baseline is `y`; text starts at `left + 16`. */
+function drawLine(line: PdfLine, left: number, right: number, y: number, isUser: boolean): string[] {
+  const content = left + 16;
+  const out: string[] = [];
+  switch (line.kind) {
+    case 'gap':
+      return out;
+    case 'text': {
+      for (const bar of line.quoteBars ?? []) {
+        out.push(`q ${PDF_COLORS.border} RG 1.6 w ${content + bar} ${y - 3} m ${content + bar} ${y + lineHeight(line) - 3} l S Q`);
+      }
+      if (line.marker) {
+        const markerX = content + line.marker.indent;
+        if (line.marker.text) out.push(pdfText(line.marker.text, markerX, y, { color: PDF_COLORS.muted, size: line.size }));
+        else out.push(`q ${PDF_COLORS.muted} rg ${circle(markerX + 3, y + 2.8, 1.6)} f Q`);
+      }
+      out.push(...drawRuns(line.runs, content + line.indent, y, line.size, isUser));
+      return out;
+    }
+    case 'code':
+      if (line.text) out.push(pdfText(line.text, content + line.indent + 6, y, { color: PDF_COLORS.body, font: 'mono', size: CODE_SIZE }));
+      return out;
+    case 'cells':
+      for (const cell of line.cells) out.push(...drawRuns(cell.runs, content + line.indent + cell.x, y, BODY_SIZE, isUser));
+      if (line.rule) {
+        const width = line.rule === 'header' ? 0.9 : 0.5;
+        out.push(`q ${PDF_COLORS.border} RG ${width} w ${content + line.indent} ${y - 4} m ${right - 16} ${y - 4} l S Q`);
+      }
+      return out;
+    case 'rule':
+      out.push(`q ${PDF_COLORS.border} RG 0.8 w ${content + line.indent} ${y + 3} m ${right - 16} ${y + 3} l S Q`);
+      return out;
+    default:
+      break;
+  }
+  const end = right - 18;
+  if (line.kind === 'header') {
+    // A "list" glyph: three short rules.
+    for (const dy of [0, 2.6, 5.2]) out.push(`q ${PDF_COLORS.muted} RG 0.8 w ${left + 18} ${y + dy} m ${left + 25} ${y + dy} l S Q`);
+    const metaWidth = textWidth(line.meta, 7, 'mono');
+    out.push(pdfText(line.meta, end - metaWidth, y, { color: PDF_COLORS.muted, font: 'mono', size: 7 }));
+    let summaryEnd = end - metaWidth - 10;
+    if (line.failed > 0) {
+      const failed = `${line.failed} failed`;
+      const failedWidth = textWidth(failed, 7, 'bold');
+      out.push(pdfText(failed, summaryEnd - failedWidth, y, { color: PDF_COLORS.red, font: 'bold', size: 7 }));
+      summaryEnd -= failedWidth + 10;
+    }
+    out.push(pdfText(fitText(line.summary, summaryEnd - (left + 32), 8.5, 'bold'), left + 32, y, { color: PDF_COLORS.text, font: 'bold', size: 8.5 }));
+    return out;
+  }
+  out.push(`q ${line.status === 'error' ? PDF_COLORS.red : PDF_COLORS.muted} rg ${circle(left + 21.5, y + 2.8, 2.2)} f Q`);
+  const titleX = left + 32;
+  const title = fitText(line.title, end - 14 - titleX, 8.5, 'bold');
+  out.push(pdfText(title, titleX, y, { color: PDF_COLORS.text, font: 'bold', size: 8.5 }));
+  const detailX = titleX + textWidth(title, 8.5, 'bold') + 7;
+  const detailSize = line.mono ? 7.2 : 8;
+  const detail = fitText(line.detail, end - 14 - detailX, detailSize, line.mono ? 'mono' : 'regular');
+  if (detail) out.push(pdfText(detail, detailX, y, { color: PDF_COLORS.muted, font: line.mono ? 'mono' : 'regular', size: detailSize }));
+  // ZapfDingbats: "4" is a check mark, "8" a cross.
+  if (line.status === 'done') out.push(pdfText('4', end - 7, y, { color: PDF_COLORS.teal, font: 'symbol', size: 8 }));
+  if (line.status === 'error') out.push(pdfText('8', end - 7, y, { color: PDF_COLORS.red, font: 'symbol', size: 8 }));
+  return out;
+}
+
+function boxKey(line: PdfLine): string | null {
+  return line.kind === 'header' || line.kind === 'step' || line.kind === 'code' ? line.box : null;
+}
+
+/** Inset cards behind each run of one box's rows (an activity group, a code block) on this page. */
+function drawBoxes(chunk: PdfLine[], baselines: number[], left: number, right: number): string[] {
+  const out: string[] = [];
+  let index = 0;
+  while (index < chunk.length) {
+    const line = chunk[index]!;
+    const key = boxKey(line);
+    if (!key) {
+      index += 1;
+      continue;
+    }
+    let stop = index + 1;
+    while (stop < chunk.length && boxKey(chunk[stop]!) === key) stop += 1;
+    const inset = line.kind === 'code' ? 16 + line.indent : 10;
+    const right_ = line.kind === 'code' ? right - 16 : right - 10;
+    const top = baselines[index]! + 10;
+    const bottom = baselines[stop - 1]! - 5;
+    out.push(`q ${PDF_COLORS.sunk} rg ${PDF_COLORS.border} RG 0.6 w ${roundedRect(left + inset, bottom, right_ - left - inset, top - bottom, 5)} B Q`);
+    index = stop;
+  }
+  return out;
 }
 
 export function conversationToPdf(data: ConversationExport): Blob {
@@ -204,25 +371,33 @@ export function conversationToPdf(data: ConversationExport): Blob {
   };
 
   startPage();
-  for (const message of data.messages) {
-    const isUser = message.role === 'user';
+  for (const bubble of pdfBubbles(data.messages)) {
+    const { isUser } = bubble;
     const x = isUser ? 166 : 54;
     const width = isUser ? 399 : 487;
-    const textWidth = isUser ? 67 : 82;
-    const allLines = messagePdfLines(message, textWidth);
+    const allLines = bubble.lines;
     let offset = 0;
     let continuation = false;
 
     while (offset < allLines.length) {
-      const availableLines = Math.floor((cursorY - 55 - 42) / 12);
-      if (availableLines < 3) {
+      // A page never starts with spacing.
+      while (continuation && allLines[offset]?.kind === 'gap') offset += 1;
+      if (offset >= allLines.length) break;
+      const available = cursorY - 97;
+      if (available < 36) {
         finishPage();
         startPage();
         continue;
       }
-      const maxLines = availableLines;
-      const chunk = allLines.slice(offset, offset + maxLines);
-      const height = 38 + chunk.length * 12;
+      const chunk: PdfLine[] = [];
+      let used = 0;
+      while (offset + chunk.length < allLines.length) {
+        const next = allLines[offset + chunk.length]!;
+        if (chunk.length && used + lineHeight(next) > available) break;
+        chunk.push(next);
+        used += lineHeight(next);
+      }
+      const height = 38 + used;
       const bottom = cursorY - height;
       const fill = isUser ? PDF_COLORS.teal : PDF_COLORS.surface;
       const stroke = isUser ? PDF_COLORS.teal : PDF_COLORS.border;
@@ -231,30 +406,25 @@ export function conversationToPdf(data: ConversationExport): Blob {
         commands.push(`q ${PDF_COLORS.teal} rg 26 ${cursorY - 23} 18 18 re f Q`);
         commands.push(pdfText('A', 32, cursorY - 18, { color: PDF_COLORS.tealInk, font: 'bold', size: 8 }));
       }
-      const role = `${headingRole(message.role).toUpperCase()}${continuation ? '  /  CONTINUED' : ''}`;
+      const role = `${bubble.role.toUpperCase()}${continuation ? '  /  CONTINUED' : ''}`;
       const labelColor = isUser ? PDF_COLORS.tealInk : PDF_COLORS.sand;
       commands.push(pdfText(role, x + 13, cursorY - 17, { color: labelColor, font: 'bold', size: 7.5 }));
-      commands.push(pdfText(formatTimestamp(message.timestamp).replace('T', ' ').replace('.000Z', ' UTC'), x + width - 145, cursorY - 17, {
+      commands.push(pdfText(formatTimestamp(bubble.timestamp).replace('T', ' ').replace('.000Z', ' UTC'), x + width - 145, cursorY - 17, {
         color: isUser ? PDF_COLORS.tealInk : PDF_COLORS.muted,
         font: 'mono',
         size: 6.5,
       }));
-      let lineY = cursorY - 34;
+      // Each row sits below the previous one; its baseline is 3pt above its bottom edge.
+      const baselines: number[] = [];
+      let top = cursorY - 25;
       for (const line of chunk) {
-        const color = isUser ? PDF_COLORS.tealInk
-          : line.tone === 'reasoning' ? PDF_COLORS.sand
-            : line.tone === 'tool' ? PDF_COLORS.teal
-              : line.tone === 'muted' ? PDF_COLORS.muted : PDF_COLORS.body;
-        if (!isUser && line.label) {
-          commands.push(`q ${line.tone === 'reasoning' ? PDF_COLORS.sand : PDF_COLORS.teal} rg ${x + 10} ${lineY - 2} 2 10 re f Q`);
-        }
-        commands.push(pdfText(line.text, x + 16, lineY, {
-          color,
-          font: line.label ? 'bold' : line.mono ? 'mono' : 'regular',
-          size: line.mono ? 7.2 : 8.5,
-        }));
-        lineY -= 12;
+        top -= lineHeight(line);
+        baselines.push(top + 3);
       }
+      if (!isUser) commands.push(...drawBoxes(chunk, baselines, x, x + width));
+      chunk.forEach((line, index) => {
+        commands.push(...drawLine(line, x, x + width, baselines[index]!, isUser));
+      });
       cursorY = bottom - 14;
       offset += chunk.length;
       continuation = true;
@@ -273,6 +443,8 @@ export function conversationToPdf(data: ConversationExport): Blob {
   const regularFontObject = pageObjectStart + pages.length * 2;
   const boldFontObject = regularFontObject + 1;
   const monoFontObject = regularFontObject + 2;
+  const symbolFontObject = regularFontObject + 3;
+  const italicFontObject = regularFontObject + 4;
   const objects: string[] = [];
   const pageRefs = pages.map((_, index) => `${pageObjectStart + index * 2} 0 R`).join(' ');
   objects.push('<< /Type /Catalog /Pages 2 0 R >>');
@@ -280,13 +452,15 @@ export function conversationToPdf(data: ConversationExport): Blob {
   pages.forEach((page, index) => {
     const pageObject = pageObjectStart + index * 2;
     const contentObject = pageObject + 1;
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${regularFontObject} 0 R /F2 ${boldFontObject} 0 R /F3 ${monoFontObject} 0 R >> >> /Contents ${contentObject} 0 R >>`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${regularFontObject} 0 R /F2 ${boldFontObject} 0 R /F3 ${monoFontObject} 0 R /F4 ${symbolFontObject} 0 R /F5 ${italicFontObject} 0 R >> >> /Contents ${contentObject} 0 R >>`);
     const stream = page.join('\n');
     objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
   });
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>');
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>');
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>');
 
   let pdf = '%PDF-1.4\n%ASTRA\n';
   const offsets = [0];

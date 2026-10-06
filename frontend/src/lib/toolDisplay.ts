@@ -1,3 +1,5 @@
+import type { ToolItem } from './turnBlocks';
+
 /** Argument keys that best describe what a tool call is doing, in priority order. */
 const PRIMARY_ARG_KEYS = [
   'command', 'cmd', 'path', 'file_path', 'filename', 'url', 'query', 'pattern', 'q',
@@ -24,7 +26,10 @@ export function toolArgumentPreview(args: unknown): string {
   const record = value as Record<string, unknown>;
   for (const key of PRIMARY_ARG_KEYS) {
     const candidate = record[key];
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.replace(/\s+/g, ' ').trim();
+    if (typeof candidate !== 'string' || !candidate.trim()) continue;
+    // The tool-search bridge names its target MCP tool (`tool_call {name: "mcp__ha__get_state"}`).
+    if (key === 'name' && candidate.startsWith('mcp__')) return toolDisplayName(candidate);
+    return candidate.replace(/\s+/g, ' ').trim();
   }
   const firstString = Object.values(record).find((item) => typeof item === 'string' && item.trim());
   if (typeof firstString === 'string') return firstString.replace(/\s+/g, ' ').trim();
@@ -63,7 +68,7 @@ export function formatToolDuration(seconds: number | null | undefined): string |
   return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
-export type ToolCategory = 'command' | 'read' | 'edit' | 'search' | 'web' | 'delegate' | 'browser' | 'memory' | 'other';
+export type ToolCategory = 'command' | 'read' | 'edit' | 'search' | 'web' | 'delegate' | 'browser' | 'memory' | 'mcp' | 'other';
 
 interface ToolVerb {
   done: string;
@@ -93,6 +98,23 @@ const TOOL_VERBS: Record<string, ToolVerb> = {
   image_generate: { done: 'Generated image', running: 'Generating image', category: 'other' },
   cronjob: { done: 'Updated schedule', running: 'Updating schedule', category: 'other' },
   send_message: { done: 'Sent message', running: 'Sending message', category: 'other' },
+  goal: { done: 'Set goals', running: 'Setting goals', category: 'other' },
+  // Other agents' names for the same tools.
+  bash: { done: 'Ran command', running: 'Running command', category: 'command' },
+  exec_command: { done: 'Ran command', running: 'Running command', category: 'command' },
+  grep: { done: 'Searched', running: 'Searching', category: 'search' },
+  browser_exec: { done: 'Ran browser script', running: 'Running browser script', category: 'browser' },
+  // Tool-search bridge: MCP tools loaded on demand.
+  tool_search: { done: 'Searched tools', running: 'Searching tools', category: 'mcp' },
+  tool_describe: { done: 'Looked up tool', running: 'Looking up tool', category: 'mcp' },
+  tool_call: { done: 'Called tool', running: 'Calling tool', category: 'mcp' },
+  // OpenViking memory provider.
+  viking_search: { done: 'Searched memory', running: 'Searching memory', category: 'memory' },
+  viking_read: { done: 'Read memory', running: 'Reading memory', category: 'memory' },
+  viking_browse: { done: 'Browsed memory', running: 'Browsing memory', category: 'memory' },
+  viking_remember: { done: 'Saved to memory', running: 'Saving to memory', category: 'memory' },
+  viking_forget: { done: 'Removed from memory', running: 'Removing from memory', category: 'memory' },
+  viking_add_resource: { done: 'Added to memory', running: 'Adding to memory', category: 'memory' },
 };
 
 function toolVerb(name: string | null | undefined): ToolVerb {
@@ -103,7 +125,7 @@ function toolVerb(name: string | null | undefined): ToolVerb {
     return { done: `Browser ${action}`, running: `Browser ${action}`, category: 'browser' };
   }
   const label = toolDisplayName(name);
-  return { done: label, running: label, category: 'other' };
+  return { done: label, running: label, category: name?.startsWith('mcp__') ? 'mcp' : 'other' };
 }
 
 /** Readable action for a tool row, e.g. "Ran command" / "Running command". */
@@ -124,7 +146,8 @@ const CATEGORY_PHRASES: Record<ToolCategory, (n: number) => string> = {
   web: (n) => `${n} web lookup${n === 1 ? '' : 's'}`,
   delegate: (n) => `delegated ${n} task${n === 1 ? '' : 's'}`,
   browser: (n) => `${n} browser step${n === 1 ? '' : 's'}`,
-  memory: () => 'updated memory',
+  memory: (n) => `${n} memory step${n === 1 ? '' : 's'}`,
+  mcp: (n) => `${n} MCP call${n === 1 ? '' : 's'}`,
   other: (n) => `used ${n} other tool${n === 1 ? '' : 's'}`,
 };
 
@@ -145,4 +168,20 @@ export function summarizeToolNames(names: (string | null)[]): string {
   if (phrases.length > 3) shown.push(`${phrases.length - 3} more`);
   const text = shown.join(', ');
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** File paths read best from the end: keep the last few segments. */
+export function shortTarget(item: Pick<ToolItem, 'name' | 'preview' | 'arguments'>): string {
+  const target = item.preview || toolArgumentPreview(item.arguments);
+  const category = toolCategory(item.name);
+  if ((category === 'read' || category === 'edit') && /^[~./]?[^\s]*\/[^\s]+$/.test(target)) {
+    const parts = target.split('/');
+    if (parts.length > 3) return `…/${parts.slice(-3).join('/')}`;
+  }
+  return target;
+}
+
+/** First non-blank line, e.g. a collapsed thought's preview. */
+export function firstLine(text: string): string {
+  return text.trim().split('\n').find((line) => line.trim())?.trim() ?? '';
 }

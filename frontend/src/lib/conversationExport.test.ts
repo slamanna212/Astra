@@ -49,4 +49,37 @@ describe('conversation exports', () => {
     expect(document).toContain('0.169 0.714 0.769 rg');
     expect(document).toContain('/BaseFont /Helvetica-Bold');
   });
+
+  it('renders tool activity as compact steps instead of raw data', async () => {
+    const base = { ...message, role: 'assistant', content: null, timestamp: 1_700_000_002 };
+    const messages: Message[] = [
+      message,
+      {
+        ...base, id: 2, reasoning: 'Patch the wiki page first.\nSECRET-REASONING-DETAIL',
+        tool_calls: [{
+          id: 'call_1', name: 'patch', arguments_truncated: false,
+          arguments: { path: '/workspace/wiki/concepts/dns-and-networking.md', old_string: 'RAW-ARGUMENT-TEXT' },
+        }],
+      } as Message,
+      { ...message, id: 3, role: 'tool', tool_call_id: 'call_1', tool_name: 'patch', content: '{"success": true, "diff": "RAW-RESULT-TEXT"}' },
+      { ...base, id: 4, content: '## Summary\n\nAll **done**.' },
+    ];
+    const document = await conversationToPdf(createConversationExport(session, messages)).text();
+    expect(document).toContain('(Edited)');
+    expect(document).toContain('.../wiki/concepts/dns-and-networking.md');
+    expect(document).toContain('(Thought)');
+    expect(document).toContain('Patch the wiki page first.');
+    expect(document).toContain('2 steps');
+    expect(document).toContain('(Summary)');
+    expect(document).toContain('(done)');
+    expect(document).not.toContain('##');
+    expect(document).not.toContain('**');
+    expect(document).toContain('/BaseFont /ZapfDingbats');
+    expect(document).not.toContain('RAW-ARGUMENT-TEXT');
+    expect(document).not.toContain('RAW-RESULT-TEXT');
+    expect(document).not.toContain('SECRET-REASONING-DETAIL');
+    // One assistant bubble for the whole turn; the tool result is not a bubble of its own.
+    expect(document.match(/\(ASSISTANT\)/g)).toHaveLength(1);
+    expect(document).not.toContain('(TOOL)');
+  });
 });
