@@ -2,7 +2,20 @@ import { ActionIcon, Alert, Center, Loader, Text, Tooltip } from '@mantine/core'
 import { IconArrowDown } from '@tabler/icons-react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  type TouchEvent,
+  type WheelEvent,
+} from 'react';
 import { useNavigate } from 'react-router';
 import { getChildSessions, listMessages, MESSAGE_PAGE_SIZE } from '../../../api/messages';
 import type { ReasoningEffort } from '../../../api/chat';
@@ -32,7 +45,13 @@ type Row =
   | { key: string; kind: 'skill-command'; exchange: SkillCommandExchange };
 
 const NEAR_EDGE_PX = 400;
+/** Shows or hides "Jump to latest". */
 const NEAR_BOTTOM_PX = 200;
+/** How close to the real bottom the reader must come for the stream to start following again. */
+const REFOLLOW_PX = 24;
+/** A touch fling keeps scrolling after the finger lifts; anchoring would cancel it. */
+const SETTLE_MS = 150;
+const UPWARD_KEYS = new Set(['PageUp', 'ArrowUp', 'Home']);
 const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
 
 export const Transcript = memo(function Transcript({
@@ -159,6 +178,8 @@ export const Transcript = memo(function Transcript({
   // stopped the stream from following. Intent is therefore tracked separately, and the only scroll
   // offset that does not count as intent is the one this component set itself.
   const [following, setFollowing] = useState(true);
+  const followingRef = useRef(following);
+  useLayoutEffect(() => { followingRef.current = following; }, [following]);
   // The offset our own anchoring produced, so the scroll event it triggers is not mistaken for the
   // reader moving the viewport. Consumed by the first scroll event that observes it.
   const anchoredScrollTopRef = useRef<number | null>(null);
@@ -170,6 +191,71 @@ export const Transcript = memo(function Transcript({
     // Read back the offset the browser actually applied, which clamps to the scrollable range.
     anchoredScrollTopRef.current = el.scrollTop;
   }, []);
+
+  // While a finger is on the scroller, and briefly after it lifts (momentum), the reader owns the
+  // viewport: assigning scrollTop then would yank them back and, on iOS, cancel the fling outright.
+  const touchingRef = useRef(false);
+  const touchYRef = useRef<number | null>(null);
+  const settleUntilRef = useRef(0);
+  const deferredAnchorRef = useRef<number | null>(null);
+  const readerIsScrolling = useCallback(
+    () => touchingRef.current || performance.now() < settleUntilRef.current,
+    [],
+  );
+
+  // Growth that lands while the reader is mid-gesture is anchored once the gesture settles, if the
+  // reader is still following by then.
+  const anchorWhenSettled = useCallback(() => {
+    if (deferredAnchorRef.current !== null) return;
+    const wait = Math.max(16, settleUntilRef.current - performance.now());
+    deferredAnchorRef.current = window.setTimeout(() => {
+      deferredAnchorRef.current = null;
+      if (!followingRef.current) return;
+      if (readerIsScrolling()) anchorWhenSettled();
+      else anchorToBottom();
+    }, wait);
+  }, [anchorToBottom, readerIsScrolling]);
+
+  useEffect(() => () => {
+    if (deferredAnchorRef.current !== null) window.clearTimeout(deferredAnchorRef.current);
+  }, []);
+
+  // Intent to read back up is taken from the input itself, before the viewport moves, so no anchor
+  // can land between the gesture and the scroll event it produces.
+  const releaseFollow = useCallback(() => setFollowing(false), []);
+
+  const onWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY < 0) releaseFollow();
+  }, [releaseFollow]);
+
+  const onTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    touchingRef.current = true;
+    touchYRef.current = event.touches[0]?.clientY ?? null;
+  }, []);
+
+  const onTouchMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const y = event.touches[0]?.clientY;
+    if (y === undefined) return;
+    // A finger moving down drags the content down, which reveals what is above.
+    if (touchYRef.current !== null && y > touchYRef.current) releaseFollow();
+    touchYRef.current = y;
+  }, [releaseFollow]);
+
+  const onTouchEnd = useCallback(() => {
+    touchingRef.current = false;
+    touchYRef.current = null;
+    settleUntilRef.current = performance.now() + SETTLE_MS;
+  }, []);
+
+  const onKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (UPWARD_KEYS.has(event.key) || (event.key === ' ' && event.shiftKey)) releaseFollow();
+  }, [releaseFollow]);
+
+  const onPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    // Only a press on the scroller's own scrollbar, not on any content inside it.
+    const el = scrollRef.current;
+    if (el && event.target === el && event.nativeEvent.offsetX >= el.clientWidth) releaseFollow();
+  }, [releaseFollow]);
 
   // A different conversation starts out following its own tail.
   const followedSessionRef = useRef(sessionId);
@@ -231,8 +317,9 @@ export const Transcript = memo(function Transcript({
   // re-measured — before any scroll event has had the chance to report the new height.
   useLayoutEffect(() => {
     if (!following || !didInitialScrollRef.current || prependingRef.current || highlightMessageId) return;
-    anchorToBottom();
-  }, [following, lastRowKey, lastRowSize, totalSize, highlightMessageId, anchorToBottom]);
+    if (readerIsScrolling()) anchorWhenSettled();
+    else anchorToBottom();
+  }, [following, lastRowKey, lastRowSize, totalSize, highlightMessageId, anchorToBottom, anchorWhenSettled, readerIsScrolling]);
 
   const lastSkillCommandId = skillCommands.at(-1)?.id;
   useEffect(() => {
@@ -248,13 +335,17 @@ export const Transcript = memo(function Transcript({
     if (!el) return;
     const top = el.scrollTop;
     const distance = el.scrollHeight - top - el.clientHeight;
-    const atBottom = distance < NEAR_BOTTOM_PX;
     const anchored = anchoredScrollTopRef.current;
     anchoredScrollTopRef.current = null;
     // Landing where this component deliberately anchored says nothing about the reader; anywhere
-    // else the viewport went, the reader put it there.
-    if (anchored === null || Math.abs(top - anchored) > 1) setFollowing(atBottom);
-    setNearBottom(atBottom);
+    // else the viewport went, the reader put it there. Following resumes only at the real bottom: a
+    // generous threshold here kept a reader who scrolled up a little pinned to the stream.
+    if (anchored === null || Math.abs(top - anchored) > 1) {
+      setFollowing(distance <= REFOLLOW_PX);
+      // Momentum after a touch keeps emitting scroll events; the reader still owns the viewport.
+      if (performance.now() < settleUntilRef.current) settleUntilRef.current = performance.now() + SETTLE_MS;
+    }
+    setNearBottom(distance < NEAR_BOTTOM_PX);
     if (top < NEAR_EDGE_PX) loadOlder();
     if (distance < NEAR_EDGE_PX && hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
@@ -301,7 +392,19 @@ export const Transcript = memo(function Transcript({
   }
 
   return (
-    <div className={classes.root} ref={scrollRef} onScroll={onScroll} data-testid="transcript-scroller">
+    <div
+      className={classes.root}
+      ref={scrollRef}
+      onScroll={onScroll}
+      onWheel={onWheel}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+      onKeyDown={onKeyDown}
+      onPointerDown={onPointerDown}
+      data-testid="transcript-scroller"
+    >
       <div style={{ position: 'relative', height: virtualizer.getTotalSize(), width: '100%' }}>
         {virtualizer.getVirtualItems().map((item) => {
           const row = rows[item.index];

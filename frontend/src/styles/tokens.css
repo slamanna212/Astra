@@ -116,6 +116,12 @@
   --astra-danger:        var(--astra-status-danger-dark);
   --astra-danger-soft:   rgba(226,112,127,.16);
 
+  /* borders for tinted status surfaces (tool pills, notice cards) */
+  --astra-primary-border: rgba(43,182,196,.38);
+  --astra-ok-border:      rgba(63,169,135,.38);
+  --astra-danger-border:  rgba(226,112,127,.38);
+  --astra-accent-border:  rgba(242,200,121,.32);
+
   --astra-selected:      var(--astra-primary-soft);
   --astra-hover:         rgba(255,255,255,.04);
   --astra-focus-ring:    0 0 0 3px rgba(43,182,196,.25);
@@ -173,6 +179,11 @@
   --astra-warn-soft:     #FBF0DA;
   --astra-danger:        var(--astra-status-danger-light);
   --astra-danger-soft:   #FCEAED;
+
+  --astra-primary-border: #A2E2EA;  /* teal-2 */
+  --astra-ok-border:      #97D9C4;  /* green-2 */
+  --astra-danger-border:  #F1A7B1;  /* red-2 */
+  --astra-accent-border:  #F5D9A0;  /* sand-2 */
 
   --astra-selected:      var(--astra-primary-soft);
   --astra-hover:         rgba(16,20,24,.035);

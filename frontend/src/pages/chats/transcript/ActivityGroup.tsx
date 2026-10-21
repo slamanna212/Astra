@@ -1,30 +1,26 @@
-import { Badge, Box, Collapse, Loader, Text, Timeline, Tooltip, UnstyledButton } from '@mantine/core';
+import { Badge, Box, Collapse, Loader, Text, Tooltip, UnstyledButton, VisuallyHidden } from '@mantine/core';
 import {
   IconAlertTriangle,
+  IconBookmark,
   IconBulb,
-  IconCheck,
   IconChevronRight,
-  IconClock,
   IconEdit,
   IconFile,
-  IconInfoCircle,
-  IconListDetails,
   IconPlugConnected,
   IconRobot,
   IconSearch,
   IconTerminal2,
   IconTool,
   IconWorld,
-  IconX,
 } from '@tabler/icons-react';
-import { memo } from 'react';
+import { memo, useLayoutEffect, useRef, useState } from 'react';
 import type { ChildSession } from '../../../api/types';
+import { useNow } from '../../../hooks/useNow';
 import { useRememberedDisclosure } from '../../../lib/disclosureMemory';
 import {
   firstLine,
   formatToolDuration,
   shortTarget,
-  summarizeToolNames,
   toolArgumentPreview,
   toolCategory,
   toolTitle,
@@ -33,7 +29,7 @@ import { effectiveStatus, resultHasErrorDetail, type ActivityBlock, type Activit
 import { ToolResultView } from './ToolResultView';
 import classes from './Transcript.module.css';
 
-const ICON = { size: 14, stroke: 1.8 };
+const ICON = { size: 15, stroke: 1.8 };
 
 function ToolIcon({ name }: { name: string | null }) {
   switch (toolCategory(name)) {
@@ -45,47 +41,77 @@ function ToolIcon({ name }: { name: string | null }) {
     case 'browser': return <IconWorld {...ICON} />;
     case 'delegate': return <IconRobot {...ICON} />;
     case 'mcp': return <IconPlugConnected {...ICON} />;
+    case 'memory': return <IconBookmark {...ICON} />;
     default: return <IconTool {...ICON} />;
   }
 }
 
-function StatusMark({ status }: { status: ToolStatus }) {
-  if (status === 'running') return <Loader size={12} type="oval" aria-label="Running" />;
-  if (status === 'pending') return <IconClock size={14} className={classes.dim} aria-label="No result" />;
-  if (status === 'error') return <IconX size={14} className={classes.danger} aria-label="Failed" />;
-  return <IconCheck size={14} className={classes.ok} aria-label="Done" />;
+/** Colour carries status on screen; screen readers get it as words. */
+const STATUS_LABEL: Record<ToolStatus, string> = {
+  running: 'Running',
+  done: 'Done',
+  error: 'Failed',
+  pending: 'No result',
+};
+
+// Rows already shown once. Virtualization remounts rows as they scroll back into view, and only a
+// row appearing for the first time while the turn runs should animate in.
+const seenRows = new Set<string>();
+// When each running call was first seen, so its elapsed time survives a remount.
+const runningSince = new Map<string, number>();
+
+/** True only for a row that first appears while the turn is live; saved history never animates. */
+function useEntering(key: string, live: boolean): boolean {
+  const [entering] = useState(() => live && !seenRows.has(key));
+  seenRows.add(key);
+  return entering;
+}
+
+function LiveElapsed({ itemKey }: { itemKey: string }) {
+  const now = useNow(100);
+  const [since] = useState(() => {
+    const known = runningSince.get(itemKey);
+    if (known !== undefined) return known;
+    const started = Date.now();
+    runningSince.set(itemKey, started);
+    return started;
+  });
+  return <span className={classes.toolDuration}>{(Math.max(0, now - since) / 1000).toFixed(1)}s</span>;
 }
 
 export const ToolRow = memo(function ToolRow({
   item,
   status,
   childSessions,
-  withIcon = true,
+  live = false,
 }: {
   item: ToolItem;
   status: ToolStatus;
   childSessions: ChildSession[];
-  /** A standalone row shows the tool's icon; inside a timeline the bullet already does. */
-  withIcon?: boolean;
+  /** The row belongs to a turn that is still running. */
+  live?: boolean;
 }) {
   const [open, toggle] = useRememberedDisclosure(
     `tool:${item.key}`,
     status === 'error' && (item.result === null || resultHasErrorDetail(item.result)),
   );
+  const entering = useEntering(`tool:${item.key}`, live);
+  const running = status === 'running';
   const target = shortTarget(item);
   const full = item.preview || toolArgumentPreview(item.arguments);
   const duration = formatToolDuration(item.duration);
   const runningChildren = item.subagents.filter((agent) => agent.status === 'running').length;
+  if (!running) runningSince.delete(item.key);
   return (
-    <Box className={classes.toolRow} data-opened={open || undefined} data-status={status}>
+    <Box className={classes.toolRow} data-opened={open || undefined} data-status={status} data-entering={entering || undefined}>
       <UnstyledButton
         className={classes.toolHeader}
         aria-expanded={open}
         onClick={(event) => { event.stopPropagation(); toggle(); }}
       >
-        {withIcon && <span className={classes.toolIcon}><ToolIcon name={item.name} /></span>}
-        <Text component="span" className={classes.toolTitle} title={item.name ?? undefined}>
-          {toolTitle(item.name, status === 'running')}
+        <span className={classes.toolIcon}><ToolIcon name={item.name} /></span>
+        <Text component="span" className={`${classes.toolTitle} ${running ? classes.shimmer : ''}`} title={item.name ?? undefined}>
+          {toolTitle(item.name, running)}
         </Text>
         {target && <Text component="span" className={classes.toolTarget} title={full}>{target}</Text>}
         <span className={classes.toolMeta}>
@@ -99,8 +125,12 @@ export const ToolRow = memo(function ToolRow({
               {runningChildren ? `${runningChildren} running` : `${item.subagents.length} subagent${item.subagents.length === 1 ? '' : 's'}`}
             </Badge>
           )}
-          {duration && <span className={classes.toolDuration}>{duration}</span>}
-          <StatusMark status={status} />
+          {running
+            ? <LiveElapsed itemKey={item.key} />
+            : duration && <span className={classes.toolDuration}>{duration}</span>}
+          {running
+            ? <Loader size={12} type="oval" color="var(--astra-primary)" aria-label={STATUS_LABEL.running} />
+            : <VisuallyHidden>{STATUS_LABEL[status]}</VisuallyHidden>}
           <IconChevronRight size={13} className={classes.chevron} data-opened={open || undefined} />
         </span>
       </UnstyledButton>
@@ -111,17 +141,18 @@ export const ToolRow = memo(function ToolRow({
   );
 });
 
-export function ThoughtRow({ item, withIcon = true }: { item: ThoughtItem; withIcon?: boolean }) {
+export function ThoughtRow({ item, live = false }: { item: ThoughtItem; live?: boolean }) {
   const [open, toggle] = useRememberedDisclosure(`thought:${item.key}`, false);
+  const entering = useEntering(`thought:${item.key}`, live);
   return (
-    <Box className={classes.toolRow} data-opened={open || undefined}>
+    <Box className={classes.toolRow} data-opened={open || undefined} data-kind="thought" data-entering={entering || undefined}>
       <UnstyledButton
         className={classes.toolHeader}
         aria-expanded={open}
         aria-label="Thought"
         onClick={(event) => { event.stopPropagation(); toggle(); }}
       >
-        {withIcon && <span className={classes.toolIcon}><IconBulb {...ICON} /></span>}
+        <span className={classes.toolIcon}><IconBulb {...ICON} /></span>
         <Text component="span" className={classes.toolTitle}>Thought</Text>
         {!open && <Text component="span" className={classes.thoughtPreview}>{firstLine(item.text)}</Text>}
         <span className={classes.toolMeta}>
@@ -135,110 +166,74 @@ export function ThoughtRow({ item, withIcon = true }: { item: ThoughtItem; withI
   );
 }
 
-function NoticeRow({ item }: { item: NoticeItem }) {
+/** A notice such as "Memory updated": a sand card whose body is clamped to a few lines. */
+function NoticeCard({ item, live }: { item: NoticeItem; live: boolean }) {
+  const entering = useEntering(`notice:${item.key}`, live);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (el && !expanded) setOverflows(el.scrollHeight - el.clientHeight > 1);
+  }, [item.detail, expanded]);
   return (
-    <div className={classes.noticeRow}>
-      <Text component="span" size="xs" c="dimmed">{item.label}</Text>
-      {item.detail && <Text component="pre" size="xs" c="dimmed" className={classes.noticeDetail}>{item.detail}</Text>}
+    <div className={classes.noticeCard} data-entering={entering || undefined}>
+      <div className={classes.noticeLabel}>{item.label}</div>
+      {item.detail && (
+        <>
+          <div ref={bodyRef} className={classes.noticeBody} data-clamped={expanded ? undefined : true}>
+            {item.detail}
+          </div>
+          {(overflows || expanded) && (
+            <UnstyledButton
+              className={classes.noticeMore}
+              onClick={(event) => { event.stopPropagation(); setExpanded((value) => !value); }}
+            >
+              {expanded ? 'Show less' : 'Show more'}
+            </UnstyledButton>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-function ItemRow({ item, pendingIsRunning, childSessions, withIcon }: {
+function ItemRow({ item, pendingIsRunning, childSessions }: {
   item: ActivityItem;
   pendingIsRunning: boolean;
   childSessions: ChildSession[];
-  withIcon: boolean;
 }) {
-  if (item.kind === 'thought') return <ThoughtRow item={item} withIcon={withIcon} />;
-  if (item.kind === 'notice') return <NoticeRow item={item} />;
-  return <ToolRow item={item} status={effectiveStatus(item, pendingIsRunning)} childSessions={childSessions} withIcon={withIcon} />;
-}
-
-function Bullet({ item, pendingIsRunning }: { item: ActivityItem; pendingIsRunning: boolean }) {
-  if (item.kind === 'thought') return <IconBulb size={12} />;
-  if (item.kind === 'notice') return <IconInfoCircle size={12} />;
-  const status = effectiveStatus(item, pendingIsRunning);
-  if (status === 'running') return <Loader size={10} type="oval" />;
-  if (status === 'error') return <IconX size={12} className={classes.danger} />;
-  return <ToolIcon name={item.name} />;
+  if (item.kind === 'thought') return <ThoughtRow item={item} live={pendingIsRunning} />;
+  if (item.kind === 'notice') return <NoticeCard item={item} live={pendingIsRunning} />;
+  return (
+    <ToolRow
+      item={item}
+      status={effectiveStatus(item, pendingIsRunning)}
+      childSessions={childSessions}
+      live={pendingIsRunning}
+    />
+  );
 }
 
 /**
- * A run of consecutive thoughts and tool calls. Collapsed it is one line: a summary of what was
- * done, or while running, the step in progress. Expanded it is a timeline of the steps.
+ * A run of consecutive thoughts, tool calls and notices. Each is its own tinted pill, coloured by
+ * its status, so progress reads at a glance; any pill opens to show its detail.
  */
 export const ActivityGroup = memo(function ActivityGroup({
   block,
   pendingIsRunning,
   childSessions,
-  defaultOpen,
 }: {
   block: ActivityBlock;
   /** Calls without a result are still executing (the newest turn while a turn runs). */
   pendingIsRunning: boolean;
   childSessions: ChildSession[];
-  defaultOpen: boolean;
 }) {
-  const { items } = block;
-  const tools = items.filter((item): item is ToolItem => item.kind === 'tool');
-  const statuses = tools.map((item) => effectiveStatus(item, pendingIsRunning));
-  const errors = statuses.filter((status) => status === 'error').length;
-  const [open, toggle] = useRememberedDisclosure(`group:${block.key}`, defaultOpen || errors > 0);
-
-  if (items.length === 1) {
-    return (
-      <div className={classes.activitySingle}>
-        <ItemRow item={items[0]!} pendingIsRunning={pendingIsRunning} childSessions={childSessions} withIcon />
-      </div>
-    );
-  }
-
-  const runningIndex = statuses.lastIndexOf('running');
-  const current = runningIndex >= 0 ? tools[runningIndex]! : null;
-  const summary = current
-    ? toolTitle(current.name, true)
-    : tools.length > 0 ? summarizeToolNames(tools.map((item) => item.name)) : 'Thought';
-  const detail = current ? shortTarget(current) : null;
-  const total = tools.reduce((sum, item) => sum + (item.duration ?? 0), 0);
-  const duration = total > 0 ? formatToolDuration(total) : null;
   return (
-    <Box className={classes.activityGroup} data-opened={open || undefined} data-running={current ? true : undefined}>
-      <UnstyledButton
-        className={classes.groupHeader}
-        aria-expanded={open}
-        onClick={(event) => { event.stopPropagation(); toggle(); }}
-      >
-        <span className={classes.toolIcon}>
-          {current ? <Loader size={12} type="oval" aria-label="Running" /> : <IconListDetails {...ICON} />}
-        </span>
-        <Text component="span" className={classes.toolTitle}>{summary}</Text>
-        {detail && <Text component="span" className={classes.toolTarget}>{detail}</Text>}
-        <span className={classes.toolMeta}>
-          {errors > 0 && (
-            <Badge size="xs" variant="light" color="red" radius="sm">{errors} failed</Badge>
-          )}
-          <Text component="span" className={classes.toolDuration}>
-            {items.length} steps{duration ? ` · ${duration}` : ''}
-          </Text>
-          <IconChevronRight size={13} className={classes.chevron} data-opened={open || undefined} />
-        </span>
-      </UnstyledButton>
-      <Collapse expanded={open}>
-        {open && (
-          <Timeline bulletSize={20} lineWidth={1} active={-1} className={classes.timeline}>
-            {items.map((item) => (
-              <Timeline.Item
-                key={item.key}
-                bullet={<Bullet item={item} pendingIsRunning={pendingIsRunning} />}
-                classNames={{ item: classes.timelineItem, itemBullet: classes.timelineBullet, itemBody: classes.timelineBody }}
-              >
-                <ItemRow item={item} pendingIsRunning={pendingIsRunning} childSessions={childSessions} withIcon={false} />
-              </Timeline.Item>
-            ))}
-          </Timeline>
-        )}
-      </Collapse>
-    </Box>
+    <div className={classes.activityStack}>
+      {block.items.map((item) => (
+        <ItemRow key={item.key} item={item} pendingIsRunning={pendingIsRunning} childSessions={childSessions} />
+      ))}
+    </div>
   );
 });

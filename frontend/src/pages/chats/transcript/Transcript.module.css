@@ -138,65 +138,99 @@
 .danger { color: var(--astra-danger); }
 .warn { color: var(--astra-warn); }
 
-/* ---- Activity: tool rows, thoughts, groups ---- */
+/* ---- Activity: one tinted pill per tool call or thought, notice cards ---- */
 
-.activitySingle,
-.activityGroup {
+.activityStack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   max-width: 100%;
   min-width: 0;
 }
 
-.toolRow,
-.activityGroup {
-  border: 1px solid var(--astra-border);
-  border-radius: var(--astra-radius);
-  background: var(--astra-surface-sunk);
-  transition: border-color var(--astra-transition);
+/* Status lives in three variables so each state is one rule and the colours cross-fade. */
+.toolRow {
+  --pill-bg: var(--astra-surface-sunk);
+  --pill-border: var(--astra-border);
+  --pill-icon: var(--astra-text-dim);
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--pill-border);
+  border-radius: var(--astra-radius-pill);
+  background: var(--pill-bg);
+  transition: background-color 600ms ease, border-color 600ms ease;
 }
 
-.timelineBody .toolRow {
-  border-color: transparent;
-  background: transparent;
+.toolRow[data-status='running'] {
+  --pill-bg: var(--astra-primary-soft);
+  --pill-border: var(--astra-primary-border);
+  --pill-icon: var(--astra-primary);
 }
 
-.timelineBody .toolRow[data-opened] {
-  border-color: var(--astra-border);
-  background: var(--astra-surface);
+.toolRow[data-status='done'] {
+  --pill-bg: var(--astra-ok-soft);
+  --pill-border: var(--astra-ok-border);
+  --pill-icon: var(--astra-ok);
 }
 
-.toolRow[data-status='error'],
-.timelineBody .toolRow[data-status='error'] {
-  border-color: var(--astra-danger-soft);
+.toolRow[data-status='error'] {
+  --pill-bg: var(--astra-danger-soft);
+  --pill-border: var(--astra-danger-border);
+  --pill-icon: var(--astra-danger);
 }
 
-.toolHeader,
-.groupHeader {
+/* Open, the pill becomes a rounded card holding its detail. */
+.toolRow[data-opened] {
+  border-radius: 18px;
+}
+
+.toolRow[data-entering],
+.noticeCard[data-entering] {
+  animation: rowIn 260ms ease-out both;
+}
+
+.noticeCard[data-entering] {
+  animation-duration: 360ms;
+}
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.toolHeader {
   display: flex;
   align-items: center;
   width: 100%;
   min-width: 0;
-  min-height: 30px;
-  padding: 4px 10px;
-  gap: 8px;
-  border-radius: var(--astra-radius);
+  min-height: 34px;
+  padding: 0 14px;
+  gap: 9px;
+  border-radius: var(--astra-radius-pill);
 }
 
-.toolHeader:hover,
-.groupHeader:hover {
-  background-color: var(--astra-hover);
+.toolRow[data-opened] .toolHeader {
+  border-radius: 18px 18px 0 0;
+}
+
+.toolHeader:focus-visible {
+  outline: none;
+  box-shadow: var(--astra-focus-ring);
 }
 
 .toolIcon {
   display: inline-flex;
   flex-shrink: 0;
-  color: var(--astra-text-dim);
+  color: var(--pill-icon, var(--astra-text-dim));
+  transition: color 600ms ease;
 }
 
 .toolTitle {
-  flex-shrink: 0;
+  flex: none;
+  font-family: var(--astra-font);
   font-size: 13px;
-  font-weight: 500;
-  color: var(--astra-text-body);
+  font-weight: 600;
+  color: var(--astra-text);
   white-space: nowrap;
 }
 
@@ -220,7 +254,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex: none;
   margin-left: auto;
   padding-left: 4px;
 }
@@ -230,21 +264,34 @@
   font-size: 11px;
   color: var(--astra-text-dim);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .chevron {
   flex-shrink: 0;
   color: var(--astra-text-dim);
-  transition: transform var(--astra-transition);
+  transition: transform var(--astra-transition), opacity var(--astra-transition);
 }
 
 .chevron[data-opened] {
   transform: rotate(90deg);
 }
 
+/* With a mouse the chevron appears on hover or focus; on touch it is always there to hint the tap. */
+@media (hover: hover) and (pointer: fine) {
+  .toolHeader .chevron:not([data-opened]) {
+    opacity: 0;
+  }
+
+  .toolHeader:hover .chevron,
+  .toolHeader:focus-visible .chevron {
+    opacity: 1;
+  }
+}
+
 .toolBody {
-  padding: 4px 10px 10px;
-  border-top: 1px solid var(--astra-divider);
+  padding: 4px 14px 12px;
+  border-top: 1px solid var(--pill-border);
 }
 
 .toolSection {
@@ -284,61 +331,59 @@
   overflow-wrap: anywhere;
 }
 
-.timelineBody .thoughtBody {
-  margin-left: 10px;
+.toolRow .thoughtBody {
+  margin: 0;
+  padding: 8px 14px 12px;
+  border-left: 0;
+  border-top: 1px solid var(--pill-border);
 }
 
-.noticeRow {
-  padding: 5px 10px;
+.noticeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 16px 12px;
+  border: 1px solid var(--astra-accent-border);
+  border-radius: 18px;
+  background: var(--astra-accent-soft);
 }
 
-.noticeDetail {
-  margin: 4px 0 0;
-  max-height: 160px;
-  overflow: auto;
+.noticeLabel {
+  font-family: var(--astra-font-mono);
+  font-size: var(--astra-label-size);
+  font-weight: 500;
+  letter-spacing: var(--astra-label-tracking);
+  text-transform: uppercase;
+  color: var(--astra-accent);
+}
+
+.noticeBody {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--astra-text-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
-/* A group's summary wraps rather than overflowing; its target (a URL, a path) gives way first. */
-.groupHeader .toolTitle {
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
+.noticeBody[data-clamped] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
 
-.groupHeader .toolTarget {
-  flex-shrink: 4;
+.noticeMore {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--astra-accent);
 }
 
-.activityGroup[data-running] .groupHeader .toolTitle {
-  color: var(--astra-text);
-}
-
-.timeline {
-  padding: 6px 10px 8px 12px;
-  border-top: 1px solid var(--astra-divider);
-}
-
-.timelineItem {
-  min-width: 0;
-}
-
-.timelineItem:not(:first-of-type) {
-  margin-top: 4px;
-}
-
-.timelineBullet {
-  background: var(--astra-surface);
-  color: var(--astra-text-dim);
-  border-width: 1px;
-  border-color: var(--astra-border-strong);
-}
-
-.timelineBody {
-  min-width: 0;
-  margin-top: -5px;
+.noticeMore:hover {
+  text-decoration: underline;
 }
 
 .subagentCard {
@@ -431,6 +476,10 @@
 @media (prefers-reduced-motion: reduce) {
   .shimmer { animation: none; }
   .shimmer { color: var(--astra-text-dim); background: none; }
+  .toolRow[data-entering],
+  .noticeCard[data-entering] { animation: none; }
+  .toolRow,
+  .toolIcon { transition-duration: 0ms; }
 }
 
 @media (max-width: 48em) {
@@ -439,6 +488,8 @@
   .rowWrapper[data-user] .rowInner::before { left: 0; }
   /* Every pixel of width goes to content on a phone; the avatar is decoration. */
   .avatarGutter { display: none; }
+  /* A full finger-sized target for each pill. */
+  .toolHeader { min-height: 44px; }
   /* Narrow lines hold few words, so the reasoning window gets more of them and a shorter fade. */
   .thinkingPreview {
     max-height: 9.6em;

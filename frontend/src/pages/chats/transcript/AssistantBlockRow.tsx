@@ -38,14 +38,7 @@ export function BlockView({
   }
   if (block.kind === 'parts') return <ContentParts parts={block.parts} />;
   if (block.kind === 'thinking') return <ThinkingBlock text={block.text} />;
-  return (
-    <ActivityGroup
-      block={block}
-      pendingIsRunning={pendingIsRunning}
-      childSessions={context.childSessions}
-      defaultOpen={context.activityDisplayMode === 'transparent_stream'}
-    />
-  );
+  return <ActivityGroup block={block} pendingIsRunning={pendingIsRunning} childSessions={context.childSessions} />;
 }
 
 const ENDINGS: Record<string, { label: string; color: string }> = {

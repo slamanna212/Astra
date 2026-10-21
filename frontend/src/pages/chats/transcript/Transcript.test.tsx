@@ -115,7 +115,7 @@ describe('Transcript', () => {
     expect(screen.getByText('Partial answer')).toBeInTheDocument();
   });
 
-  it('keeps live tool activity inline and collapsed, between the prose around it', async () => {
+  it('keeps live tool activity inline as one collapsed pill per step, between the prose around it', async () => {
     fetchMock.mockImplementation(async (input) => String(input).includes('/children')
       ? jsonResponse({ items: [] })
       : jsonResponse({ items: [], has_older: false, has_newer: false, oldest_id: null, newest_id: null }));
@@ -133,14 +133,14 @@ describe('Transcript', () => {
     await screen.findByText('Only answer');
     const activity = screen.getByLabelText('Current turn activity');
     expect(activity).toHaveTextContent('search');
-    expect(screen.queryByText('Private thought')).not.toBeInTheDocument();
     expect(screen.queryByText('Arguments')).not.toBeInTheDocument();
-    // The thought and the call form one collapsed group; the answer follows it.
+    // The thought and the call are each their own collapsed pill; the answer follows them.
+    expect(screen.getByRole('button', { name: 'Thought' })).toHaveAttribute('aria-expanded', 'false');
     const text = activity.textContent ?? '';
     expect(text.indexOf('search')).toBeLessThan(text.indexOf('Only answer'));
-    fireEvent.click(screen.getByRole('button', { name: /search/ }));
-    // The opened group's rows sit inside a collapse that jsdom never finishes animating.
-    fireEvent.click(screen.getAllByRole('button', { name: /search/, hidden: true }).at(-1)!);
+    const call = screen.getByRole('button', { name: /search/ });
+    expect(call.closest('[data-status]')).toHaveAttribute('data-status', 'running');
+    fireEvent.click(call);
     expect(screen.getByText('Arguments')).toBeInTheDocument();
   });
 
@@ -461,6 +461,92 @@ describe('Transcript', () => {
 
     expect(next.scrollTop).toBe(40000 - 640);
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).not.toBeInTheDocument();
+  });
+
+  // Many tool pills streaming in: every one re-measures as it mounts and changes status, so the
+  // list grows almost continuously. A reader scrolling up must not be pulled back by that growth.
+  function toolTurn(count: number) {
+    return {
+      userText: 'Q',
+      answer: '',
+      reasoning: '',
+      events: Array.from({ length: count }, (_, i) => (
+        { kind: 'tool' as const, data: { event: 'tool.started', name: 'terminal', arguments: { command: `step ${i}` } } }
+      )),
+      state: 'running' as const,
+    };
+  }
+
+  it('stops following on an upward wheel even when the viewport moved less than a screen', async () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 30));
+    const view = render(<Transcript sessionId="s1" liveTurn={toolTurn(20)} />, { route: '/chats/s1' });
+    const scroller = await screen.findByTestId('transcript-scroller');
+    const geometry = defineGeometry(scroller, { scrollHeight: 4000, clientHeight: 640, scrollTop: 3360 });
+
+    fireEvent.wheel(scroller, { deltaY: -100 });
+    scroller.scrollTop = 3260;
+    fireEvent.scroll(scroller);
+    await act(flush);
+
+    for (let n = 21; n <= 24; n++) {
+      geometry.setScrollHeight(4000 + (n - 20) * 200);
+      await act(async () => {
+        view.rerender(<Transcript sessionId="s1" liveTurn={toolTurn(n)} />);
+        await flush();
+      });
+    }
+    expect(scroller.scrollTop).toBe(3260);
+  });
+
+  it('does not anchor under a finger dragging the transcript down', async () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 30));
+    const view = render(<Transcript sessionId="s1" liveTurn={toolTurn(20)} />, { route: '/chats/s1' });
+    const scroller = await screen.findByTestId('transcript-scroller');
+    const geometry = defineGeometry(scroller, { scrollHeight: 4000, clientHeight: 640, scrollTop: 3360 });
+
+    fireEvent.touchStart(scroller, { touches: [{ clientY: 300 }] });
+    fireEvent.touchMove(scroller, { touches: [{ clientY: 380 }] });
+    scroller.scrollTop = 3280;
+    fireEvent.scroll(scroller);
+
+    geometry.setScrollHeight(5000);
+    await act(async () => {
+      view.rerender(<Transcript sessionId="s1" liveTurn={toolTurn(25)} />);
+      await flush();
+    });
+    fireEvent.touchEnd(scroller);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
+
+    expect(scroller.scrollTop).toBe(3280);
+  });
+
+  it('a small scroll up releases the stream, and returning to the very bottom resumes it', async () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 30));
+    const view = render(<Transcript sessionId="s1" liveTurn={toolTurn(20)} />, { route: '/chats/s1' });
+    const scroller = await screen.findByTestId('transcript-scroller');
+    const geometry = defineGeometry(scroller, { scrollHeight: 4000, clientHeight: 640, scrollTop: 3360 });
+
+    // 60px up is well inside the old 200px "near bottom" band, yet it is the reader leaving.
+    scroller.scrollTop = 3300;
+    fireEvent.scroll(scroller);
+    await act(flush);
+    geometry.setScrollHeight(4400);
+    await act(async () => {
+      view.rerender(<Transcript sessionId="s1" liveTurn={toolTurn(22)} />);
+      await flush();
+    });
+    expect(scroller.scrollTop).toBe(3300);
+
+    // Within 24px of the bottom counts as back at the bottom.
+    scroller.scrollTop = 4400 - 640 - 20;
+    fireEvent.scroll(scroller);
+    await act(flush);
+    geometry.setScrollHeight(5000);
+    await act(async () => {
+      view.rerender(<Transcript sessionId="s1" liveTurn={toolTurn(24)} />);
+      await flush();
+    });
+    expect(scroller.scrollTop).toBe(5000 - 640);
   });
 
   it('does not reparse historical Markdown on parent updates or running-state changes', async () => {
