@@ -83,6 +83,12 @@ def test_roster_path_guards_and_legacy_surface(gateway, monkeypatch):
         encoding="utf-8",
     )
 
+    # Readiness must come from the home's own .env, not whatever keys the test host exports.
+    for key in list(os.environ):
+        if key.endswith(("_API_KEY", "_API_TOKEN", "_AUTH_TOKEN")):
+            monkeypatch.delenv(key)
+    (settings.hermes_home / ".env").write_text("OPENAI_API_KEY=sk-default-secret\n", encoding="utf-8")
+
     assert client.get("/api/bots").status_code == 401
     login(client)
 
@@ -92,6 +98,7 @@ def test_roster_path_guards_and_legacy_surface(gateway, monkeypatch):
     assert names == ["default", "apikey", "researcher", "writer"]
     assert "sk-should-never-be-returned" not in response.text
     assert "api_key" not in response.text
+    assert "sk-default-secret" not in response.text
     # Readiness is reported, key material is not.
     assert response.json()["profiles"][0]["credentials_ready"] is True
     assert [row["title"] for row in response.json()["profiles"][1:]] == ["apikey", "researcher", "writer"]

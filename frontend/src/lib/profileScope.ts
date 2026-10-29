@@ -17,7 +17,7 @@ export function profileFromPath(path: string): string {
   const match = PROFILE_SEGMENT.exec(path);
   if (!match) return 'default';
   try {
-    return decodeURIComponent(match[1]) || 'default';
+    return decodeURIComponent(match[1] ?? '') || 'default';
   } catch {
     return 'default';
   }

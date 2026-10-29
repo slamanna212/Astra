@@ -41,11 +41,11 @@ describe('profiles api', () => {
     const page = await listProfiles();
     expect(page.items).toHaveLength(1);
     expect(page.next_cursor).toBeNull();
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/bots');
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/bots');
   });
 
   it('creates, updates, duplicates and deletes through the registry', async () => {
-    fetchMock.mockImplementation(async () => jsonResponse({ ...roster.profiles[0], name: 'writer' }, 201));
+    fetchMock.mockImplementation(async () => jsonResponse({ ...roster.profiles[0]!, name: 'writer' }, 201));
     const api = await import('./profiles');
 
     await api.createProfile({ name: 'writer', title: 'Writer' });
@@ -60,7 +60,7 @@ describe('profiles api', () => {
       ['/api/bots/writer/duplicate', 'POST'],
       ['/api/bots/writer-copy', 'DELETE'],
     ]);
-    const patchBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
+    const patchBody = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
     expect(patchBody).toEqual({ soul: 'be terse', hidden: true });
   });
 
@@ -68,16 +68,16 @@ describe('profiles api', () => {
     fetchMock.mockResolvedValue(jsonResponse({ session_id: 'abc', created: true }));
     const { ensureBotChat } = await import('./profiles');
     expect(await ensureBotChat('writer')).toEqual({ session_id: 'abc', created: true });
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/bots/writer/bot-chat');
-    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST');
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/bots/writer/bot-chat');
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('POST');
   });
 
   it('posts avatars as multipart with the CSRF header and surfaces the server detail', async () => {
     const { uploadAvatar } = await import('./profiles');
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ...roster.profiles[0], has_avatar: true }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...roster.profiles[0]!, has_avatar: true }));
     const file = new File([new Uint8Array([0x89, 0x50])], 'a.png', { type: 'image/png' });
     await uploadAvatar('writer', file);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe('/api/bots/writer/avatar');
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
     expect((init as RequestInit).headers).toMatchObject({ 'X-Requested-With': 'astra' });

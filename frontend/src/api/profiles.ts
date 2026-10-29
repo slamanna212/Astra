@@ -130,13 +130,16 @@ export function markBotRead(name: string): Promise<void> {
 }
 
 /** Avatar URLs are already absolute gateway paths, so <img src> works with the cookie. */
-export function avatarSrc(profile: Pick<ProfileSummary, 'name' | 'avatar_url'>): string | null {
+export function avatarSrc(
+  profile: Pick<ProfileSummary, 'name' | 'avatar_url'> & Partial<Pick<ProfileSummary, 'updated_at'>>,
+): string | null {
   return profile.avatar_url ? `${profile.avatar_url}?v=${encodeURIComponent(String(profile.updated_at ?? ''))}` : null;
 }
 
 export function initialsOf(profile: Pick<ProfileSummary, 'name' | 'title'>): string {
   const source = (profile.title || profile.name).trim();
   const words = source.split(/[\s._-]+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  const [first, second] = words;
+  if (first && second) return (first.charAt(0) + second.charAt(0)).toUpperCase();
   return source.slice(0, 2).toUpperCase();
 }

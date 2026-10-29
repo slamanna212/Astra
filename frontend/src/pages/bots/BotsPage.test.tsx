@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, render } from '../../test/render';
-import type { ProfileSummary } from '../../api/bots';
+import type { ProfileSummary } from '../../api/profiles';
 
 const base: ProfileSummary = {
   name: 'default',
@@ -48,7 +48,7 @@ const researcher: ProfileSummary = {
 };
 
 function mockRoster(profiles: ProfileSummary[]) {
-  const fetchMock = vi.fn(async (url: string) => jsonResponse({ profiles }));
+  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse({ profiles }));
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
@@ -67,7 +67,7 @@ describe('BotsPage', () => {
     expect(await screen.findByText('Copy Editor')).toBeInTheDocument();
     expect(screen.getByText('Tightens prose and kills adverbs.')).toBeInTheDocument();
     // A bot with a picture renders an <img>; one without falls back to initials.
-    expect(screen.getByAltText('', { exact: false, selector: 'img' })).toBeInTheDocument();
+    expect(document.querySelector('[data-bot="writer"] img')).toBeInTheDocument();
     expect(screen.getByText('RE')).toBeInTheDocument();
     // Short model chip, not the full provider path.
     expect(screen.getByText('claude-sonnet-4')).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe('BotsPage', () => {
     await waitFor(() => {
       const [, init] =
         fetchMock.mock.calls.find(
-          ([url, options]) => url === '/api/bots' && (options as RequestInit | undefined)?.method === 'POST',
+          ([url, options]) => url === '/api/bots' && options?.method === 'POST',
         ) ?? [];
       expect(init).toBeDefined();
       expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
