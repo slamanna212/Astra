@@ -480,6 +480,7 @@ class ChatManager:
                 return False
             question.response = answer
             question.answered.set()
+        self._emit(turn, "clarify_resolved", {"id": question_id})
         return True
 
     @staticmethod

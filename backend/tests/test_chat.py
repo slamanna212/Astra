@@ -214,6 +214,8 @@ async def test_turn_fans_out_clarify_approval_late_steer_and_commits(base_settin
     assert clarify_a.data == clarify_b.data
     assert await manager.active_turns() == [("session-1", "chat", True)]
     assert await manager.answer("session-1", clarify_a.data["id"], "dev")
+    resolved_a, resolved_b = await asyncio.gather(next_named(first, "clarify_resolved"), next_named(second, "clarify_resolved"))
+    assert resolved_a.data == resolved_b.data == {"id": clarify_a.data["id"]}
 
     approval_a, approval_b = await asyncio.gather(next_named(first, "approval"), next_named(second, "approval"))
     assert approval_a.data == approval_b.data

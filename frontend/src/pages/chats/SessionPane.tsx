@@ -516,6 +516,11 @@ export default function SessionPane() {
         refreshActive();
         setClarify(JSON.parse((event as MessageEvent).data) as { id: number; question: string; choices: unknown[] | null });
       }));
+      currentSource.addEventListener('clarify_resolved', tracked((event) => {
+        refreshActive();
+        const { id } = JSON.parse((event as MessageEvent).data) as { id: number };
+        setClarify((current) => (current?.id === id ? null : current));
+      }));
       currentSource.addEventListener('approval', tracked((event) => {
         refreshActive();
         setApproval(JSON.parse((event as MessageEvent).data) as { request_id: string; command?: string; description?: string });
