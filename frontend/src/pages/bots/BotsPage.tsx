@@ -12,7 +12,6 @@ import {
   Text,
   Title,
   Tooltip,
-  UnstyledButton,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconDots, IconPlus, IconSparkles } from '@tabler/icons-react';
@@ -39,6 +38,7 @@ export default function BotsPage() {
   // `/bots?new=1` (from the composer picker) opens the create sheet directly.
   useEffect(() => {
     if (searchParams.get('new') !== '1') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditing(null);
     setEditorOpen(true);
     const next = new URLSearchParams(searchParams);

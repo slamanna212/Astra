@@ -28,7 +28,7 @@ import {
   type ProfileDetail,
 } from '../../api/profiles';
 import { queryKeys } from '../../api/queryKeys';
-import { currentProfile, pathForProfile } from '../../lib/profileScope';
+import { currentProfile } from '../../lib/profileScope';
 import { BotAvatar } from '../../components/BotAvatar';
 import classes from './BotEditor.module.css';
 
@@ -56,6 +56,8 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
 
   useEffect(() => {
     if (!opened) return;
+    // Reset the form each time the sheet opens, for whichever bot it opened on.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
     setName(profile?.name ?? '');
     setTitle(profile?.title ?? '');

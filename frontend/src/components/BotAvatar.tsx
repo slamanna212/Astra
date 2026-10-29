@@ -3,7 +3,7 @@ import { avatarSrc, initialsOf, type ProfileSummary } from '../api/profiles';
 import classes from './BotAvatar.module.css';
 
 /** Stable per-bot accent so a bot without a photo still reads as the same bot everywhere. */
-export function hueFor(name: string): number {
+function hueFor(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) % 360;
   return hash;

@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, render } from '../test/render';
-import type { ProfileSummary } from '../api/bots';
+import type { ProfileSummary } from '../api/profiles';
 
 const base: ProfileSummary = {
   name: 'writer',
