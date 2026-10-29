@@ -7,10 +7,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { getHealth, logout } from '../api/auth';
+import { listProfiles } from '../api/profiles';
 import { queryKeys } from '../api/queryKeys';
 import { markSignedOut } from '../auth/session';
 import { BrandMark } from '../components/BrandMark';
 import { SearchSpotlight } from '../components/SearchSpotlight';
+import { applyChromeColor } from '../lib/profileChrome';
+import { currentProfile } from '../lib/profileScope';
 import { CHAT_FONT_SIZES, useUiPreferences } from '../lib/uiPreferences';
 import classes from './AppLayout.module.css';
 import { NAV_ITEMS } from './navItems';
@@ -28,6 +31,18 @@ export function AppLayout() {
   useEffect(() => {
     document.documentElement.style.setProperty('--astra-chat-font-size', `${CHAT_FONT_SIZES[prefs.chatFontSize]}px`);
   }, [prefs.chatFontSize]);
+
+  // Same roster query the gate and bot picker use, so this costs no extra request.
+  const roster = useQuery({
+    queryKey: queryKeys.profiles.list,
+    queryFn: ({ signal }) => listProfiles(signal),
+    staleTime: 30_000,
+  });
+  const chromeColor = roster.data?.items.find((row) => row.name === currentProfile)?.color ?? null;
+
+  useEffect(() => {
+    if (roster.data) applyChromeColor(chromeColor);
+  }, [roster.data, chromeColor]);
 
   const health = useQuery({
     queryKey: queryKeys.health,
@@ -65,7 +80,7 @@ export function AppLayout() {
       <AppShell.Header withBorder={false} className={classes.shellChrome}>
         <div className={`${classes.headerInner} ${classes.headerGrid}`}>
           <Group gap="sm" wrap="nowrap">
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" color="var(--astra-chrome-text)" aria-label="Toggle navigation" />
             <BrandMark size={22} />
             <span className={classes.brandTitle}>Astra</span>
             {activeNavItem && (

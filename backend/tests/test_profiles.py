@@ -231,6 +231,17 @@ def test_profile_crud_ui_meta_and_avatar(gateway, monkeypatch):
     meta = yaml.safe_load((home / "profile.yaml").read_text())
     assert meta["ui_meta"]["hermes-bots"] == {"title": "Copy", "hidden": True, "section": "Editorial"}
     assert meta["_ui_meta_revisions"]["title"] == 2
+    assert patched.json()["color"] is None
+
+    colored = client.patch("/api/bots/editor", json={"color": "#C9495A"}, headers=CSRF)
+    assert colored.status_code == 200, colored.text
+    assert colored.json()["color"] == "#c9495a"
+    assert yaml.safe_load((home / "profile.yaml").read_text())["ui_meta"]["hermes-bots"]["color"] == "#c9495a"
+    for bad_color in ("red", "#fff", "#c9495a; x", "url(#a)"):
+        assert client.patch("/api/bots/editor", json={"color": bad_color}, headers=CSRF).status_code == 422
+    uncolored = client.patch("/api/bots/editor", json={"color": None}, headers=CSRF)
+    assert uncolored.json()["color"] is None
+    assert "color" not in yaml.safe_load((home / "profile.yaml").read_text())["ui_meta"]["hermes-bots"]
 
     upload = client.post(
         "/api/bots/editor/avatar", files={"file": ("a.png", PNG, "image/png")}, headers=CSRF

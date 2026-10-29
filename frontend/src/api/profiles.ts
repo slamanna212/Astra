@@ -19,6 +19,8 @@ export interface ProfileSummary {
   is_default: boolean;
   hidden: boolean;
   section: string | null;
+  /** Chrome colour (`#rrggbb`); null means the default teal. */
+  color: string | null;
   bot_session_id: string | null;
   running: boolean;
   updated_at: number | null;
@@ -52,6 +54,7 @@ export interface ProfileUpdateBody {
   provider?: string | null;
   hidden?: boolean;
   section?: string | null;
+  color?: string | null;
 }
 
 export interface ModelOptions {

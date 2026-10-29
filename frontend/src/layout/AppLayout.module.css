@@ -172,12 +172,12 @@
   padding: 10px;
   border-radius: var(--astra-radius);
   border: 1px solid var(--astra-chrome-border);
-  background-color: rgba(255, 255, 255, .06);
+  background-color: var(--astra-chrome-card-bg);
   background-image:
-    radial-gradient(1px 1px at 18px 14px, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1px 1px at 88px 30px, rgba(255, 255, 255, 0.28), transparent),
+    radial-gradient(1px 1px at 18px 14px, var(--astra-chrome-text-dim), transparent),
+    radial-gradient(1px 1px at 88px 30px, var(--astra-chrome-border), transparent),
     radial-gradient(1.4px 1.4px at 148px 16px, var(--astra-chrome-dot), transparent),
-    radial-gradient(1px 1px at 54px 46px, rgba(255, 255, 255, 0.22), transparent);
+    radial-gradient(1px 1px at 54px 46px, var(--astra-chrome-border), transparent);
   display: flex;
   flex-direction: column;
   gap: 4px;

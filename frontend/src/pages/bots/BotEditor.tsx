@@ -2,6 +2,7 @@ import {
   Alert,
   Autocomplete,
   Button,
+  ColorInput,
   Divider,
   FileButton,
   Group,
@@ -15,7 +16,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { IconTrash, IconUpload } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   clearAvatar,
   createProfile,
@@ -28,6 +29,7 @@ import {
   type ProfileDetail,
 } from '../../api/profiles';
 import { queryKeys } from '../../api/queryKeys';
+import { applyChromeColor, CHROME_SWATCHES, DEFAULT_CHROME_COLOR, isChromeColor } from '../../lib/profileChrome';
 import { currentProfile } from '../../lib/profileScope';
 import { BotAvatar } from '../../components/BotAvatar';
 import classes from './BotEditor.module.css';
@@ -51,6 +53,8 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
   const [model, setModel] = useState('');
   const [section, setSection] = useState('');
   const [hidden, setHidden] = useState(false);
+  /** '' = no colour of its own (default teal). */
+  const [color, setColor] = useState('');
   const [cloneFrom, setCloneFrom] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,8 +70,22 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
     setModel(profile?.model ?? '');
     setSection(profile?.section ?? '');
     setHidden(profile?.hidden ?? false);
+    setColor(profile?.color ?? '');
     setCloneFrom(null);
   }, [opened, profile]);
+
+  // Editing the bot this document belongs to previews its colour live on the real chrome;
+  // closing without saving puts the saved colour back.
+  const previewsChrome = opened && profile?.name === currentProfile;
+  const savedColor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!previewsChrome) return;
+    savedColor.current = profile?.color ?? null;
+    return () => applyChromeColor(savedColor.current);
+  }, [previewsChrome, profile]);
+  useEffect(() => {
+    if (previewsChrome && (color === '' || isChromeColor(color))) applyChromeColor(color || null, { persist: false });
+  }, [previewsChrome, color]);
 
   const options = useQuery({
     queryKey: queryKeys.profiles.modelOptions(profile?.name ?? currentProfile),
@@ -97,6 +115,7 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
           model: model.trim() || null,
           section: section.trim() || null,
           hidden,
+          color: color ? color.toLowerCase() : null,
         });
       }
       return createProfile({
@@ -109,6 +128,7 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
       });
     },
     onSuccess: (saved) => {
+      if (saved.name === currentProfile) savedColor.current = saved.color;
       invalidate();
       notifications.show({
         color: 'green',
@@ -159,13 +179,15 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
     !editing && name && !NAME_PATTERN.test(name.trim())
       ? 'Lowercase letters, numbers, dashes and underscores only'
       : null;
-  const canSave = editing ? true : NAME_PATTERN.test(name.trim()) && !nameError;
+  const colorError = color && !isChromeColor(color) ? 'Use a #rrggbb colour' : null;
+  const canSave = editing ? !colorError : NAME_PATTERN.test(name.trim()) && !nameError;
 
   const preview = {
     name: (profile?.name ?? name) || 'new-bot',
     title: title || name || 'New bot',
     avatar_url: profile?.avatar_url ?? null,
     updated_at: profile?.updated_at ?? null,
+    color: isChromeColor(color) ? color : null,
   };
 
   return (
@@ -290,6 +312,26 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
 
         {editing && (
           <>
+            <Divider label="Colour" labelPosition="left" />
+            <Group gap="xs" align="flex-end" wrap="nowrap">
+              <ColorInput
+                label="Bar colour"
+                description="Top bar and sidebar while you're in this bot"
+                placeholder={`Default (${DEFAULT_CHROME_COLOR})`}
+                format="hex"
+                swatches={CHROME_SWATCHES}
+                swatchesPerRow={10}
+                withEyeDropper={false}
+                value={color}
+                onChange={setColor}
+                error={colorError}
+                style={{ flex: 1 }}
+              />
+              <Button variant="subtle" color="gray" onClick={() => setColor('')} disabled={!color}>
+                Reset
+              </Button>
+            </Group>
+
             <Divider label="Placement" labelPosition="left" />
             <TextInput
               label="Section"

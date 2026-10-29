@@ -24,9 +24,12 @@ import { RouterProvider } from 'react-router/dom';
 import { setUnauthorizedHandler } from './api/client';
 import { queryKeys } from './api/queryKeys';
 import { markSignedOut } from './auth/session';
+import { applyCachedChromeColor } from './lib/profileChrome';
 import { createQueryClient } from './lib/queryClient';
 import { createAppRouter } from './router';
 import { theme } from './theme';
+
+applyCachedChromeColor();
 
 const queryClient = createQueryClient();
 const router = createAppRouter();

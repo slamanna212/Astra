@@ -11,7 +11,7 @@ Semantics mirrored from the shipped desktop/gateway implementation
 * a profile is a directory under ``<base>/profiles/<name>`` carrying an identity file
   (``config.yaml``, ``profile.yaml``, ``.env``, ``SOUL.md``, ``auth.json`` or ``state.db``);
 * Bot presentation lives in ``profile.yaml`` ``ui_meta['hermes-bots']`` (``title``,
-  ``hidden``, ``section``) plus ``assets/avatar.<ext>``;
+  ``hidden``, ``section``, ``color``) plus ``assets/avatar.<ext>``;
 * the canonical Bot Chat is the session titled exactly ``Bot Chat`` — its name is its
   identity, it is created hidden and pinned, and an archived one is "retired".
 """
@@ -48,6 +48,7 @@ MAX_PROFILE_DOC_BYTES = 2 * 1024 * 1024
 IDENTITY_FILES = ("config.yaml", "profile.yaml", ".env", "SOUL.md", "auth.json", "state.db")
 
 _ui_meta_lock = threading.Lock()
+COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 _admin_runner: Any = None  # test seam: callable(op: dict) -> dict
 
 
@@ -311,6 +312,7 @@ def profile_view(root: Path, name: str, *, running: bool = False) -> dict[str, A
     model = model_section.get("default") if isinstance(model_section.get("default"), str) else None
     provider = model_section.get("provider") if isinstance(model_section.get("provider"), str) else None
     section = bots.get("section")
+    color = bots.get("color")
     return {
         "name": name,
         "title": str(bots.get("title") or meta.get("display_name") or name),
@@ -323,6 +325,7 @@ def profile_view(root: Path, name: str, *, running: bool = False) -> dict[str, A
         "is_default": name == "default",
         "hidden": bool(bots.get("hidden", False)),
         "section": str(section) if section else None,
+        "color": color.lower() if isinstance(color, str) and COLOR_RE.fullmatch(color) else None,
         "bot_session_id": canonical.get("id") if canonical else None,
         "running": bool(running),
         "updated_at": last_active,
@@ -523,6 +526,11 @@ def update_profile(settings, name: str, changes: dict[str, Any]) -> dict[str, An
     if "section" in changes:
         value = (changes["section"] or "").strip()
         ui["section"] = value[:80] if value else None
+    if "color" in changes:
+        value = changes["color"]
+        if value is not None and not COLOR_RE.fullmatch(value):
+            raise HTTPException(status_code=422, detail="Colour must be #rrggbb")
+        ui["color"] = value.lower() if value else None
     if ui:
         write_bot_ui(home, ui)
     if changes.get("description") is not None:

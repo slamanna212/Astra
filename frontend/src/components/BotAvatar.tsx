@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { avatarSrc, initialsOf, type ProfileSummary } from '../api/profiles';
+import { isChromeColor, prefersDarkInk } from '../lib/profileChrome';
 import classes from './BotAvatar.module.css';
 
 /** Stable per-bot accent so a bot without a photo still reads as the same bot everywhere. */
@@ -10,7 +11,8 @@ function hueFor(name: string): number {
 }
 
 interface BotAvatarProps {
-  profile: Pick<ProfileSummary, 'name' | 'title' | 'avatar_url' | 'updated_at'>;
+  profile: Pick<ProfileSummary, 'name' | 'title' | 'avatar_url' | 'updated_at'> &
+    Partial<Pick<ProfileSummary, 'color'>>;
   size?: number;
   /** Dot in the corner: a turn is running. */
   busy?: boolean;
@@ -21,11 +23,14 @@ export function BotAvatar({ profile, size = 40, busy = false, className }: BotAv
   const [failed, setFailed] = useState(false);
   const src = avatarSrc(profile);
   const hue = hueFor(profile.name);
+  // The profile's chrome colour, when set, replaces the name-derived hue.
+  const color = isChromeColor(profile.color) ? profile.color : null;
   const style = {
     width: size,
     height: size,
     fontSize: Math.max(11, Math.round(size * 0.38)),
     '--bot-hue': String(hue),
+    ...(color && { '--bot-color': color, color: prefersDarkInk(color) ? '#101418' : '#fff' }),
   } as React.CSSProperties;
 
   return (
@@ -33,6 +38,7 @@ export function BotAvatar({ profile, size = 40, busy = false, className }: BotAv
       className={`${classes.avatar} ${className ?? ''}`}
       style={style}
       data-bot={profile.name}
+      data-colored={color ? '' : undefined}
       aria-hidden="true"
     >
       {src && !failed ? (
