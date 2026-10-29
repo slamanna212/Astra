@@ -517,6 +517,8 @@ def create_profile(settings, *, name: str, clone_from: str | None = None, title:
 def update_profile(settings, name: str, changes: dict[str, Any]) -> dict[str, Any]:
     root = profile_root(settings)
     home = profile_home(root, name)
+    # Resolve the model change before writing anything, so a rejected save changes nothing.
+    pin = _model_change(home, changes)
     ui: dict[str, Any] = {}
     if "title" in changes:
         value = (changes["title"] or "").strip()
@@ -537,13 +539,28 @@ def update_profile(settings, name: str, changes: dict[str, Any]) -> dict[str, An
         run_admin({"op": "describe", "name": name, "description": changes["description"]}, settings)
     if changes.get("soul") is not None:
         write_soul(home, changes["soul"])
+    if pin:
+        run_admin({"op": "pin_model", "name": name, "model": pin[0], "provider": pin[1]}, settings)
+    return profile_view(root, name)
+
+
+def _model_change(home: Path, changes: dict[str, Any]) -> tuple[str, str] | None:
+    """The ``(model, provider)`` to pin, or ``None`` when the model is not changing.
+
+    A model on its own keeps the profile's current provider; re-sending the current model is
+    a no-op rather than a re-pin.
+    """
     model = (changes.get("model") or "").strip()
     provider = (changes.get("provider") or "").strip()
-    if model and provider:
-        run_admin({"op": "pin_model", "name": name, "model": model, "provider": provider}, settings)
-    elif bool(model) != bool(provider):
+    if not model and not provider:
+        return None
+    options = model_options(home)
+    provider = provider or (options["provider"] or "")
+    if not model or not provider:
         raise HTTPException(status_code=422, detail="Model and provider must be set together")
-    return profile_view(root, name)
+    if model == options["model"] and provider == options["provider"]:
+        return None
+    return model, provider
 
 
 def delete_profile(settings, name: str) -> None:

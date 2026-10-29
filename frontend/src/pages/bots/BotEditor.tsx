@@ -105,6 +105,14 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.profiles.all });
   };
 
+  /** Only a changed model is sent; an alias brings its own provider, otherwise the bot's is kept. */
+  const modelChange = () => {
+    const typed = model.trim();
+    if (!typed || typed === (profile?.model ?? '')) return {};
+    const alias = options.data?.aliases.find((row) => row.name === typed);
+    return alias ? { model: alias.model, provider: alias.provider ?? null } : { model: typed };
+  };
+
   const save = useMutation({
     mutationFn: async () => {
       if (editing && profile) {
@@ -112,7 +120,7 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
           title: title.trim() || null,
           description: description.trim() || null,
           soul,
-          model: model.trim() || null,
+          ...modelChange(),
           section: section.trim() || null,
           hidden,
           color: color ? color.toLowerCase() : null,
@@ -294,7 +302,7 @@ export function BotEditor({ opened, onClose, profile }: BotEditorProps) {
           label="Model"
           description="Leave empty to use the profile's configured default"
           placeholder={options.data?.model ?? 'inherit'}
-          data={[options.data?.model ?? '', ...(options.data?.aliases ?? []).map((a) => a.alias ?? '')].filter(Boolean)}
+          data={[...new Set([options.data?.model ?? '', ...(options.data?.aliases ?? []).map((a) => a.name)])].filter(Boolean)}
           value={model}
           onChange={setModel}
         />

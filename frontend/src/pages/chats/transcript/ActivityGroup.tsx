@@ -25,7 +25,7 @@ import {
   toolCategory,
   toolTitle,
 } from '../../../lib/toolDisplay';
-import { effectiveStatus, resultHasErrorDetail, type ActivityBlock, type ActivityItem, type NoticeItem, type ThoughtItem, type ToolItem, type ToolStatus } from '../../../lib/turnBlocks';
+import { effectiveStatus, type ActivityBlock, type ActivityItem, type NoticeItem, type ThoughtItem, type ToolItem, type ToolStatus } from '../../../lib/turnBlocks';
 import { ToolResultView } from './ToolResultView';
 import classes from './Transcript.module.css';
 
@@ -91,10 +91,8 @@ export const ToolRow = memo(function ToolRow({
   /** The row belongs to a turn that is still running. */
   live?: boolean;
 }) {
-  const [open, toggle] = useRememberedDisclosure(
-    `tool:${item.key}`,
-    status === 'error' && (item.result === null || resultHasErrorDetail(item.result)),
-  );
+  // Failed calls start collapsed like every other step; the red pill already flags them.
+  const [open, toggle] = useRememberedDisclosure(`tool:${item.key}`, false);
   const entering = useEntering(`tool:${item.key}`, live);
   const running = status === 'running';
   const target = shortTarget(item);

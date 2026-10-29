@@ -60,7 +60,7 @@ export interface ProfileUpdateBody {
 export interface ModelOptions {
   model: string | null;
   provider: string | null;
-  aliases: { alias?: string; model?: string; provider?: string }[];
+  aliases: { name: string; model: string; provider?: string | null }[];
   providers: string[];
 }
 

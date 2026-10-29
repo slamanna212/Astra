@@ -80,18 +80,6 @@ function parseJson(text: string): unknown {
   }
 }
 
-/** A failure with something to read (an error message, a refusal) rather than only a non-zero exit
- * code, which is routine output for a failing test run and not worth opening by itself. */
-export function resultHasErrorDetail(result: string | null): boolean {
-  if (!result) return false;
-  const parsed = parseJson(result);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-  const record = parsed as Record<string, unknown>;
-  return record.success === false
-    || (typeof record.error === 'string' && record.error.trim() !== '')
-    || record.status === 'blocked';
-}
-
 /** Hermes tools report failure inside their JSON result rather than out of band. */
 export function resultLooksFailed(result: string | null): boolean {
   if (!result) return false;
