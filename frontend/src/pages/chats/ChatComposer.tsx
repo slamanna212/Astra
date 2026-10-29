@@ -137,8 +137,9 @@ export function ChatComposer({
   const toggleGroup = (key: string | null) => {
     setExpandedGroup((prev) => (prev === key ? undefined : key));
   };
-  const selectModel = (name: string) => {
-    const option = models.find((item) => item.name === name);
+  // One model id can sit under several providers, so a row is identified by both.
+  const selectModel = (name: string, groupProvider: string | null) => {
+    const option = models.find((item) => item.name === name && (item.provider ?? null) === groupProvider);
     if (!option) return;
     onModelChange(option.name);
     onProviderChange(option.provider);
@@ -272,6 +273,7 @@ export function ChatComposer({
                 onClose={() => setSheet(null)}
                 groups={groups}
                 model={model}
+                provider={provider}
                 defaultModel={defaultModel}
                 onSelect={(option) => {
                   onModelChange(option?.name ?? null);
@@ -322,9 +324,12 @@ export function ChatComposer({
                         {isActive ? <span className={classes.activeDot} /> : <span className={classes.groupCount}>{group.models.length}</span>}
                       </button>
                       {isExpanded && (
-                        <Menu.RadioGroup value={model} onChange={selectModel}>
+                        <Menu.RadioGroup
+                          value={group.provider === (provider ?? null) ? model : null}
+                          onChange={(name) => selectModel(name, group.provider)}
+                        >
                           {group.models.map((option) => {
-                            const selected = option.name === model;
+                            const selected = option.name === model && group.provider === (provider ?? null);
                             return (
                               <Menu.RadioItem
                                 key={option.name}

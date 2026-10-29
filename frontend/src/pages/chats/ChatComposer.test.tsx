@@ -66,6 +66,54 @@ function Harness({
 }
 
 describe('ChatComposer', () => {
+  it('sends the provider of the group a shared model id was picked from', async () => {
+    const user = userEvent.setup();
+    const onModelChange = vi.fn();
+    const onProviderChange = vi.fn();
+    render(
+      <ChatComposer
+        running={false}
+        onSend={vi.fn(async () => undefined)}
+        onStop={vi.fn(async () => undefined)}
+        onSteer={vi.fn(async () => undefined)}
+        onQueue={vi.fn(async () => undefined)}
+        onInterrupt={vi.fn(async () => undefined)}
+        onCompact={vi.fn(async () => true)}
+        onSkills={vi.fn(async () => true)}
+        model="deepseek-v4.1-flash"
+        provider="deepseek"
+        models={[
+          { name: 'deepseek-v4.1-flash', provider: 'deepseek' },
+          { name: 'deepseek-v4.1-flash', provider: 'openrouter' },
+        ]}
+        providers={['deepseek', 'openrouter']}
+        defaultModel="deepseek-v4.1-flash"
+        onModelChange={onModelChange}
+        onProviderChange={onProviderChange}
+        reasoningEffort={null}
+        onReasoningEffortChange={vi.fn()}
+        draft=""
+        onDraftChange={vi.fn()}
+        onAttach={vi.fn(async () => '')}
+        busyTurnMode="steer"
+        contextTokens={0}
+        contextLength={null}
+        contextEstimated={false}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Model' }));
+    // The current route's group opens first; only its row is checked.
+    expect(screen.getByRole('menuitemradio', { name: 'deepseek-v4.1-flash' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('button', { name: /openrouter/ }));
+    const row = screen.getByRole('menuitemradio', { name: 'deepseek-v4.1-flash' });
+    expect(row).toHaveAttribute('aria-checked', 'false');
+    await user.click(row);
+
+    expect(onModelChange).toHaveBeenCalledWith('deepseek-v4.1-flash');
+    expect(onProviderChange).toHaveBeenCalledWith('openrouter');
+  });
+
   it('selects a model, uploads an attachment, and includes its canonical workspace path', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn(async () => undefined);
