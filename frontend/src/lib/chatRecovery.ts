@@ -3,7 +3,9 @@ import { isLiveActivityEvent, MAX_LIVE_ACTIVITY_EVENTS, type LiveActivityEvent }
 export const CHAT_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 export const CHAT_RECONNECT_DELAYS_MS = [1_500, 3_000, 5_000, 8_000, 12_000, 20_000] as const;
 
-const STORAGE_KEY = 'astra.chat.inflight.v1';
+import { profileStorageKey } from './profileScope';
+
+const STORAGE_KEY = profileStorageKey('astra.chat.inflight.v1');
 const MAX_SESSIONS = 8;
 
 export interface ChatRecovery {

@@ -21,7 +21,7 @@ const CLEAN: GitStatus = {
 function mockApi(fetchMock: ReturnType<typeof vi.fn<typeof fetch>>, git: GitStatus) {
   fetchMock.mockImplementation(async (input) => {
     const url = String(input);
-    if (url.startsWith('/api/files/git')) return jsonResponse(git);
+    if (url.startsWith('/api/profiles/default/files/git')) return jsonResponse(git);
     return jsonResponse({ path: '', entries: [], truncated: false });
   });
 }
@@ -42,7 +42,7 @@ describe('Files git badge', () => {
     expect(badge).toHaveTextContent('main');
     expect(badge).not.toHaveTextContent('●');
     expect(badge).toHaveAccessibleName(/Working tree clean/);
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/files/git?path=proj'), expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/profiles/default/files/git?path=proj'), expect.anything());
   });
 
   it('shows dirty count and ahead/behind', async () => {

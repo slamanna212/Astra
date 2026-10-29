@@ -24,7 +24,7 @@ export async function refreshMessages(
   const windows = client.getQueryCache().findAll({
     queryKey,
     type: 'active',
-    predicate: (query) => query.queryKey[2] === 'window',
+    predicate: (query) => query.queryKey[queryKey.length] === 'window',
   });
   await Promise.all(windows.map(async (query) => {
     // Let an in-flight history page settle before capturing the tail. Otherwise its response

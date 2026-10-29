@@ -5,6 +5,7 @@ import { IconArrowUp, IconBrain, IconCheck, IconChevronDown, IconChevronRight, I
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
 import type { BusyTurnMode } from '../../lib/uiPreferences';
+import { BotPicker } from '../../components/BotPicker';
 import { ContextRing } from './ContextRing';
 import { EffortPickerModal, ModelPickerModal, type ModelGroup } from './ComposerPickers';
 import classes from './ChatComposer.module.css';
@@ -247,6 +248,9 @@ export function ChatComposer({
               </Tooltip>
             )}
           </FileButton>
+
+          {/* Which bot answers this message — the choice belongs next to the input. */}
+          <BotPicker compact={compact} />
 
           {compact ? (
             <>

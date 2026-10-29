@@ -1,3 +1,4 @@
+import { buildUrl } from '../api/client';
 import { Anchor, Code, Table, Text } from '@mantine/core';
 import { isValidElement, lazy, memo, Suspense, useMemo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -22,7 +23,7 @@ function mediaImageUrl(ref: string, sessionId?: string): string {
   if (/^https?:\/\//i.test(ref) || /^data:image\//i.test(ref)) return ref;
   const params = new URLSearchParams({ path: ref });
   if (sessionId) params.set('session_id', sessionId);
-  return `/api/media?${params.toString()}`;
+  return `${buildUrl('/media')}?${params.toString()}`;
 }
 
 function mediaAlt(ref: string): string {

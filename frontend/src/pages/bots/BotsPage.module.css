@@ -1,0 +1,95 @@
+.root {
+  padding: 24px 20px 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 48em) {
+  .root {
+    padding: 16px 12px 32px;
+  }
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mantine-color-dimmed);
+}
+
+.card {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--mantine-color-body);
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.card:hover {
+  border-color: var(--mantine-color-default-hover);
+  background: var(--mantine-color-default-hover);
+}
+
+.card[data-active] {
+  border-color: var(--mantine-color-teal-6);
+  box-shadow: 0 0 0 1px var(--mantine-color-teal-6) inset;
+}
+
+.avatarLink {
+  display: inline-flex;
+  border-radius: 50%;
+  text-decoration: none;
+}
+
+.botName {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.botDescription {
+  font-size: 12px;
+  color: var(--mantine-color-dimmed);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.modelBadge {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mantine-color-default-border);
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unreadDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mantine-color-blue-5);
+  display: inline-block;
+}
+
+.working {
+  display: inline-flex;
+  align-items: center;
+  color: var(--mantine-color-teal-5);
+}

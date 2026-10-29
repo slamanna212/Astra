@@ -25,6 +25,36 @@ from astra.auth import (
     verify_token,
 )
 
+PROFILE_PREFIX = "/api/profiles/"
+
+
+class ProfilePathMiddleware:
+    """Serve one profile's routes from ``/api/profiles/<name>/...``.
+
+    FastAPI's router cannot take a path parameter in an ``include_router`` prefix, so the
+    profile is resolved here, before routing: the prefix is stripped and the name is put on the
+    scope for ``deps.get_ctx``. Pure ASGI, so streaming responses are untouched.
+
+    The registry of profiles itself lives under ``/api/bots`` precisely so it stays outside this
+    namespace — no path can mean both "a bot" and "a bot's data".
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in {"http", "websocket"}:
+            path = scope.get("path", "")
+            if path.startswith(PROFILE_PREFIX):
+                name, _, rest = path[len(PROFILE_PREFIX):].partition("/")
+                if name and rest:
+                    scope = dict(scope)
+                    scope["path"] = f"/api/{rest}"
+                    scope["raw_path"] = scope["path"].encode()
+                    scope["astra_profile"] = name
+        await self.app(scope, receive, send)
+
+
 # Reachable without a session. Logout is included so an expired cookie can still be cleared;
 # it only ever removes the cookie.
 PUBLIC_API_PATHS = frozenset({"/api/health", "/api/auth/login", "/api/auth/logout"})

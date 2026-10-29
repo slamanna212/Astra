@@ -2,9 +2,13 @@ import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import { RequireAuth } from './auth/RequireAuth';
 import { AppLayout } from './layout/AppLayout';
+import { ProfileGate } from './layout/ProfileGate';
+import { appBase } from './lib/profileScope';
 
 // Route-level code splitting: each area ships in its own chunk.
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const BotsPage = lazy(() => import('./pages/bots/BotsPage'));
+const BotChatPage = lazy(() => import('./pages/bots/BotChatPage'));
 const ChatsPage = lazy(() => import('./pages/chats/ChatsPage'));
 const ChatsIndex = lazy(() => import('./pages/chats/ChatsIndex'));
 const SessionPane = lazy(() => import('./pages/chats/SessionPane'));
@@ -22,17 +26,22 @@ const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 export function createAppRouter() {
-  return createBrowserRouter([
+  return createBrowserRouter(
+    [
     { path: '/login', element: <LoginPage /> },
     {
       path: '/',
       element: (
         <RequireAuth>
-          <AppLayout />
+          <ProfileGate>
+            <AppLayout />
+          </ProfileGate>
         </RequireAuth>
       ),
       children: [
-        { index: true, element: <Navigate to="/chats" replace /> },
+        { index: true, element: <Navigate to="/bots" replace /> },
+        { path: 'bots', element: <BotsPage /> },
+        { path: 'bots/chat', element: <BotChatPage /> },
         {
           path: 'chats',
           element: <ChatsPage />,
@@ -66,5 +75,9 @@ export function createAppRouter() {
         { path: '*', element: <NotFoundPage /> },
       ],
     },
-  ]);
+  ],
+  // The profile lives in the URL as a basename, so every existing link (`/chats`, `/skills`, …)
+  // automatically resolves inside the profile the document belongs to.
+  { basename: appBase || undefined },
+  );
 }

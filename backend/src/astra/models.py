@@ -655,3 +655,93 @@ class MemoryFilesResponse(BaseModel):
 
 class MemoryWriteRequest(BaseModel):
     content: str = Field(max_length=1_000_000)
+
+
+# -- Profiles / Bots ---------------------------------------------------------
+
+
+class ProfileModel(BaseModel):
+    """One roster row. ``avatar_url`` is a gateway path, fetched with the session cookie."""
+
+    name: str
+    title: str
+    description: str = ""
+    role: str | None = None
+    avatar_url: str | None = None
+    has_avatar: bool = False
+    model: str | None = None
+    provider: str | None = None
+    is_default: bool = False
+    hidden: bool = False
+    section: str | None = None
+    bot_session_id: str | None = None
+    running: bool = False
+    updated_at: float | None = None
+    preview: str | None = None
+    message_count: int = 0
+    unread: bool = False
+    credentials_ready: bool = True
+
+
+class ProfileDetail(ProfileModel):
+    soul: str = ""
+
+
+class ProfileList(BaseModel):
+    profiles: list[ProfileModel]
+
+
+class ProfileCreateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    name: str = Field(min_length=1, max_length=64)
+    clone_from: str | None = Field(default=None, max_length=64)
+    title: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, max_length=2_000)
+    soul: str | None = Field(default=None, max_length=200_000)
+    model: str | None = Field(default=None, max_length=200)
+    provider: str | None = Field(default=None, max_length=100)
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    title: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, max_length=2_000)
+    soul: str | None = Field(default=None, max_length=200_000)
+    model: str | None = Field(default=None, max_length=200)
+    provider: str | None = Field(default=None, max_length=100)
+    hidden: bool | None = None
+    section: str | None = Field(default=None, max_length=80)
+
+
+class ProfileDuplicateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    name: str = Field(min_length=1, max_length=64)
+    title: str | None = Field(default=None, max_length=80)
+
+
+class ProfileModelOptions(BaseModel):
+    model: str | None = None
+    provider: str | None = None
+    aliases: list[dict[str, Any]] = Field(default_factory=list)
+    providers: list[str] = Field(default_factory=list)
+
+
+class BotChatResponse(BaseModel):
+    session_id: str
+    created: bool = False
+
+
+class InternalBotChat(BaseModel):
+    session_id: str
+    created: bool = False
+
+
+class InternalStatus(BaseModel):
+    profile: str
+    hermes_home: str
+    running: list[str] = Field(default_factory=list)
+    waiting: list[str] = Field(default_factory=list)
+    terminal_enabled: bool = False

@@ -18,7 +18,9 @@ export interface UiPreferences {
   activityDisplayMode: ActivityDisplayMode;
 }
 
-const KEY = 'astra.ui-preferences.v1';
+import { profileStorageKey } from './profileScope';
+
+const KEY = profileStorageKey('astra.ui-preferences.v1');
 const DEFAULTS: UiPreferences = {
   cronAdvancedOpen: true,
   chatFontSize: 'md',

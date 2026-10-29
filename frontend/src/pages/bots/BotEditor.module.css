@@ -1,0 +1,8 @@
+.modalTitle {
+  font-weight: 600;
+}
+
+.soul {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+}

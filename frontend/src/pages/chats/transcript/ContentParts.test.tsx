@@ -18,7 +18,7 @@ describe('ContentParts', () => {
     expect(screen.getByRole('img', { name: 'chart' })).toHaveAttribute('src', 'https://example.test/image.png');
     expect(screen.getByRole('link', { name: 'result.csv' })).toHaveAttribute(
       'href',
-      '/api/files/download?path=reports%2Fresult.csv',
+      '/api/profiles/default/files/download?path=reports%2Fresult.csv',
     );
   });
 });

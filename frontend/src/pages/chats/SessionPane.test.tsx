@@ -334,8 +334,12 @@ describe('conversation stream updates', () => {
     expect(refresh).toHaveBeenCalledWith(queryClient, 's1', expect.objectContaining({ reconcile: false }));
     expect(screen.queryByTestId('live-tps')).not.toBeInTheDocument();
     expect(frames.size).toBe(0);
+    // Every key is profile-scoped: one cache cannot serve two bots' conversations.
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
-      ['chat', 'active'], ['chat', 'active'], ['sessions', 'detail', 's1'], ['sessions', 'list'],
+      ['profile', 'default', 'chat', 'active'],
+      ['profile', 'default', 'chat', 'active'],
+      ['profile', 'default', 'sessions', 'detail', 's1'],
+      ['profile', 'default', 'sessions', 'list'],
     ]);
   });
 

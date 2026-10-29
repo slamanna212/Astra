@@ -143,7 +143,7 @@ describe('InsightsPage', () => {
     expect(link).toHaveAttribute('href', '/chats/sess-1');
 
     expect(fetchMock).toHaveBeenCalled();
-    expect(String(fetchMock.mock.calls[0]![0])).toContain('/api/insights');
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/api/profiles/default/insights');
     expect(String(fetchMock.mock.calls[0]![0])).toContain('days=30');
   });
 
