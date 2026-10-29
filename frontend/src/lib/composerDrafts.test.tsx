@@ -18,7 +18,7 @@ describe('composer drafts', () => {
     expect(loadComposerDraft('one')).toBe('ab');
     act(() => vi.advanceTimersByTime(200));
     expect(write).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(localStorage.getItem('astra.chat.composer-drafts.v1')!).one.text).toBe('ab');
+    expect(JSON.parse(localStorage.getItem('astra.profile.default:astra.chat.composer-drafts.v1')!).one.text).toBe('ab');
     unmount();
     expect(write).toHaveBeenCalledTimes(1);
   });
@@ -28,7 +28,7 @@ describe('composer drafts', () => {
     const { result, rerender, unmount } = renderHook(
       ({ sessionId }) => useComposerDraft(sessionId), { initialProps: { sessionId: 'one' } },
     );
-    const stored = () => JSON.parse(localStorage.getItem('astra.chat.composer-drafts.v1') ?? '{}');
+    const stored = () => JSON.parse(localStorage.getItem('astra.profile.default:astra.chat.composer-drafts.v1') ?? '{}');
     act(() => result.current[1]('first'));
     rerender({ sessionId: 'two' });
     expect(stored().one.text).toBe('first');
@@ -80,7 +80,7 @@ describe('composer drafts', () => {
   });
 
   it('ignores malformed browser storage', () => {
-    localStorage.setItem('astra.chat.composer-drafts.v1', '{not-json');
+    localStorage.setItem('astra.profile.default:astra.chat.composer-drafts.v1', '{not-json');
     expect(loadComposerDraft('session-1')).toBe('');
   });
 

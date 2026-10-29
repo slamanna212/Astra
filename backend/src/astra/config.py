@@ -277,3 +277,32 @@ def apply_hermes_src(settings: Settings) -> None:
         if src not in sys.path:
             sys.path.insert(0, src)
     os.environ["HERMES_HOME"] = str(settings.hermes_home)
+
+
+def activate_hermes_home(home: Path) -> None:
+    """Point Hermes at ``home`` for the work about to run in this thread.
+
+    Hermes reads ``os.environ["HERMES_HOME"]`` at runtime (``hermes_constants.get_hermes_home``)
+    and, in two modules, snapshots paths derived from it at *import time*. Switching profiles
+    inside one process therefore needs both an environment update and a patch of those
+    already-imported constants — this is the same approach hermes-webui uses.
+    """
+    home = Path(home)
+    os.environ["HERMES_HOME"] = str(home)
+    _patch_import_time_paths(home)
+
+
+def _patch_import_time_paths(home: Path) -> None:
+    cron_jobs = sys.modules.get("cron.jobs")
+    if cron_jobs is not None:
+        for attr, value in (
+            ("HERMES_DIR", home),
+            ("CRON_DIR", home / "cron"),
+            ("JOBS_FILE", home / "cron" / "jobs.json"),
+            ("OUTPUT_DIR", home / "cron" / "output"),
+        ):
+            if hasattr(cron_jobs, attr):
+                setattr(cron_jobs, attr, value)
+    skills_tool = sys.modules.get("tools.skills_tool")
+    if skills_tool is not None and hasattr(skills_tool, "SKILLS_DIR"):
+        skills_tool.SKILLS_DIR = home / "skills"

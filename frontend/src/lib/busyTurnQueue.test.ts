@@ -25,7 +25,7 @@ describe('busy turn queue', () => {
   });
 
   it('ignores malformed browser storage', () => {
-    localStorage.setItem('astra.chat.busy-turn-queues.v1', '{bad json');
+    localStorage.setItem('astra.profile.default:astra.chat.busy-turn-queues.v1', '{bad json');
     expect(loadBusyTurnQueue('session-a')).toEqual([]);
   });
 });

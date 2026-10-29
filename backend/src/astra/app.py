@@ -14,8 +14,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from astra import __version__
 from astra.config import Settings, apply_hermes_src
 from astra.db import StateDB, StateDBUnavailable
-from astra.deps import AppContext
-from astra.middleware import ApiGuardMiddleware
+from astra.deps import AppContext, ProfileContexts, close_context
+from astra.middleware import ApiGuardMiddleware, ProfilePathMiddleware
 from astra.routes import auth as auth_routes
 from astra.routes import chat as chat_routes
 from astra.routes import cron as cron_routes
@@ -27,6 +27,7 @@ from astra.routes import media as media_routes
 from astra.routes import memory as memory_routes
 from astra.routes import messages as message_routes
 from astra.routes import openviking as openviking_routes
+from astra.routes import profiles_api as profiles_routes
 from astra.routes import search as search_routes
 from astra.routes import sessions as session_routes
 from astra.routes import skills as skills_routes
@@ -35,9 +36,35 @@ from astra.routes import terminal as terminal_routes
 log = logging.getLogger(__name__)
 
 
+# Routers that read or write profile-owned state. Each is mounted twice: once at ``/api`` for
+# the default profile and once at ``/api/profiles/{profile}`` for a named one.
+PROFILE_ROUTERS = (
+    chat_routes,
+    session_routes,
+    message_routes,
+    search_routes,
+    insights_routes,
+    files_routes,
+    media_routes,
+    logs_routes,
+    memory_routes,
+    openviking_routes,
+    cron_routes,
+    skills_routes,
+    terminal_routes,
+)
+
+
 def create_app(settings: Settings) -> FastAPI:
+    """Build the application.
+
+    One process serves every profile: ``/api/...`` is the default profile, and
+    ``/api/profiles/<name>/...`` serves that profile's own home through the same routes.
+    """
     apply_hermes_src(settings)
     ctx = AppContext(settings=settings, db=StateDB(settings.paths.state_db))
+    contexts = ProfileContexts(ctx)
+    ctx.profile_contexts = contexts
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -53,11 +80,8 @@ def create_app(settings: Settings) -> FastAPI:
         try:
             yield
         finally:
-            await ctx.terminal.close()
-            await ctx.cron_events.stop()
-            await ctx.chat.close()
-            await ctx.openviking.close()
-            ctx.db.close()
+            await contexts.close()
+            await close_context(ctx)
 
     app = FastAPI(
         title="Astra",
@@ -68,6 +92,7 @@ def create_app(settings: Settings) -> FastAPI:
         openapi_url=None,
     )
     app.state.ctx = ctx
+    app.state.contexts = contexts
 
     @app.exception_handler(StateDBUnavailable)
     async def _state_db_unavailable(_: Request, __: StateDBUnavailable) -> JSONResponse:
@@ -75,19 +100,9 @@ def create_app(settings: Settings) -> FastAPI:
 
     app.include_router(health_routes.router)
     app.include_router(auth_routes.router)
-    app.include_router(chat_routes.router)
-    app.include_router(session_routes.router)
-    app.include_router(message_routes.router)
-    app.include_router(search_routes.router)
-    app.include_router(insights_routes.router)
-    app.include_router(files_routes.router)
-    app.include_router(media_routes.router)
-    app.include_router(logs_routes.router)
-    app.include_router(memory_routes.router)
-    app.include_router(openviking_routes.router)
-    app.include_router(cron_routes.router)
-    app.include_router(skills_routes.router)
-    app.include_router(terminal_routes.router)
+    app.include_router(profiles_routes.router)
+    for module in PROFILE_ROUTERS:
+        app.include_router(module.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:
@@ -96,6 +111,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     _mount_spa(app, settings.static_dir)
     app.add_middleware(ApiGuardMiddleware, secret=settings.session_secret, revoked=ctx.revoked)
+    app.add_middleware(ProfilePathMiddleware)
     return app
 
 

@@ -5,6 +5,7 @@ import {
   IconFileText,
   IconFolder,
   IconMessages,
+  IconRobot,
   IconSettings,
   IconSparkles,
   type Icon,
@@ -17,6 +18,7 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  { label: 'Bots', to: '/bots', icon: IconRobot },
   { label: 'Chats', to: '/chats', icon: IconMessages },
   { label: 'Scheduled tasks', to: '/cron', icon: IconClock },
   { label: 'Skills', to: '/skills', icon: IconSparkles },

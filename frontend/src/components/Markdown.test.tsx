@@ -114,7 +114,7 @@ describe('Markdown', () => {
     );
     expect(screen.getByRole('img', { name: 'local.png' })).toHaveAttribute(
       'src',
-      '/api/media?path=%2Ftmp%2Flocal.png&session_id=session+one',
+      '/api/profiles/default/media?path=%2Ftmp%2Flocal.png&session_id=session+one',
     );
   });
 

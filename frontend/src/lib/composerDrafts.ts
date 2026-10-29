@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 
-const STORAGE_KEY = 'astra.chat.composer-drafts.v1';
+import { profileStorageKey } from './profileScope';
+
+const STORAGE_KEY = profileStorageKey('astra.chat.composer-drafts.v1');
 const MAX_DRAFTS = 50;
 const SAVE_DELAY_MS = 400;
 // Pending text is available across route changes before the debounced storage write.

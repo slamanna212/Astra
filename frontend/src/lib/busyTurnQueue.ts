@@ -1,4 +1,6 @@
-const STORAGE_KEY = 'astra.chat.busy-turn-queues.v1';
+import { profileStorageKey } from './profileScope';
+
+const STORAGE_KEY = profileStorageKey('astra.chat.busy-turn-queues.v1');
 const MAX_SESSIONS = 50;
 const MAX_MESSAGES_PER_SESSION = 20;
 

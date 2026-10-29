@@ -28,7 +28,7 @@ describe('api client', () => {
     fetchMock.mockResolvedValue(json({ ok: true }));
     await apiFetch('/thing', { method: 'POST', body: { a: 1 } });
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('/api/thing');
+    expect(url).toBe('/api/profiles/default/thing');
     expect(init?.credentials).toBe('same-origin');
     const headers = init?.headers as Record<string, string>;
     expect(headers['X-Requested-With']).toBe('astra');
@@ -73,14 +73,14 @@ describe('api client', () => {
   it('builds session list query strings, omitting empty params', async () => {
     fetchMock.mockImplementation(async () => json({ items: [], next_cursor: null }));
     await listSessions({ source: null, cursor: null });
-    expect(fetchMock.mock.calls[0]![0]).toBe('/api/sessions?limit=50&status=active');
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/profiles/default/sessions?limit=50&status=active');
     await listSessions({ source: ['cron', 'tui'], cursor: 'abc', status: 'archived', limit: 10 });
     expect(fetchMock.mock.calls[1]![0]).toBe(
-      '/api/sessions?limit=10&cursor=abc&source=cron&source=tui&status=archived',
+      '/api/profiles/default/sessions?limit=10&cursor=abc&source=cron&source=tui&status=archived',
     );
   });
 
   it('buildUrl encodes values', () => {
-    expect(buildUrl('/x', { q: 'a b&c' })).toBe('/api/x?q=a+b%26c');
+    expect(buildUrl('/x', { q: 'a b&c' })).toBe('/api/profiles/default/x?q=a+b%26c');
   });
 });

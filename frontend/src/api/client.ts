@@ -1,3 +1,5 @@
+import { currentProfile } from '../lib/profileScope';
+
 /**
  * Minimal fetch wrapper for the Astra backend.
  *
@@ -48,10 +50,12 @@ export interface RequestOptions {
   redirectOnUnauthorized?: boolean;
 }
 
-export const API_BASE = '/api';
+export const API_BASE = `/api/profiles/${encodeURIComponent(currentProfile)}`;
 
 export function buildUrl(path: string, query?: Record<string, QueryValue>): string {
-  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  const global = /^\/(?:auth(?:\/|$)|health(?:\/|$)|bots(?:\/|$)|profiles(?:\/|$))/.test(normalized);
+  const url = `${global ? '/api' : API_BASE}${normalized}`;
   if (!query) return url;
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {

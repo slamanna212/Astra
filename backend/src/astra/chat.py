@@ -27,7 +27,7 @@ from typing import Any
 import anyio.to_thread
 import yaml
 
-from astra.config import Settings
+from astra.config import Settings, activate_hermes_home
 from astra.hermes_bridge import (
     agent_class,
     approval_module,
@@ -566,6 +566,9 @@ class ChatManager:
             notify(pending)
 
     def _build_agent(self, turn: Turn) -> Any:
+        # Hermes resolves its home from the environment; point it at this profile's before
+        # anything is constructed, or a bot would inherit the previous bot's skills/cron.
+        activate_hermes_home(self._settings.hermes_home)
         config = _load_chat_config(self._settings.paths.config_yaml)
         model_config = config.get("model") if isinstance(config.get("model"), dict) else {}
         model = turn.model or model_config.get("default")

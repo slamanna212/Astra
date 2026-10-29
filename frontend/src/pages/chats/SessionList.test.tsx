@@ -6,7 +6,7 @@ import { jsonResponse, render } from '../../test/render';
 import { formatGroupDate } from '../../lib/format';
 import { SESSION_CHILD_ROW_HEIGHT, SESSION_GROUP_HEADER_HEIGHT, SESSION_ROW_HEIGHT, SessionList } from './SessionList';
 
-/** Path (no query string) a mocked fetch call was made against, e.g. "/api/sessions/child-a". */
+/** Path (no query string) a mocked fetch call was made against, e.g. "/api/profiles/default/sessions/child-a". */
 function pathOf(input: Parameters<typeof fetch>[0]): string {
   return new URL(String(input), 'http://localhost').pathname;
 }
@@ -121,7 +121,7 @@ describe('SessionList', () => {
 
     await waitFor(() => expect(screen.getAllByTestId('session-row')).toHaveLength(10));
     expect(listCalls).toBe(2);
-    const listRequestUrls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/api/sessions?'));
+    const listRequestUrls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/api/profiles/default/sessions?'));
     expect(listRequestUrls[1]).toContain('cursor=c1');
   });
 
@@ -129,7 +129,7 @@ describe('SessionList', () => {
     const items = [makeSession(1), makeSession(2), makeSession(3)];
     fetchMock.mockImplementation(async (input) => {
       const path = pathOf(input);
-      if (path === '/api/chat/active') {
+      if (path === '/api/profiles/default/chat/active') {
         return jsonResponse({
           turns: [
             { session_id: 's-1', operation: 'chat', waiting: false },
@@ -137,7 +137,7 @@ describe('SessionList', () => {
           ],
         });
       }
-      if (path === '/api/sessions/count') return jsonResponse({ count: 0 });
+      if (path === '/api/profiles/default/sessions/count') return jsonResponse({ count: 0 });
       return jsonResponse({ items, next_cursor: null });
     });
 
@@ -166,10 +166,10 @@ describe('SessionList', () => {
     function mockFetch() {
       fetchMock.mockImplementation(async (input) => {
         const path = pathOf(input);
-        if (path === '/api/sessions/count') return jsonResponse({ count: 0 });
-        if (path === '/api/sessions/s-0/children') return jsonResponse({ items: children });
-        if (path === '/api/sessions/child-a') return jsonResponse(makeChildSessionDetail('child-a', 's-0'));
-        if (path === '/api/sessions') return jsonResponse({ items: [parent], next_cursor: null });
+        if (path === '/api/profiles/default/sessions/count') return jsonResponse({ count: 0 });
+        if (path === '/api/profiles/default/sessions/s-0/children') return jsonResponse({ items: children });
+        if (path === '/api/profiles/default/sessions/child-a') return jsonResponse(makeChildSessionDetail('child-a', 's-0'));
+        if (path === '/api/profiles/default/sessions') return jsonResponse({ items: [parent], next_cursor: null });
         throw new Error(`unexpected fetch: ${path}`);
       });
     }
