@@ -15,6 +15,7 @@ const base: ProfileSummary = {
   is_default: false,
   hidden: false,
   section: null,
+  color: null,
   bot_session_id: null,
   running: false,
   updated_at: null,

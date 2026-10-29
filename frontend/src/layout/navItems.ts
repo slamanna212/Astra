@@ -18,11 +18,11 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Bots', to: '/bots', icon: IconRobot },
   { label: 'Chats', to: '/chats', icon: IconMessages },
   { label: 'Scheduled tasks', to: '/cron', icon: IconClock },
   { label: 'Skills', to: '/skills', icon: IconSparkles },
   { label: 'Memories', to: '/memories', icon: IconBrain },
+  { label: 'Bots', to: '/bots', icon: IconRobot },
   { label: 'Files', to: '/files', icon: IconFolder },
   { label: 'Insights', to: '/insights', icon: IconChartBar },
   { label: 'Logs', to: '/logs', icon: IconFileText },

@@ -231,6 +231,32 @@ def test_profile_crud_ui_meta_and_avatar(gateway, monkeypatch):
     meta = yaml.safe_load((home / "profile.yaml").read_text())
     assert meta["ui_meta"]["hermes-bots"] == {"title": "Copy", "hidden": True, "section": "Editorial"}
     assert meta["_ui_meta_revisions"]["title"] == 2
+    assert patched.json()["color"] is None
+
+    # The editor re-sends the current model with every save: that is not a re-pin and needs
+    # no provider. A new model alone keeps the profile's provider.
+    resent = client.patch("/api/bots/editor", json={"title": "Copy Ed", "model": "m2"}, headers=CSRF)
+    assert resent.status_code == 200, resent.text
+    assert resent.json()["title"] == "Copy Ed"
+    model_only = client.patch("/api/bots/editor", json={"model": "m3"}, headers=CSRF)
+    assert model_only.status_code == 200, model_only.text
+    assert (model_only.json()["model"], model_only.json()["provider"]) == ("m3", "p2")
+    # Without any provider to keep, the save is rejected before anything is written.
+    (home / "config.yaml").write_text("model:\n  default: m3\n")
+    rejected = client.patch("/api/bots/editor", json={"title": "Nope", "model": "m4"}, headers=CSRF)
+    assert rejected.status_code == 422
+    assert client.get("/api/bots/editor").json()["title"] == "Copy Ed"
+    (home / "config.yaml").write_text("model:\n  default: m3\n  provider: p2\n")
+
+    colored = client.patch("/api/bots/editor", json={"color": "#C9495A"}, headers=CSRF)
+    assert colored.status_code == 200, colored.text
+    assert colored.json()["color"] == "#c9495a"
+    assert yaml.safe_load((home / "profile.yaml").read_text())["ui_meta"]["hermes-bots"]["color"] == "#c9495a"
+    for bad_color in ("red", "#fff", "#c9495a; x", "url(#a)"):
+        assert client.patch("/api/bots/editor", json={"color": bad_color}, headers=CSRF).status_code == 422
+    uncolored = client.patch("/api/bots/editor", json={"color": None}, headers=CSRF)
+    assert uncolored.json()["color"] is None
+    assert "color" not in yaml.safe_load((home / "profile.yaml").read_text())["ui_meta"]["hermes-bots"]
 
     upload = client.post(
         "/api/bots/editor/avatar", files={"file": ("a.png", PNG, "image/png")}, headers=CSRF

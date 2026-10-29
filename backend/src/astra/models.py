@@ -674,6 +674,7 @@ class ProfileModel(BaseModel):
     is_default: bool = False
     hidden: bool = False
     section: str | None = None
+    color: str | None = None
     bot_session_id: str | None = None
     running: bool = False
     updated_at: float | None = None
@@ -713,6 +714,8 @@ class ProfileUpdateRequest(BaseModel):
     provider: str | None = Field(default=None, max_length=100)
     hidden: bool | None = None
     section: str | None = Field(default=None, max_length=80)
+    #: Chrome colour as ``#rrggbb``; ``null`` clears it back to the default teal.
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class ProfileDuplicateRequest(BaseModel):
