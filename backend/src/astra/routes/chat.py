@@ -9,7 +9,13 @@ import sqlite3
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from astra.chat import ChatError, NoActiveTurn, SessionBusy, _load_chat_config
+from astra.chat import (
+    ChatError,
+    NoActiveTurn,
+    SessionBusy,
+    _config_model_aliases,
+    _load_chat_config,
+)
 from astra.deps import Ctx
 from astra.models import (
     ChatActive,
@@ -95,30 +101,34 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
     session_model = session_model or None
     session_provider = session_provider or None
 
-    # `model` and `billing_provider` are independent columns; pairing distinct rows recovers the
-    # actual provider a model was billed under last, rather than guessing from the model name.
-    model_names: list[str] = []
-    provider_for: dict[str, str | None] = {}
-    for model_name, billing_provider in model_rows:
-        if model_name not in provider_for:
-            model_names.append(model_name)
-            provider_for[model_name] = billing_provider or None
+    # Entries are (model, provider) pairs: one model id can run on several providers (DeepSeek's
+    # own API and OpenRouter, say), and each route needs its own row so picking one sends that
+    # provider. `model` and `billing_provider` pair up per session, recovering the provider a
+    # model actually ran on rather than guessing it from the name.
+    entries: list[tuple[str, str | None]] = []
 
-    aliases = model_config.get("aliases")
-    if isinstance(aliases, dict):
-        for alias_name, alias_target in aliases.items():
-            if not isinstance(alias_name, str) or not alias_name:
-                continue
-            if alias_name not in provider_for:
-                model_names.append(alias_name)
-            # Alias values are "<provider>/<model>" (the model id itself may contain "/").
-            if isinstance(alias_target, str) and "/" in alias_target:
-                provider_for[alias_name] = alias_target.split("/", 1)[0]
-                # Usage rows record the resolved model id; show the alias the user picked.
-                if session_model and alias_target == f"{session_provider}/{session_model}":
-                    session_model = alias_name
-            else:
-                provider_for.setdefault(alias_name, None)
+    def add(name: str, provider: str | None, *, first: bool = False) -> None:
+        entry = (name, provider or None)
+        if entry in entries:
+            return
+        if entry[1] is None and any(n == name for n, _ in entries):
+            return
+        # A provider-less row for this name is superseded by one that knows its route.
+        if entry[1] is not None and (name, None) in entries:
+            entries.remove((name, None))
+        if first:
+            entries.insert(0, entry)
+        else:
+            entries.append(entry)
+
+    for model_name, billing_provider in model_rows:
+        add(model_name, billing_provider)
+
+    for alias_name, (alias_provider, alias_model) in _config_model_aliases(config).items():
+        add(alias_name, alias_provider)
+        # Usage rows record the resolved model id; show the alias the user picked.
+        if session_model == alias_model and (session_provider or None) == alias_provider:
+            session_model = alias_name
 
     fallbacks = config.get("fallback_providers")
     if isinstance(fallbacks, list):
@@ -127,36 +137,28 @@ async def options(session_id: str, ctx: Ctx) -> ChatOptions:
                 continue
             fallback_model = fallback.get("model")
             fallback_provider = fallback.get("provider")
+            if not isinstance(fallback_provider, str) or not fallback_provider:
+                fallback_provider = None
             if isinstance(fallback_model, str) and fallback_model:
-                if fallback_model not in provider_for:
-                    model_names.append(fallback_model)
-                if isinstance(fallback_provider, str) and fallback_provider:
-                    provider_for[fallback_model] = fallback_provider
-                else:
-                    provider_for.setdefault(fallback_model, None)
-            if isinstance(fallback_provider, str) and fallback_provider:
+                add(fallback_model, fallback_provider)
+            if fallback_provider:
                 providers.append(fallback_provider)
 
     if default_model:
-        if default_model not in provider_for:
-            model_names.insert(0, default_model)
-            provider_for[default_model] = default_provider
-        elif default_provider:
-            provider_for[default_model] = default_provider
-    if session_model and session_model not in provider_for:
-        model_names.append(session_model)
-        provider_for[session_model] = session_provider
+        add(default_model, default_provider, first=True)
+    if session_model:
+        add(session_model, session_provider)
     if default_provider and default_provider not in providers:
         providers.insert(0, default_provider)
     # Every provider a model actually resolved to must have a group to render into.
-    providers.extend(p for p in provider_for.values() if p)
+    providers.extend(p for _, p in entries if p)
     providers = list(dict.fromkeys(providers))
     return ChatOptions(
         default_model=default_model,
         default_provider=default_provider,
         session_model=session_model,
         session_provider=session_provider,
-        models=[ChatModelOption(name=name, provider=provider_for.get(name)) for name in model_names],
+        models=[ChatModelOption(name=name, provider=provider) for name, provider in entries],
         providers=providers,
     )
 

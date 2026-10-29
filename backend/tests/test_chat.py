@@ -740,3 +740,66 @@ async def test_interim_commentary_streams_as_its_own_event(base_settings, monkey
     assert chatmod._interim_messages_enabled({}) is True
 
     await manager.close()
+
+
+def test_config_model_aliases_follow_hermes_rules():
+    config = {
+        "model": {
+            "provider": "deepseek",
+            "aliases": {
+                "DS-Flash-OR": "openrouter/deepseek/deepseek-v4.1-flash",
+                "flash": "deepseek-v4-flash",
+                "opus": {"provider": "anthropic", "model": "claude-opus"},
+                "shadowed": "openrouter/ignored",
+            },
+        },
+        "model_aliases": {"shadowed": {"model": "local-model", "provider": "ollama"}},
+    }
+    assert chatmod._config_model_aliases(config) == {
+        "shadowed": ("ollama", "local-model"),
+        "ds-flash-or": ("openrouter", "deepseek/deepseek-v4.1-flash"),
+        "flash": ("deepseek", "deepseek-v4-flash"),
+        "opus": ("anthropic", "claude-opus"),
+    }
+
+
+@pytest.mark.anyio
+async def test_alias_selection_builds_the_agent_on_the_aliased_route(base_settings, fake_hermes, monkeypatch):
+    requested = []
+
+    def resolver(**kwargs):
+        requested.append(kwargs)
+        return {"provider": kwargs["requested"], "base_url": "https://invalid", "api_key": "key"}
+
+    monkeypatch.setattr(chatmod, "resolve_runtime_provider", lambda: resolver)
+    monkeypatch.setattr(
+        chatmod,
+        "_load_chat_config",
+        lambda _path: {"model": {"default": "deepseek-v4-flash", "provider": "deepseek",
+                                 "aliases": {"ds-flash-or": "openrouter/deepseek/deepseek-v4.1-flash"}}},
+    )
+    manager = ChatManager(base_settings, max_workers=1)
+    turn = chatmod.Turn("session-alias", "go", "ds-flash-or", "openrouter")
+    agent = await asyncio.to_thread(manager._build_agent, turn)
+    assert requested == [{"requested": "openrouter", "target_model": "deepseek/deepseek-v4.1-flash"}]
+    assert (agent.model, agent.provider) == ("deepseek/deepseek-v4.1-flash", "openrouter")
+    await manager.close()
+
+
+def test_options_list_one_model_under_each_provider_it_runs_on(authed, monkeypatch):
+    import astra.routes.chat as chat_routes
+
+    session_id = authed.get("/api/sessions", params={"limit": 1}).json()["items"][0]["id"]
+    monkeypatch.setattr(
+        chat_routes,
+        "_load_chat_config",
+        lambda _path: {
+            "model": {"default": "deepseek-v4.1-flash", "provider": "deepseek",
+                      "aliases": {"or-flash": {"provider": "openrouter", "model": "deepseek/deepseek-v4.1-flash"}}},
+            "fallback_providers": [{"provider": "openrouter", "model": "deepseek-v4.1-flash"}],
+        },
+    )
+    models = authed.get(f"/api/chat/{session_id}/options").json()["models"]
+    assert models[0] == {"name": "deepseek-v4.1-flash", "provider": "deepseek"}
+    assert {"name": "deepseek-v4.1-flash", "provider": "openrouter"} in models
+    assert {"name": "or-flash", "provider": "openrouter"} in models

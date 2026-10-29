@@ -32,6 +32,7 @@ export function ModelPickerModal({
   onClose,
   groups,
   model,
+  provider,
   defaultModel,
   onSelect,
 }: {
@@ -39,6 +40,7 @@ export function ModelPickerModal({
   onClose: () => void;
   groups: ModelGroup[];
   model: string | null;
+  provider: string | null;
   defaultModel: string | null;
   /** `null` clears the override back to the session default. */
   onSelect: (option: ChatModelOption | null) => void;
@@ -80,7 +82,7 @@ export function ModelPickerModal({
               <OptionRow
                 key={`${group.provider ?? ''}:${option.name}`}
                 label={option.name}
-                selected={option.name === model}
+                selected={option.name === model && group.provider === (provider ?? null)}
                 onClick={() => choose(option)}
               />
             ))}

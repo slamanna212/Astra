@@ -142,6 +142,44 @@ def _load_chat_config(path: Path) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _config_model_aliases(config: dict[str, Any]) -> dict[str, tuple[str | None, str]]:
+    """Config model aliases as ``{alias: (provider, model)}``, using Hermes' own rules.
+
+    Mirrors ``hermes_cli.model_switch._load_direct_aliases``: top-level ``model_aliases`` dict
+    entries win; ``model.aliases`` entries are dicts (``model``/``provider``) or strings, where a
+    string's ``provider/`` prefix names the provider (``openrouter/deepseek/deepseek-v4.1-flash``)
+    and a bare string inherits ``model.provider``. Hermes only expands these inside its ``/model``
+    command, never in ``AIAgent``, so Astra must resolve them before building an agent.
+    """
+    model_section = config.get("model") if isinstance(config.get("model"), dict) else {}
+    current = model_section.get("provider") if isinstance(model_section.get("provider"), str) else ""
+    current = current.strip()
+    aliases: dict[str, tuple[str | None, str]] = {}
+
+    def text(value: object) -> str:
+        return value.strip() if isinstance(value, str) else ""
+
+    top = config.get("model_aliases")
+    if isinstance(top, dict):
+        for name, entry in top.items():
+            key = text(name).lower()
+            if key and isinstance(entry, dict) and text(entry.get("model")):
+                aliases[key] = (text(entry.get("provider")) or "custom", text(entry.get("model")))
+    simple = model_section.get("aliases")
+    if isinstance(simple, dict):
+        for name, value in simple.items():
+            key = text(name).lower()
+            if not key or key in aliases:
+                continue
+            if isinstance(value, dict):
+                if text(value.get("model")):
+                    aliases[key] = (text(value.get("provider")) or current or "custom", text(value.get("model")))
+            elif text(value):
+                provider, model = text(value).split("/", 1) if "/" in text(value) else (current, text(value))
+                aliases[key] = (provider.strip() or current or None, model.strip())
+    return aliases
+
+
 def _interim_messages_enabled(config: dict[str, Any]) -> bool:
     """Hermes' ``display.interim_assistant_messages`` gate (default on), also applied to history."""
     display = config.get("display")
@@ -533,6 +571,12 @@ class ChatManager:
         provider = turn.provider or model_config.get("provider")
         if not isinstance(model, str) or not model:
             raise ChatError("no Hermes model is configured")
+        # The picker offers config aliases by name; send Hermes the model and provider they stand
+        # for, or the provider rejects the alias and Hermes' fallback chain picks another route.
+        alias = _config_model_aliases(config).get(model.strip().lower())
+        if alias is not None:
+            provider = alias[0] or provider
+            model = alias[1]
         if not isinstance(provider, str) or not provider:
             provider = None
         runtime = resolve_runtime_provider()(requested=provider, target_model=model)
