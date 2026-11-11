@@ -8,7 +8,6 @@ import { appBase } from './lib/profileScope';
 // Route-level code splitting: each area ships in its own chunk.
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const BotsPage = lazy(() => import('./pages/bots/BotsPage'));
-const BotChatPage = lazy(() => import('./pages/bots/BotChatPage'));
 const ChatsPage = lazy(() => import('./pages/chats/ChatsPage'));
 const ChatsIndex = lazy(() => import('./pages/chats/ChatsIndex'));
 const SessionPane = lazy(() => import('./pages/chats/SessionPane'));
@@ -39,9 +38,10 @@ export function createAppRouter() {
         </RequireAuth>
       ),
       children: [
-        { index: true, element: <Navigate to="/bots" replace /> },
+        { index: true, element: <Navigate to="/chats" replace /> },
         { path: 'bots', element: <BotsPage /> },
-        { path: 'bots/chat', element: <BotChatPage /> },
+        // Old Bot Chat links land on the chat list.
+        { path: 'bots/chat', element: <Navigate to="/chats" replace /> },
         {
           path: 'chats',
           element: <ChatsPage />,

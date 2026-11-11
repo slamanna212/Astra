@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, render } from '../test/render';
 
-const switchProfile = vi.fn((name: string) => `/p/${name}/bots/chat`);
+const switchProfile = vi.fn((name: string) => `/p/${name}/chats`);
 
 vi.mock('../lib/profileScope', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/profileScope')>();
@@ -62,7 +62,7 @@ describe('BotPicker', () => {
     const menu = await screen.findByRole('menu');
     await user.click(await within(menu).findByText('Copy Editor'));
 
-    expect(switchProfile).toHaveBeenCalledWith('writer', '/bots/chat', '');
+    expect(switchProfile).toHaveBeenCalledWith('writer', '/chats', '');
   });
 
   it('does nothing when the current bot is picked again', async () => {
@@ -85,7 +85,5 @@ describe('BotPicker', () => {
     const menu = await screen.findByRole('menu');
     expect(await within(menu).findByText('All bots')).toBeInTheDocument();
     expect(within(menu).getByText('New bot').closest('a')).toHaveAttribute('href', '/bots?new=1');
-    // Unread state is visible where the choice is made.
-    expect(within(menu).getByLabelText('New messages')).toBeInTheDocument();
   });
 });

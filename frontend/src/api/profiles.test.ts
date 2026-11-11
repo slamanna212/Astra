@@ -64,14 +64,6 @@ describe('profiles api', () => {
     expect(patchBody).toEqual({ soul: 'be terse', hidden: true });
   });
 
-  it('resolves the canonical bot chat without sending a session id', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ session_id: 'abc', created: true }));
-    const { ensureBotChat } = await import('./profiles');
-    expect(await ensureBotChat('writer')).toEqual({ session_id: 'abc', created: true });
-    expect(fetchMock.mock.calls[0]![0]).toBe('/api/bots/writer/bot-chat');
-    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('POST');
-  });
-
   it('posts avatars as multipart with the CSRF header and surfaces the server detail', async () => {
     const { uploadAvatar } = await import('./profiles');
     fetchMock.mockResolvedValueOnce(jsonResponse({ ...roster.profiles[0]!, has_avatar: true }));

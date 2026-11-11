@@ -12,7 +12,7 @@ import classes from './BotPicker.module.css';
  * Which bot answers the next message. This lives in the composer because that is the moment
  * the choice matters — same place the reference UI puts it.
  *
- * Picking another bot loads that bot's own document (and its Bot Chat). Nothing from the
+ * Picking another bot loads that bot's own document (and its chats). Nothing from the
  * current profile's caches, drafts or streams can follow you across.
  */
 export function BotPicker({ compact = false }: { compact?: boolean }) {
@@ -27,7 +27,7 @@ export function BotPicker({ compact = false }: { compact?: boolean }) {
 
   const pick = (row: ProfileSummary) => {
     if (row.name === currentProfile) return;
-    switchProfile(row.name, '/bots/chat', '');
+    switchProfile(row.name, '/chats', '');
   };
 
   return (
@@ -58,8 +58,6 @@ export function BotPicker({ compact = false }: { compact?: boolean }) {
             rightSection={
               row.name === currentProfile ? (
                 <IconCheck size={14} className={classes.check} />
-              ) : row.unread ? (
-                <span className={classes.unread} aria-label="New messages" />
               ) : null
             }
             classNames={{ item: classes.row, itemLabel: classes.rowLabel }}

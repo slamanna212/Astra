@@ -60,7 +60,7 @@ describe('BotsPage', () => {
     vi.resetModules();
   });
 
-  it('shows one card per bot with its picture, model and unread marker', async () => {
+  it('shows one card per bot with its picture and model', async () => {
     mockRoster([base, writer, researcher]);
     const BotsPage = (await import('./BotsPage')).default;
     render(<BotsPage />);
@@ -72,7 +72,6 @@ describe('BotsPage', () => {
     expect(screen.getByText('RE')).toBeInTheDocument();
     // Short model chip, not the full provider path.
     expect(screen.getByText('claude-sonnet-4')).toBeInTheDocument();
-    expect(screen.getAllByLabelText('New messages')).toHaveLength(1);
     expect(screen.getAllByLabelText('Working')).toHaveLength(1);
     // The card for this document is marked active.
     expect(document.querySelector('[data-bot="default"]')).toHaveAttribute('data-active');
@@ -85,11 +84,11 @@ describe('BotsPage', () => {
 
     const otherLink = await screen.findByLabelText('Open Copy Editor');
     expect(otherLink.tagName).toBe('A');
-    expect(otherLink).toHaveAttribute('href', '/p/writer/bots/chat');
+    expect(otherLink).toHaveAttribute('href', '/p/writer/chats');
 
     // The bot this document belongs to stays inside it.
     const ownLink = screen.getByLabelText('Open Home');
-    expect(ownLink).toHaveAttribute('href', '/bots/chat');
+    expect(ownLink).toHaveAttribute('href', '/chats');
   });
 
   it('hides bots that are marked hidden unless they are the current one', async () => {

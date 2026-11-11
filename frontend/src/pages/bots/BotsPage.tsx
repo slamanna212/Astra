@@ -26,9 +26,8 @@ import { BotEditor } from './BotEditor';
 import classes from './BotsPage.module.css';
 
 /**
- * The Bots roster: one card per profile, with its picture, what it does and whether it has
- * something new to say. Clicking a card opens that bot's canonical Bot Chat — the same
- * conversation every time, in that bot's own Hermes home.
+ * The Bots roster: one card per profile, with its picture and what it does. Clicking a card
+ * opens that bot's chats, in its own Hermes home.
  */
 export default function BotsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
@@ -153,14 +152,14 @@ interface BotCardProps {
 }
 
 function BotCard({ profile, active, onEdit }: BotCardProps) {
-  const target = pathForProfile(profile.name, '/bots/chat');
+  const target = pathForProfile(profile.name, '/chats');
 
   return (
     <Box className={classes.card} data-active={active || undefined} data-bot={profile.name}>
       <Group gap="sm" wrap="nowrap" align="flex-start">
         {active ? (
           // Same profile: an ordinary in-document route change.
-          <Link to="/bots/chat" className={classes.avatarLink} aria-label={`Open ${profile.title}`}>
+          <Link to="/chats" className={classes.avatarLink} aria-label={`Open ${profile.title}`}>
             <BotAvatar profile={profile} size={44} busy={profile.running} />
           </Link>
         ) : (
@@ -182,7 +181,7 @@ function BotCard({ profile, active, onEdit }: BotCardProps) {
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item component="a" href={target}>
-                  Open chat
+                  Open chats
                 </Menu.Item>
                 <Menu.Item onClick={onEdit}>Edit bot</Menu.Item>
                 {!active && !profile.is_default && (
@@ -220,7 +219,6 @@ function BotCard({ profile, active, onEdit }: BotCardProps) {
           )}
         </Group>
         <Group gap={6} wrap="nowrap">
-          {profile.unread && <span className={classes.unreadDot} aria-label="New messages" />}
           {profile.running && (
             <Tooltip label="Working on a turn">
               <span className={classes.working} aria-label="Working">
@@ -231,7 +229,6 @@ function BotCard({ profile, active, onEdit }: BotCardProps) {
         </Group>
       </Group>
 
-      {profile.preview && <Text className={classes.preview}>{profile.preview}</Text>}
     </Box>
   );
 }

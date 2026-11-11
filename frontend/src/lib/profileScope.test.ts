@@ -47,12 +47,6 @@ describe('profile paths', () => {
     // A path from another document must not be trimmed with this document's prefix.
     expect(scope.currentInProfilePath('/p/other/chats')).toBe('/p/other/chats');
   });
-
-  it('builds a Bot Chat URL per profile', async () => {
-    const scope = await scopeAt('/p/writer/bots');
-    expect(scope.botChatPath()).toBe('/p/writer/bots/chat');
-    expect(scope.botChatPath('default')).toBe('/bots/chat');
-  });
 });
 
 describe('switchProfile', () => {

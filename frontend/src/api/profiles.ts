@@ -121,17 +121,6 @@ export function clearAvatar(name: string): Promise<ProfileDetail> {
   return apiFetch<ProfileDetail>(`/bots/${encodeURIComponent(name)}/avatar`, { method: 'DELETE' });
 }
 
-/** Returns the profile's canonical Bot Chat, creating it on first use. */
-export function ensureBotChat(name: string): Promise<{ session_id: string; created: boolean }> {
-  return apiFetch<{ session_id: string; created: boolean }>(`/bots/${encodeURIComponent(name)}/bot-chat`, {
-    method: 'POST',
-  });
-}
-
-export function markBotRead(name: string): Promise<void> {
-  return apiFetch<void>(`/bots/${encodeURIComponent(name)}/read`, { method: 'POST' });
-}
-
 /** Avatar URLs are already absolute gateway paths, so <img src> works with the cookie. */
 export function avatarSrc(
   profile: Pick<ProfileSummary, 'name' | 'avatar_url'> & Partial<Pick<ProfileSummary, 'updated_at'>>,
