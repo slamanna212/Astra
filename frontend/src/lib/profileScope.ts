@@ -64,8 +64,3 @@ export function profileStorageKey(key: string): string {
 export function profileQueryKey<T extends readonly unknown[]>(key: T) {
   return ['profile', currentProfile, ...key] as const;
 }
-
-/** Canonical Bot Chat: one URL per profile; the backend resolves the session behind it. */
-export function botChatPath(name = currentProfile): string {
-  return pathForProfile(name, '/bots/chat');
-}

@@ -69,24 +69,7 @@
   text-overflow: ellipsis;
 }
 
-.preview {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--mantine-color-default-border);
-  font-size: 11px;
-  color: var(--mantine-color-dimmed);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.unreadDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--mantine-color-blue-5);
-  display: inline-block;
-}
 
 .working {
   display: inline-flex;

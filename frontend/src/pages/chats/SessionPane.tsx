@@ -71,8 +71,7 @@ function SessionDetails({ source, rows, parent }: { source: ReactNode; rows: [st
   );
 }
 
-/** ``sessionId`` lets a caller render a specific conversation outside the `/chats/:id` route
- * — the Bot Chat surface does exactly that with the profile's canonical session. */
+/** ``sessionId`` lets a caller render a specific conversation outside the `/chats/:id` route. */
 export default function SessionPane({ sessionId: sessionIdProp }: { sessionId?: string } = {}) {
   const { sessionId: routeSessionId = '' } = useParams();
   const sessionId = sessionIdProp ?? routeSessionId;

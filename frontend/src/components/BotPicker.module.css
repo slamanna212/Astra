@@ -72,10 +72,3 @@
   color: var(--astra-primary, var(--mantine-color-teal-5));
 }
 
-.unread {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--mantine-color-blue-5);
-  display: inline-block;
-}

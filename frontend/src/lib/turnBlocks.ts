@@ -61,7 +61,8 @@ export type TurnBlock =
   | { kind: 'parts'; key: string; parts: MessageContentPart[] }
   | { kind: 'activity'; key: string; items: ActivityItem[] }
   /** Reasoning that is streaming right now, shown open until something else happens. */
-  | { kind: 'thinking'; key: string; text: string };
+  /** Reasoning still streaming; `thoughtKey` is the Thought row it becomes, so an opened card stays open. */
+  | { kind: 'thinking'; key: string; text: string; thoughtKey: string };
 
 export type ActivityBlock = Extract<TurnBlock, { kind: 'activity' }>;
 
@@ -464,7 +465,7 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
     else blocks.unshift({ kind: 'text', key: 'live-t-head', text: missing });
   }
 
-  // Reasoning that is still streaming stays open on its own until anything else happens.
+  // Reasoning that is still streaming gets its own live card until anything else happens.
   const tail = blocks.at(-1);
   const trailing = lastMeaningful as LiveActivityEvent | null;
   if (isRunningState(turn) && trailing?.kind === 'reasoning' && tail?.kind === 'activity') {
@@ -472,7 +473,7 @@ export function buildLiveBlocks(turn: LiveTurn): TurnBlock[] {
     if (thought?.kind === 'thought') {
       tail.items.pop();
       if (tail.items.length === 0) blocks.pop();
-      blocks.push({ kind: 'thinking', key: `live-k-${blocks.length}`, text: thought.text });
+      blocks.push({ kind: 'thinking', key: `live-k-${blocks.length}`, text: thought.text, thoughtKey: thought.key });
     }
   }
   return blocks;
