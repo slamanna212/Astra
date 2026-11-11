@@ -37,7 +37,7 @@ export function BlockView({
     return <Markdown sessionId={context.sessionId}>{block.text}</Markdown>;
   }
   if (block.kind === 'parts') return <ContentParts parts={block.parts} />;
-  if (block.kind === 'thinking') return <ThinkingBlock text={block.text} />;
+  if (block.kind === 'thinking') return <ThinkingBlock text={block.text} thoughtKey={block.thoughtKey} />;
   return <ActivityGroup block={block} pendingIsRunning={pendingIsRunning} childSessions={context.childSessions} />;
 }
 

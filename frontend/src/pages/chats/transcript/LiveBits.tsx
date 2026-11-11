@@ -1,35 +1,51 @@
 import { Badge, Box, Collapse, Group, Loader, Text, UnstyledButton } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
-import { IconChevronRight, IconSparkles } from '@tabler/icons-react';
-import { useState } from 'react';
+import { IconBulb, IconChevronRight } from '@tabler/icons-react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { useRememberedDisclosure } from '../../../lib/disclosureMemory';
 import { useNow } from '../../../hooks/useNow';
 import type { LiveStatus } from '../../../lib/liveTurn';
 import classes from './Transcript.module.css';
 
-const PREVIEW_CHARS = 600;
-
 /**
- * Reasoning that is streaming right now. The newest lines show through a faded window so the
- * reader can see the model is working; the full text is one click away.
+ * Reasoning that is streaming right now: a collapsed card like any other step, because it usually
+ * scrolls by too fast to read. Opening it shows the live text, pinned to the newest line; the open
+ * state carries over to the saved "Thought" card the reasoning becomes.
  */
-export function ThinkingBlock({ text }: { text: string }) {
-  const [open, { toggle }] = useDisclosure(false);
-  const tail = text.length > PREVIEW_CHARS ? `…${text.slice(-PREVIEW_CHARS)}` : text;
+export function ThinkingBlock({ text, thoughtKey }: { text: string; thoughtKey: string }) {
+  const [open, toggle] = useRememberedDisclosure(`thought:${thoughtKey}`, false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const pinned = useRef(true);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [text, open]);
   return (
-    <Box className={classes.thinking} data-opened={open || undefined}>
+    <Box className={classes.toolRow} data-opened={open || undefined} data-status="running" data-kind="thinking">
       <UnstyledButton
-        className={classes.thinkingHeader}
+        className={classes.toolHeader}
         aria-expanded={open}
         aria-label="Thinking"
         onClick={(event) => { event.stopPropagation(); toggle(); }}
       >
-        <IconSparkles size={14} className={classes.thinkingIcon} />
-        <Text component="span" size="sm" fw={500} className={classes.shimmer}>Thinking</Text>
-        <IconChevronRight size={13} className={classes.chevron} data-opened={open || undefined} />
+        <span className={classes.toolIcon}><IconBulb size={15} stroke={1.8} /></span>
+        <Text component="span" className={`${classes.toolTitle} ${classes.shimmer}`}>Thinking</Text>
+        <span className={classes.toolMeta}>
+          <IconChevronRight size={13} className={classes.chevron} data-opened={open || undefined} />
+        </span>
       </UnstyledButton>
-      {!open && <div className={classes.thinkingPreview} aria-hidden>{tail}</div>}
       <Collapse expanded={open}>
-        {open && <Text size="sm" className={classes.thoughtBody}>{text}</Text>}
+        {open && (
+          <div
+            ref={bodyRef}
+            className={`${classes.thoughtBody} ${classes.thinkingLive}`}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+            }}
+          >
+            {text}
+          </div>
+        )}
       </Collapse>
     </Box>
   );

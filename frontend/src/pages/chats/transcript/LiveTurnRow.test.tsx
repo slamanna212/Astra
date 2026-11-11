@@ -34,9 +34,10 @@ describe('LiveTurnRow', () => {
     expect(screen.queryByText(/Waiting for response/)).not.toBeInTheDocument();
   });
 
-  it('shows streaming reasoning as a live preview that expands to the full text', () => {
+  it('shows streaming reasoning as a collapsed card that expands to the live text', () => {
     render(<LiveTurnRow context={context} turn={turn({ reasoning: 'secret plan', events: [{ kind: 'reasoning', text: 'secret plan' }] })} />, { route: '/chats/s1' });
     expect(screen.getByRole('status')).toHaveTextContent('Thinking');
+    expect(screen.queryByText(/secret plan/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Thinking' }));
     expect(screen.getAllByText(/secret plan/).length).toBeGreaterThan(0);
   });
