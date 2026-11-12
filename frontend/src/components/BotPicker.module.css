@@ -7,11 +7,13 @@
   border-radius: 999px;
   border: 1px solid var(--astra-border, var(--mantine-color-default-border));
   max-width: 190px;
+  min-width: 0;
   transition: background 120ms ease, border-color 120ms ease;
 }
 
-.trigger:hover {
-  background: var(--mantine-color-default-hover);
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--astra-hover, var(--mantine-color-default-hover));
 }
 
 .trigger[data-compact] {
@@ -32,6 +34,11 @@
 .chevron {
   color: var(--astra-text-dim, var(--mantine-color-dimmed));
   flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+
+.trigger[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
 }
 
 .iconWrap {

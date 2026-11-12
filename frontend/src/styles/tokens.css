@@ -110,6 +110,7 @@
 
   --astra-accent:        var(--astra-sand-3);
   --astra-accent-soft:   rgba(242,200,121,.15);
+  --astra-accent-ink:    #2A1E05;             /* text on a filled accent */
 
   --astra-ok:            var(--astra-status-ok-dark);
   --astra-ok-soft:       rgba(63,169,135,.16);
@@ -117,6 +118,7 @@
   --astra-warn-soft:     rgba(242,200,121,.15);
   --astra-danger:        var(--astra-status-danger-dark);
   --astra-danger-soft:   rgba(226,112,127,.16);
+  --astra-danger-ink:    #2A0B11;             /* text on a filled danger */
 
   /* borders for tinted status surfaces (tool pills, notice cards) */
   --astra-primary-border: rgba(43,182,196,.38);
@@ -174,6 +176,7 @@
 
   --astra-accent:        var(--astra-sand-8);
   --astra-accent-soft:   #FBF0DA;
+  --astra-accent-ink:    #FFFFFF;
 
   --astra-ok:            var(--astra-status-ok-light);
   --astra-ok-soft:       #E4F6EC;
@@ -181,6 +184,7 @@
   --astra-warn-soft:     #FBF0DA;
   --astra-danger:        var(--astra-status-danger-light);
   --astra-danger-soft:   #FCEAED;
+  --astra-danger-ink:    #FFFFFF;
 
   --astra-primary-border: #A2E2EA;  /* teal-2 */
   --astra-ok-border:      #97D9C4;  /* green-2 */

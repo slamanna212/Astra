@@ -1,6 +1,6 @@
-import { ActionIcon, Badge, Box, FileButton, Group, Menu, Text, Textarea, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, FileButton, Group, Loader, Menu, Text, Textarea, Tooltip, UnstyledButton } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
-import { useMediaQuery } from '@mantine/hooks';
+import { useElementSize, useMediaQuery } from '@mantine/hooks';
 import { IconArrowUp, IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCpu, IconFileUpload, IconPaperclip, IconPlayerStopFilled, IconSearch, IconSparkles, IconX } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { ChatModelOption, ReasoningEffort } from '../../api/chat';
@@ -10,12 +10,22 @@ import { ContextRing } from './ContextRing';
 import { EffortPickerModal, ModelPickerModal, type ModelGroup } from './ComposerPickers';
 import classes from './ChatComposer.module.css';
 
+/** The effort menu opens from the right end of the pill, so it grows from that corner. */
+const EFFORT_MENU_TRANSITION = {
+  in: { opacity: 1, transform: 'none' },
+  out: { opacity: 0, transform: 'translateY(4px) scale(.98)' },
+  transitionProperty: 'opacity, transform',
+  common: { transformOrigin: 'bottom right' },
+};
+
 const REASONING_EFFORTS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const BUSY_MODE_LABELS: Record<BusyTurnMode, string> = {
   queue: 'Queue',
   interrupt: 'Interrupt',
   steer: 'Steer',
 };
+
+let nextUploadId = 0;
 
 function groupModels(models: ChatModelOption[], providerOrder: string[]): ModelGroup[] {
   const byProvider = new Map<string, ChatModelOption[]>();
@@ -93,15 +103,20 @@ export function ChatComposer({
   contextEstimated: boolean;
 }) {
   const [attachments, setAttachments] = useState<string[]>([]);
-  const [uploadsInFlight, setUploadsInFlight] = useState(0);
-  const uploading = uploadsInFlight > 0;
+  // Names of files still uploading, shown as grey chips until each lands.
+  const [uploadsInFlight, setUploadsInFlight] = useState<{ id: number; name: string }[]>([]);
+  const uploading = uploadsInFlight.length > 0;
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [menuOpened, setMenuOpened] = useState(false);
   const [filter, setFilter] = useState('');
   const [expandedGroup, setExpandedGroup] = useState<string | null | undefined>(undefined);
   // On a phone the model and effort pills become icons that open full pickers, so the whole
   // control row fits on one line.
-  const compact = useMediaQuery('(max-width: 48em)', undefined, { getInitialValueInEffect: false }) ?? false;
+  // The same compact controls take over when the card itself gets narrow (a wide session list on a
+  // laptop), so the control row never overflows.
+  const { ref: cardRef, width: cardWidth } = useElementSize<HTMLDivElement>();
+  const phone = useMediaQuery('(max-width: 48em)', undefined, { getInitialValueInEffect: false }) ?? false;
+  const compact = phone || (cardWidth > 0 && cardWidth < 520);
   const [sheet, setSheet] = useState<'model' | 'effort' | null>(null);
   // On a touchscreen keyboard Enter adds a new line and the button sends; with a real keyboard
   // Enter sends and Shift+Enter adds a new line.
@@ -158,11 +173,12 @@ export function ChatComposer({
     if (files.length === 0) return;
     setUploadError(null);
     for (const file of files) {
-      setUploadsInFlight((count) => count + 1);
+      const upload = { id: nextUploadId++, name: file.name };
+      setUploadsInFlight((items) => [...items, upload]);
       void onAttach(file)
         .then((path) => setAttachments((items) => (items.includes(path) ? items : [...items, path])))
         .catch((error: unknown) => setUploadError(error instanceof Error ? error.message : 'Upload failed'))
-        .finally(() => setUploadsInFlight((count) => count - 1));
+        .finally(() => setUploadsInFlight((items) => items.filter((item) => item.id !== upload.id)));
     }
   };
   const submit = async () => {
@@ -192,9 +208,19 @@ export function ChatComposer({
   // While running, the action button is Stop until something is typed, then it sends via the busy-turn mode from settings.
   const showStop = running && !draft.trim() && attachments.length === 0;
   const actionLabel = showStop ? 'Stop' : running ? `${BUSY_MODE_LABELS[busyTurnMode]} message` : 'Send message';
+  const hasContent = !!draft.trim() || attachments.length > 0;
+  const sendState = showStop ? 'stop' : running ? 'steer' : hasContent ? 'ready' : 'empty';
+
+  // Compact pops back in when a turn ends, not on every render.
+  const [prevRunning, setPrevRunning] = useState(running);
+  const [compactEntering, setCompactEntering] = useState(false);
+  if (prevRunning !== running) {
+    setPrevRunning(running);
+    setCompactEntering(prevRunning && !running);
+  }
 
   return (
-    <Box className={classes.wrapper}>
+    <Box className={classes.wrapper} ref={cardRef}>
       <Dropzone
         onDrop={handleAttach}
         multiple
@@ -204,6 +230,7 @@ export function ChatComposer({
         unstyled
         classNames={{ root: classes.card, inner: classes.cardInner }}
         data-astra-composer
+        data-running={running || undefined}
       >
         <Dropzone.Accept>
           <Box className={classes.dropOverlay}>
@@ -228,21 +255,27 @@ export function ChatComposer({
             }
           }}
         />
-        {attachments.length > 0 && (
+        {(attachments.length > 0 || uploading) && (
           <Group gap={6}>
             {attachments.map((path) => (
-              <Badge key={path} variant="light" rightSection={<IconX size={11} onClick={() => setAttachments((items) => items.filter((item) => item !== path))} />}>
+              <Badge key={path} variant="light" className={classes.attachmentChip} rightSection={<IconX size={11} onClick={() => setAttachments((items) => items.filter((item) => item !== path))} />}>
                 {path}
               </Badge>
+            ))}
+            {uploadsInFlight.map((upload) => (
+              <span key={upload.id} className={`${classes.attachmentChip} ${classes.uploadChip}`}>
+                <Loader size={9} type="oval" color="var(--astra-primary)" />
+                Uploading {upload.name}
+              </span>
             ))}
           </Group>
         )}
         {uploadError && <Text c="red" fz="xs">{uploadError}</Text>}
-        <Group gap={compact ? 4 : 8} wrap={compact ? 'nowrap' : 'wrap'} className={classes.controlRow}>
+        <Group gap={compact ? 4 : 8} wrap="nowrap" className={classes.controlRow}>
           <FileButton multiple onChange={handleAttach}>
             {(props) => (
               <Tooltip label="Attach a workspace file">
-                <ActionIcon {...props} variant="subtle" size={30} radius={6} aria-label="Attach file" loading={uploading} c={running ? 'var(--astra-border-strong)' : 'var(--astra-text-dim)'}>
+                <ActionIcon {...props} variant="subtle" size={30} radius={6} aria-label="Attach file" loading={uploading} className={classes.attachButton} c={running ? 'var(--astra-border-strong)' : 'var(--astra-text-dim)'}>
                   <IconPaperclip size={17} />
                 </ActionIcon>
               </Tooltip>
@@ -296,7 +329,7 @@ export function ChatComposer({
           <Box className={classes.pillGroup}>
           <Menu opened={menuOpened} onChange={(opened) => (opened ? openMenu() : closeMenu())} position="top-start" offset={8} radius="md" trapFocus>
             <Menu.Target>
-              <button type="button" className={classes.groupTrigger} aria-label="Model" disabled={running}>
+              <button type="button" className={`${classes.groupTrigger} ${classes.modelTrigger}`} aria-label="Model" disabled={running}>
                 <span className={classes.pillModel}>{model ?? '—'}</span>
                 <IconChevronDown size={13} className={classes.pillChevron} />
               </button>
@@ -323,11 +356,12 @@ export function ChatComposer({
                   return (
                     <Box key={groupKey}>
                       <button type="button" className={classes.groupHeader} aria-expanded={isExpanded} onClick={() => toggleGroup(group.provider)}>
-                        <span className={classes.groupChevron}>{isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</span>
+                        <span className={classes.groupChevron}><IconChevronRight size={14} /></span>
                         <span className={`astraLabel ${classes.groupLabel}`}>{groupKey}</span>
                         {isActive ? <span className={classes.activeDot} /> : <span className={classes.groupCount}>{group.models.length}</span>}
                       </button>
                       {isExpanded && (
+                        <div className={classes.groupRows}>
                         <Menu.RadioGroup
                           value={group.provider === (provider ?? null) ? model : null}
                           onChange={(name) => selectModel(name, group.provider)}
@@ -348,6 +382,7 @@ export function ChatComposer({
                             );
                           })}
                         </Menu.RadioGroup>
+                        </div>
                       )}
                       {index < visibleGroups.length - 1 && <Menu.Divider className={classes.groupDivider} />}
                     </Box>
@@ -362,7 +397,7 @@ export function ChatComposer({
             </Menu.Dropdown>
           </Menu>
 
-          <Menu position="top-start" offset={8} radius="md">
+          <Menu position="top-end" offset={8} radius="md" transitionProps={{ transition: EFFORT_MENU_TRANSITION, duration: 150, timingFunction: 'cubic-bezier(.2,.6,.3,1)' }}>
             <Menu.Target>
               <button type="button" className={`${classes.groupTrigger} ${classes.effortTrigger}`} aria-label="Reasoning effort" disabled={running}>
                 <span className={classes.pillModel}>
@@ -396,6 +431,8 @@ export function ChatComposer({
                 size={30}
                 radius={6}
                 aria-label="Compact context"
+                className={classes.compactButton}
+                data-entering={compactEntering || undefined}
                 onClick={() => void onCompact(null)}
               >
                 <IconSparkles size={16} />
@@ -404,16 +441,17 @@ export function ChatComposer({
           )}
           <ContextRing tokens={contextTokens} contextLength={contextLength} estimated={contextEstimated} />
           <Tooltip label={actionLabel}>
-            <ActionIcon
-              size={32}
-              radius="xl"
-              variant="filled"
-              color={showStop ? 'red' : running ? 'yellow' : undefined}
+            <UnstyledButton
+              className={classes.sendButton}
+              data-state={sendState}
               onClick={() => void (showStop ? onStop() : submit())}
               aria-label={actionLabel}
             >
-              {showStop ? <IconPlayerStopFilled size={14} /> : <IconArrowUp size={18} stroke={2.2} />}
-            </ActionIcon>
+              {/* Keyed by icon so it pops in each time it changes. */}
+              {showStop
+                ? <IconPlayerStopFilled key="stop" size={14} />
+                : <IconArrowUp key="send" size={18} stroke={2.2} />}
+            </UnstyledButton>
           </Tooltip>
         </Group>
       </Dropzone>
