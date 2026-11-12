@@ -3,6 +3,7 @@ import {
   IconAlertTriangle,
   IconBookmark,
   IconBulb,
+  IconCheck,
   IconChevronRight,
   IconEdit,
   IconFile,
@@ -99,6 +100,9 @@ export const ToolRow = memo(function ToolRow({
   const full = item.preview || toolArgumentPreview(item.arguments);
   const duration = formatToolDuration(item.duration);
   const runningChildren = item.subagents.filter((agent) => agent.status === 'running').length;
+  // The check pops only for a call this row watched finish, not for one that was already done.
+  const [sawRunning, setSawRunning] = useState(running);
+  if (running && !sawRunning) setSawRunning(true);
   if (!running) runningSince.delete(item.key);
   return (
     <Box className={classes.toolRow} data-opened={open || undefined} data-status={status} data-entering={entering || undefined}>
@@ -128,7 +132,14 @@ export const ToolRow = memo(function ToolRow({
             : duration && <span className={classes.toolDuration}>{duration}</span>}
           {running
             ? <Loader size={12} type="oval" color="var(--astra-primary)" aria-label={STATUS_LABEL.running} />
-            : <VisuallyHidden>{STATUS_LABEL[status]}</VisuallyHidden>}
+            : (
+              <>
+                {status === 'done'
+                  ? <span className={classes.doneMark} data-entering={(live && sawRunning) || undefined} aria-hidden><IconCheck size={13} stroke={2.2} /></span>
+                  : <span className={classes.markSpacer} aria-hidden />}
+                <VisuallyHidden>{STATUS_LABEL[status]}</VisuallyHidden>
+              </>
+            )}
           <IconChevronRight size={13} className={classes.chevron} data-opened={open || undefined} />
         </span>
       </UnstyledButton>
@@ -154,6 +165,7 @@ export function ThoughtRow({ item, live = false }: { item: ThoughtItem; live?: b
         <Text component="span" className={classes.toolTitle}>Thought</Text>
         {!open && <Text component="span" className={classes.thoughtPreview}>{firstLine(item.text)}</Text>}
         <span className={classes.toolMeta}>
+          <span className={classes.markSpacer} aria-hidden />
           <IconChevronRight size={13} className={classes.chevron} data-opened={open || undefined} />
         </span>
       </UnstyledButton>
