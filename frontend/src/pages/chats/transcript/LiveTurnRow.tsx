@@ -1,5 +1,5 @@
 import { Box, Button, Group, Stack, Text } from '@mantine/core';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { deriveLiveStatus, type LiveTurn } from '../../../lib/liveTurn';
 import { buildLiveBlocks, type ActivityBlock, type TurnBlock } from '../../../lib/turnBlocks';
 import { AssistantFrame, BlockView, type BlockContext } from './AssistantBlockRow';
@@ -41,11 +41,14 @@ export function LiveTurnRow({
     : deriveLiveStatus(turn, liveBlocks);
   const active = turn.state === 'running' || turn.state === 'sending' || turn.state === 'reconnecting';
   const lastIndex = blocks.length - 1;
+  // The bubble rises in only when it first appears as the message is sent. Returning to a chat
+  // mid-turn (or the virtualizer remounting the row) shows it in place.
+  const [bubbleEntering] = useState(() => turn.state === 'sending');
   return (
     <Stack gap="sm" aria-label="Current turn">
       {turn.userText !== null && (
         <Group justify="flex-end">
-          <Box className={classes.userBubble} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{turn.userText}</Box>
+          <Box className={`${classes.userBubble} ${classes.userText}`} data-entering={bubbleEntering || undefined}>{turn.userText}</Box>
         </Group>
       )}
       <AssistantFrame avatar={avatar}>
