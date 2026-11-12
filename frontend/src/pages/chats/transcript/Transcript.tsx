@@ -1,4 +1,4 @@
-import { Alert, Center, Loader, Text, UnstyledButton } from '@mantine/core';
+import { Alert, Center, Loader, UnstyledButton } from '@mantine/core';
 import { IconArrowDown } from '@tabler/icons-react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -30,6 +30,7 @@ import { isLiveAnswerCanonical, type LiveTurn } from '../../../lib/liveTurn';
 import { LiveTurnRow } from './LiveTurnRow';
 import { AssistantBlockRow, type BlockContext } from './AssistantBlockRow';
 import { SkillCommandResult } from './SkillCommandResult';
+import { EmptyChat } from './EmptyChat';
 import classes from './Transcript.module.css';
 
 interface PageParam {
@@ -382,13 +383,7 @@ export const Transcript = memo(function Transcript({
     );
   }
   if (messages.length === 0 && skillCommands.length === 0 && !liveTurn) {
-    return (
-      <Center h="100%">
-        <Text c="dimmed" size="sm">
-          No messages in this conversation.
-        </Text>
-      </Center>
-    );
+    return <EmptyChat />;
   }
 
   return (
