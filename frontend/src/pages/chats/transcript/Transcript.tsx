@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Center, Loader, Text, Tooltip } from '@mantine/core';
+import { Alert, Center, Loader, Text, UnstyledButton } from '@mantine/core';
 import { IconArrowDown } from '@tabler/icons-react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -46,7 +46,7 @@ type Row =
 
 const NEAR_EDGE_PX = 400;
 /** Shows or hides "Jump to latest". */
-const NEAR_BOTTOM_PX = 200;
+const NEAR_BOTTOM_PX = 40;
 /** How close to the real bottom the reader must come for the stream to start following again. */
 const REFOLLOW_PX = 24;
 /** A touch fling keeps scrolling after the finger lifts; anchoring would cancel it. */
@@ -475,18 +475,12 @@ export const Transcript = memo(function Transcript({
         })}
       </div>
       {!nearBottom && (
-        <Tooltip label="Jump to latest">
-          <ActionIcon
-            className={classes.jumpToLatest}
-            radius="xl"
-            size="lg"
-            variant="filled"
-            onClick={jumpToLatest}
-            aria-label="Jump to latest"
-          >
-            <IconArrowDown size={18} />
-          </ActionIcon>
-        </Tooltip>
+        <div className={classes.jumpDock}>
+          <UnstyledButton className={classes.jumpToLatest} onClick={jumpToLatest} aria-label="Jump to latest">
+            <IconArrowDown size={13} stroke={2} />
+            <span>{liveVisible && running ? 'New activity' : 'Jump to latest'}</span>
+          </UnstyledButton>
+        </div>
       )}
     </div>
   );

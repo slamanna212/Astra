@@ -51,6 +51,7 @@ import { Transcript } from './transcript/Transcript';
 import { ChatComposer } from './ChatComposer';
 import { ApprovalCard, ClarifyCard } from './transcript/InlinePrompts';
 import type { LiveTurn } from '../../lib/liveTurn';
+import classes from './SessionPane.module.css';
 
 const EMPTY_SKILL_COMMANDS: SkillCommandExchange[] = [];
 
@@ -851,9 +852,11 @@ export default function SessionPane({ sessionId: sessionIdProp }: { sessionId?: 
           {s.pinned && (
             <IconStarFilled size={14} color="var(--astra-accent)" style={{ flexShrink: 0 }} aria-label="Pinned" />
           )}
-          <Text fz={14} fw={600} truncate="end" style={{ minWidth: 0, flex: 1 }}>
+          <Text fz={14} fw={600} truncate="end" style={{ minWidth: 0, flex: running ? '0 1 auto' : 1 }}>
             {sessionTitle(s)}
           </Text>
+          {running && <span className={classes.runningPill}>Running</span>}
+          {running && <Box style={{ flex: 1 }} />}
           {connection === 'reconnecting' && (
             <Tooltip label={`Retry connection now (attempt ${reconnectAttempt}/${CHAT_RECONNECT_DELAYS_MS.length})`}>
               <ActionIcon variant="subtle" color="sand" aria-label="Retry connection" onClick={() => retryNowRef.current()}>

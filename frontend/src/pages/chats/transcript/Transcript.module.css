@@ -87,12 +87,15 @@
   outline: none;
 }
 
+/* The footer drops 2px into place after a short delay, so sweeping the pointer across the
+   transcript does not flicker every row. It hides immediately. */
 .messageFooter {
   min-height: 22px;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 0s 140ms;
 }
 
 .messageInteractive:hover .messageFooter,
@@ -101,6 +104,8 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
+  transform: none;
+  transition-delay: 60ms, 60ms, 0s;
 }
 
 .highlighted {
@@ -545,9 +550,50 @@
   .toolHeader { min-height: 44px; }
 }
 
+/* Centred pill over the composer. Sticky inside the scroller so it stays put while the list scrolls. */
+.jumpDock {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  z-index: 2;
+}
+
 .jumpToLatest {
   position: absolute;
-  bottom: var(--mantine-spacing-md);
-  right: var(--mantine-spacing-md);
-  z-index: 2;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--astra-border-strong);
+  border-radius: var(--astra-radius-pill);
+  background: var(--astra-surface);
+  color: var(--astra-text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--astra-float-shadow);
+  animation: jumpIn 200ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+.jumpToLatest:hover {
+  border-color: var(--astra-primary-border);
+}
+
+.jumpToLatest:focus-visible {
+  outline: none;
+  box-shadow: var(--astra-float-shadow), var(--astra-focus-ring);
+}
+
+@keyframes jumpIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jumpToLatest { animation: none; }
+  .messageFooter { transform: none; }
 }
