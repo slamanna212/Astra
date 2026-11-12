@@ -49,14 +49,7 @@ export function UserMessage({
       <Stack gap={3} align="flex-end" className={classes.userMessage}>
         <Stack gap={4} className={classes.userBubble}>
           {text && (
-            <Text
-              style={{
-                fontSize: 'var(--astra-chat-font-size, 14px)',
-                whiteSpace: 'pre-wrap',
-                overflowWrap: 'anywhere',
-                lineHeight: 1.55,
-              }}
-            >
+            <Text className={classes.userText} style={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit' }}>
               {text}
             </Text>
           )}

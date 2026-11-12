@@ -1,4 +1,4 @@
-import { Badge, Box, Collapse, Group, Loader, Text, UnstyledButton } from '@mantine/core';
+import { Badge, Box, Collapse, Group, Text, UnstyledButton } from '@mantine/core';
 import { IconBulb, IconChevronRight } from '@tabler/icons-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useRememberedDisclosure } from '../../../lib/disclosureMemory';
@@ -70,11 +70,11 @@ export function LiveStatusLine({ status, startedAt }: { status: LiveStatus; star
   }
   return (
     <Group gap={8} className={classes.liveStatus} wrap="nowrap">
-      <Loader type="dots" size="xs" />
-      <Text component="span" size="xs" c="dimmed" role="status" aria-live="polite">{status.label}</Text>
-      <Text component="span" size="xs" c="dimmed" ff="monospace" aria-hidden>
+      <span className={classes.liveDots} aria-hidden><span /><span /><span /></span>
+      <span role="status" aria-live="polite">{status.label}</span>
+      <span className={classes.liveElapsed} aria-hidden>
         {formatElapsed(now - (startedAt ?? mountedAt))}
-      </Text>
+      </span>
     </Group>
   );
 }

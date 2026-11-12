@@ -1,0 +1,24 @@
+/* Shown next to the title while a turn runs. */
+.runningPill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--astra-radius-pill);
+  background: var(--astra-primary-soft);
+  color: var(--astra-primary-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  animation: pillPop 200ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+@keyframes pillPop {
+  from { opacity: 0; transform: scale(.6); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runningPill { animation: none; }
+}

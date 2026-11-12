@@ -134,11 +134,14 @@ const SessionRow = memo(function SessionRow({
   active,
   now,
   runState,
+  entering = false,
 }: {
   session: SessionSummary;
   active: boolean;
   now: number;
   runState?: RunState;
+  /** Just created here: slides in at the top of the list. */
+  entering?: boolean;
 }) {
   const lastActivity = session.last_activity_at ?? session.started_at;
   const showStatus = session.archived || session.hidden;
@@ -150,6 +153,7 @@ const SessionRow = memo(function SessionRow({
       // Pixel height (not a Mantine rem prop) so it matches the virtualizer's pixel math.
       style={{ height: SESSION_ROW_HEIGHT }}
       data-active={active || undefined}
+      data-new={entering || undefined}
       aria-current={active ? 'page' : undefined}
       data-testid="session-row"
     >
@@ -260,9 +264,14 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
   const runStates = useActiveTurns();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // The chat just created here slides into the list once; cleared after the animation so a
+  // virtualizer remount does not replay it.
+  const [enteringId, setEnteringId] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: () => createSession({}),
     onSuccess: (session) => {
+      setEnteringId(session.id);
+      window.setTimeout(() => setEnteringId((id) => (id === session.id ? null : id)), 1500);
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
       navigate(`/chats/${encodeURIComponent(session.id)}`);
     },
@@ -419,7 +428,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
             clearable
             style={{ flex: 1, minWidth: 0 }}
           />
-          <Button leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
+          <Button variant="default" className={classes.newChat} leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
             New chat
           </Button>
         </Group>
@@ -487,6 +496,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
                       active={row.session.id === selectedId}
                       now={now}
                       runState={runStates.get(row.session.id)}
+                      entering={row.session.id === enteringId}
                     />
                   ) : row.kind === 'child' ? (
                     <SessionChildRow session={row.session} active={row.session.id === selectedId} />

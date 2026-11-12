@@ -25,11 +25,32 @@
 .userBubble {
   max-width: 70%;
   min-width: 0;
-  background: var(--astra-primary);
-  color: var(--astra-primary-ink);
-  border-radius: 10px 10px 2px 10px;
+  background: var(--astra-primary-soft);
+  color: var(--astra-text);
+  border: 1px solid var(--astra-primary-border);
+  border-radius: 14px 14px 4px 14px;
   padding: 10px 14px;
-  box-shadow: var(--astra-float-shadow);
+  box-shadow: none;
+  font-size: var(--astra-chat-font-size, 14px);
+  line-height: 1.6;
+  text-wrap: pretty;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+/* User text is plain, so its own line breaks and spacing are kept. */
+.userText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Only a bubble sent while the turn is live rises in; saved history never animates. */
+.userBubble[data-entering] {
+  animation: msgRise 260ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+@keyframes msgRise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
 .userMessage {
@@ -66,12 +87,15 @@
   outline: none;
 }
 
+/* The footer drops 2px into place after a short delay, so sweeping the pointer across the
+   transcript does not flicker every row. It hides immediately. */
 .messageFooter {
   min-height: 22px;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 0s 140ms;
 }
 
 .messageInteractive:hover .messageFooter,
@@ -80,6 +104,8 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
+  transform: none;
+  transition-delay: 60ms, 60ms, 0s;
 }
 
 .highlighted {
@@ -102,7 +128,11 @@
 
 /* A new exchange starts with a little air and a hairline, so turns read as separate. */
 .rowWrapper[data-user] {
-  padding-top: 18px;
+  padding-top: 22px;
+}
+
+.rowWrapper[data-user][data-index='0'] {
+  padding-top: 14px;
 }
 
 .rowWrapper[data-user] .rowInner {
@@ -186,16 +216,11 @@
 
 .toolRow[data-entering],
 .noticeCard[data-entering] {
-  animation: rowIn 260ms ease-out both;
+  animation: msgRise 240ms cubic-bezier(.2,.6,.3,1) both;
 }
 
 .noticeCard[data-entering] {
   animation-duration: 360ms;
-}
-
-@keyframes rowIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
 }
 
 .toolHeader {
@@ -250,16 +275,45 @@
   font-size: 11.5px;
 }
 
+/* Fixed-width meta slot: the chevron and title do not shift when a live counter becomes a
+   shorter duration. */
 .toolMeta {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex: none;
+  min-width: 64px;
   margin-left: auto;
   padding-left: 4px;
 }
 
+/* A finished call settles with a check that pops in where the spinner was. */
+.doneMark {
+  display: inline-flex;
+  flex: none;
+  color: var(--astra-ok);
+}
+
+.doneMark[data-entering] {
+  animation: pop 200ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+/* Holds the check's place on thoughts and failed calls so every pill lines up. */
+.markSpacer {
+  display: inline-block;
+  flex: none;
+  width: 13px;
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(.6); }
+  to { opacity: 1; transform: none; }
+}
+
 .toolDuration {
+  min-width: 34px;
+  text-align: right;
   font-family: var(--astra-font-mono);
   font-size: 11px;
   color: var(--astra-text-dim);
@@ -426,6 +480,35 @@
 
 .liveStatus {
   min-height: 22px;
+  font-size: 12px;
+  color: var(--astra-text-dim);
+}
+
+.liveDots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.liveDots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--astra-primary);
+  animation: dot 1.2s ease-in-out infinite;
+}
+
+.liveDots span:nth-child(2) { animation-delay: .15s; }
+.liveDots span:nth-child(3) { animation-delay: .3s; }
+
+@keyframes dot {
+  0%, 80%, 100% { opacity: .25; }
+  40% { opacity: 1; }
+}
+
+.liveElapsed {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .promptCard {
@@ -449,7 +532,10 @@
   .shimmer { animation: none; }
   .shimmer { color: var(--astra-text-dim); background: none; }
   .toolRow[data-entering],
-  .noticeCard[data-entering] { animation: none; }
+  .noticeCard[data-entering],
+  .userBubble[data-entering],
+  .doneMark[data-entering] { animation: none; }
+  .liveDots span { animation: none; opacity: .7; }
   .toolRow,
   .toolIcon { transition-duration: 0ms; }
 }
@@ -464,9 +550,82 @@
   .toolHeader { min-height: 44px; }
 }
 
+/* Centred pill over the composer. Sticky inside the scroller so it stays put while the list scrolls. */
+.jumpDock {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  z-index: 2;
+}
+
 .jumpToLatest {
   position: absolute;
-  bottom: var(--mantine-spacing-md);
-  right: var(--mantine-spacing-md);
-  z-index: 2;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--astra-border-strong);
+  border-radius: var(--astra-radius-pill);
+  background: var(--astra-surface);
+  color: var(--astra-text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--astra-float-shadow);
+  animation: jumpIn 200ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+.jumpToLatest:hover {
+  border-color: var(--astra-primary-border);
+}
+
+.jumpToLatest:focus-visible {
+  outline: none;
+  box-shadow: var(--astra-float-shadow), var(--astra-focus-ring);
+}
+
+@keyframes jumpIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jumpToLatest { animation: none; }
+  .messageFooter { transform: none; }
+}
+
+/* ---- Empty conversation ---- */
+
+.emptyChat {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: var(--astra-recess-bg);
+}
+
+.emptyChat > * {
+  animation: msgRise 320ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+.emptyChat > :nth-child(2) { animation-delay: 60ms; }
+.emptyChat > :nth-child(3) { animation-delay: 120ms; }
+
+.emptyPrompt {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--astra-text);
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emptyChat > * { animation: none; }
 }

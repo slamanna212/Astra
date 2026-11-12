@@ -50,9 +50,14 @@
   min-width: 8px;
   min-height: 8px;
   border-radius: 50%;
-  background: var(--mantine-color-teal-5);
-  border: 2px solid var(--mantine-color-body);
+  box-sizing: border-box;
+  background: var(--astra-primary, var(--mantine-color-teal-5));
+  border: 2px solid var(--astra-surface, var(--mantine-color-body));
   animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy { animation: none; }
 }
 
 @keyframes pulse {

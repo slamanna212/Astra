@@ -103,7 +103,7 @@ describe('Transcript', () => {
       return jsonResponse({ items: [], has_older: false, has_newer: false, oldest_id: null, newest_id: null });
     });
     render(<Transcript sessionId="s1" />, { route: '/chats/s1' });
-    expect(await screen.findByText('No messages in this conversation.')).toBeInTheDocument();
+    expect(await screen.findByText(/What should .+ work on\?/)).toBeInTheDocument();
   });
 
   it('shows the optimistic exchange in the transcript before canonical messages exist', async () => {

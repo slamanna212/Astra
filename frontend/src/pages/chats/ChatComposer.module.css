@@ -27,13 +27,40 @@
   margin: 0 auto;
   background: var(--astra-surface);
   border: 1px solid var(--astra-border-strong);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 12px 12px 10px;
   position: relative;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* The focus ring belongs to the card, not the textarea. */
+.card:focus-within {
+  border-color: var(--astra-primary);
+  box-shadow: var(--astra-focus-ring);
 }
 
 .card[data-accept] {
   border-color: var(--astra-primary);
+  box-shadow: none;
+}
+
+/* A 1px scan along the top edge says the turn is live without pulling the eye off the transcript. */
+.card[data-running]::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--astra-primary), transparent) no-repeat;
+  background-size: 40% 100%;
+  animation: scan 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes scan {
+  from { background-position: -40% 0; }
+  to { background-position: 140% 0; }
 }
 
 .cardInner {
@@ -47,7 +74,7 @@
   position: absolute;
   inset: 0;
   z-index: 2;
-  border-radius: 9px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,6 +82,38 @@
   color: var(--astra-primary);
   background: color-mix(in srgb, var(--astra-surface) 88%, var(--astra-primary));
   pointer-events: none;
+  animation: fadeIn 150ms ease-out both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(.6); }
+  to { opacity: 1; transform: none; }
+}
+
+.attachmentChip {
+  max-width: 100%;
+  animation: pop 180ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+.uploadChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--astra-radius-pill);
+  background: var(--astra-hover);
+  color: var(--astra-text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .textarea {
@@ -70,13 +129,89 @@
 
 .controlRow {
   align-items: center;
-  row-gap: 8px;
+  min-width: 0;
+}
+
+.attachButton {
+  flex: none;
+}
+
+/* ---- compact, send ---- */
+
+.compactButton {
+  flex: none;
+  color: var(--astra-primary);
+}
+
+.compactButton:hover {
+  background: var(--astra-primary-soft);
+}
+
+.compactButton[data-entering] {
+  animation: pop 180ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+.sendButton {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--astra-radius-pill);
+  border: 1px solid var(--send-border);
+  background: var(--send-bg);
+  color: var(--send-fg);
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+
+.sendButton:active {
+  transform: scale(.9);
+}
+
+.sendButton:focus-visible {
+  outline: none;
+  box-shadow: var(--astra-focus-ring);
+}
+
+.sendButton svg {
+  animation: pop 160ms cubic-bezier(.2,.6,.3,1) both;
+}
+
+.sendButton[data-state='empty'] {
+  --send-bg: transparent;
+  --send-border: var(--astra-border);
+  --send-fg: var(--astra-text-disabled);
+}
+
+.sendButton[data-state='ready'] {
+  --send-bg: var(--astra-primary);
+  --send-border: var(--astra-primary);
+  --send-fg: var(--astra-primary-ink);
+}
+
+.sendButton[data-state='ready']:hover {
+  --send-bg: var(--astra-primary-hover);
+  --send-border: var(--astra-primary-hover);
+}
+
+.sendButton[data-state='stop'] {
+  --send-bg: var(--astra-danger);
+  --send-border: var(--astra-danger);
+  --send-fg: var(--astra-danger-ink);
+}
+
+.sendButton[data-state='steer'] {
+  --send-bg: var(--astra-accent);
+  --send-border: var(--astra-accent);
+  --send-fg: var(--astra-accent-ink);
 }
 
 /* ---- model + effort: one borderless control, two segments ---- */
 
 .pillGroup {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   height: 30px;
   min-width: 0;
@@ -97,12 +232,13 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  transition: background var(--astra-transition);
+  transition: background-color var(--astra-transition), opacity 160ms ease;
   font: inherit;
   font-weight: 600;
 }
 
-.groupTrigger:hover:not(:disabled) {
+.groupTrigger:hover:not(:disabled),
+.groupTrigger[aria-expanded='true'] {
   background: var(--astra-divider);
 }
 
@@ -111,11 +247,18 @@
   cursor: default;
 }
 
+/* The model name gives way (and ellipsizes) first; the effort label always stays whole. */
+.modelTrigger {
+  flex: 0 1 auto;
+}
+
 .groupTrigger + .groupTrigger {
   border-left: 1px solid var(--astra-border);
 }
 
 .effortTrigger {
+  flex: none;
+  max-width: none;
   font-weight: 400;
   color: var(--astra-text-dim);
 }
@@ -132,6 +275,11 @@
 .pillChevron {
   color: var(--astra-text-dim);
   flex-shrink: 0;
+  transition: transform 120ms ease;
+}
+
+.groupTrigger[aria-expanded='true'] .pillChevron {
+  transform: rotate(180deg);
 }
 
 /* ---- model menu ---- */
@@ -183,6 +331,15 @@
   height: 18px;
   flex-shrink: 0;
   color: var(--astra-text-dim);
+  transition: transform 160ms cubic-bezier(.2,.6,.3,1);
+}
+
+.groupHeader[aria-expanded='true'] .groupChevron {
+  transform: rotate(90deg);
+}
+
+.groupRows {
+  animation: fadeIn 160ms ease-out both;
 }
 
 .groupLabel {
@@ -244,6 +401,7 @@
 .checkIcon {
   color: var(--astra-primary);
   flex-shrink: 0;
+  animation: pop 180ms cubic-bezier(.2,.6,.3,1) both;
 }
 
 .hiddenIndicator {
@@ -304,4 +462,15 @@
 
 .sheetOption[data-selected] {
   background: var(--astra-primary-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card[data-running]::before,
+  .dropOverlay,
+  .attachmentChip,
+  .compactButton[data-entering],
+  .sendButton svg,
+  .groupRows,
+  .checkIcon { animation: none; }
+  .sendButton:active { transform: none; }
 }

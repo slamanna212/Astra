@@ -2,29 +2,41 @@
   min-width: 0;
 }
 
-/* A caret at the end of whatever is being written. */
+/* Newly streamed words fade in instead of popping, which removes most of the jitter. */
+.tail [data-new] {
+  animation: tokenIn 180ms ease-out both;
+}
+
+@keyframes tokenIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* A thin caret at the end of whatever is being written, pulsing rather than hard-blinking. */
 .tail > div > :last-child:not(pre)::after,
 .tail > div > :is(ul, ol):last-child > li:last-child::after {
   content: '';
   display: inline-block;
-  width: 7px;
-  height: 1.05em;
+  width: 2px;
+  height: 1.1em;
   margin-left: 2px;
   vertical-align: text-bottom;
   border-radius: 1px;
   background: var(--astra-primary);
-  animation: blink 1s steps(2, start) infinite;
+  animation: caret 1.1s ease-in-out infinite;
 }
 
 .tail > div > :is(ul, ol):last-child::after {
   content: none;
 }
 
-@keyframes blink {
-  to { visibility: hidden; }
+@keyframes caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .2; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tail [data-new] { animation: none; }
   .tail > div > :last-child::after,
   .tail > div > :is(ul, ol):last-child > li:last-child::after { animation: none; }
 }

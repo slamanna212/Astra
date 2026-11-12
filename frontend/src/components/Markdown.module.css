@@ -23,13 +23,17 @@
 .root :global(code) {
   font-family: var(--astra-font-mono);
   font-size: calc(var(--astra-chat-font-size, 14px) * 0.89);
+  color: var(--astra-text);
   background-color: var(--astra-surface-sunk);
+  border: 1px solid var(--astra-divider);
   border-radius: var(--astra-radius-tight);
   padding: 1px 5px;
 }
 
 .root :global(pre code) {
+  color: inherit;
   background: none;
+  border: 0;
   padding: 0;
   border-radius: 0;
 }

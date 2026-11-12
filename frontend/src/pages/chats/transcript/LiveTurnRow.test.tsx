@@ -25,7 +25,8 @@ describe('LiveTurnRow', () => {
     const text = 'Here is **bold** text.\n\n- one\n- tw';
     render(<LiveTurnRow context={context} turn={turn({ answer: text, events: [{ kind: 'assistant', text }] })} />, { route: '/chats/s1' });
     expect(screen.getByText('bold').tagName).toBe('STRONG');
-    expect(screen.getByText('tw').tagName).toBe('LI');
+    // Streamed words sit in fade-in spans inside the list item.
+    expect(screen.getByText('tw').closest('li')).not.toBeNull();
   });
 
   it('says what the turn is waiting on before any text arrives', () => {

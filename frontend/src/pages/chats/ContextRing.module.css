@@ -6,3 +6,12 @@
   border: 1px solid var(--astra-border-strong);
   flex-shrink: 0;
 }
+
+/* The arc grows or shrinks to a new value instead of jumping. */
+.pill circle {
+  transition: stroke-dasharray 600ms cubic-bezier(.2,.6,.3,1), stroke 300ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill circle { transition: none; }
+}

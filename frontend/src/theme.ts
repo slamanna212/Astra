@@ -1,4 +1,4 @@
-import { createTheme, type MantineColorsTuple } from '@mantine/core';
+import { createTheme, type MantineColorsTuple, type MantineTransition } from '@mantine/core';
 
 /**
  * Astra — "Graphite" design language.
@@ -61,6 +61,14 @@ const red: MantineColorsTuple = [
   '#FDECEE','#F9D3D8','#F1A7B1','#EA7E8C','#E2707F',
   '#D85B6C','#C9495A','#AE3848','#8F2938','#6B1B27',
 ];
+
+/** Menus rise 4px from their trigger. Matches the `astraMenu` motion in the chat polish spec. */
+const astraMenu: MantineTransition = {
+  in: { opacity: 1, transform: 'none' },
+  out: { opacity: 0, transform: 'translateY(4px) scale(.98)' },
+  transitionProperty: 'opacity, transform',
+  common: { transformOrigin: 'bottom left' },
+};
 
 export const theme = createTheme({
   colors: { teal, sand, graphite, green, red, discord, dark: graphite },
@@ -158,8 +166,17 @@ export const theme = createTheme({
       styles: { title: { fontSize: 16, fontWeight: 600 } },
     },
     Drawer:  { defaultProps: { radius: 0, position: 'right', size: 480 } },
-    Tooltip: { defaultProps: { radius: 'sm', withArrow: false, openDelay: 300, fz: 12 } },
-    Menu:    { defaultProps: { radius: 'sm', shadow: 'md', withinPortal: true } },
+    Tooltip: {
+      defaultProps: { radius: 'sm', withArrow: false, openDelay: 300, fz: 12, transitionProps: { transition: 'fade-up', duration: 120 } },
+    },
+    Menu: {
+      defaultProps: {
+        radius: 'sm',
+        shadow: 'md',
+        withinPortal: true,
+        transitionProps: { transition: astraMenu, duration: 150, timingFunction: 'cubic-bezier(.2,.6,.3,1)' },
+      },
+    },
     Notification: { defaultProps: { radius: 'sm', withBorder: true } },
     Code: {
       styles: {

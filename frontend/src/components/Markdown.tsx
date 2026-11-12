@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { CODE_PAGE_CHARS } from '../lib/highlightWindow';
+import { rehypeFreshText } from '../lib/rehypeFreshText';
 import 'katex/dist/katex.min.css';
 import classes from './Markdown.module.css';
 
@@ -179,19 +180,26 @@ export const Markdown = memo(function Markdown({
   children,
   sessionId,
   streaming = false,
+  chunkStarts,
 }: {
   children: string;
   /** Session used to authorize absolute local paths emitted in Hermes MEDIA tokens. */
   sessionId?: string;
   /** The text is still being written; code blocks render unhighlighted until it settles. */
   streaming?: boolean;
+  /** While streaming: source offsets where each appended chunk began, so new text can fade in. */
+  chunkStarts?: number[];
 }) {
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath, remarkHermesMedia(sessionId)], [sessionId]);
+  const activeRehypePlugins = useMemo(
+    () => (streaming && chunkStarts ? [rehypeKatex, rehypeFreshText(chunkStarts)] : rehypePlugins),
+    [streaming, chunkStarts],
+  );
   return (
     <div className={classes.root}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
+        rehypePlugins={activeRehypePlugins}
         components={streaming ? streamingComponents : components}
       >
         {children}
