@@ -1,5 +1,5 @@
 import { profileQueryKey } from '../lib/profileScope';
-import type { InsightsRange, SessionListFilters } from './types';
+import type { InsightsRange, SessionListFilters, SessionStatus } from './types';
 
 /** Centralised TanStack Query keys. Hierarchical so `sessions.all` invalidates every session query. */
 export const queryKeys = {
@@ -19,7 +19,10 @@ export const queryKeys = {
     lists: () => [...queryKeys.sessions.all, 'list'] as const,
     list: (filters: Required<SessionListFilters>) => [...queryKeys.sessions.lists(), filters] as const,
     detail: (id: string) => [...queryKeys.sessions.all, 'detail', id] as const,
-    count: (source: string[] | null) => [...queryKeys.sessions.all, 'count', 'archived', source] as const,
+    count: (source: string[] | null) => queryKeys.sessions.countBy('archived', source),
+    /** Same shape as `count`, so identical requests share one cache entry. */
+    countBy: (status: SessionStatus, source: string[] | null) =>
+      [...queryKeys.sessions.all, 'count', status, source] as const,
   },
   chat: {
     active: () => profileQueryKey(['chat', 'active'] as const),
