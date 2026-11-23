@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { Page, SessionDetail, SessionListFilters, SessionSummary } from './types';
+import type { Page, SessionDetail, SessionListFilters, SessionStatus, SessionSummary } from './types';
 
 export const SESSION_PAGE_SIZE = 50;
 
@@ -20,11 +20,15 @@ export function listSessions(params: ListSessionsParams = {}, signal?: AbortSign
   });
 }
 
-export function countArchivedSessions(source: string[] | null, signal?: AbortSignal): Promise<number> {
+export function countSessions(status: SessionStatus, source: string[] | null, signal?: AbortSignal): Promise<number> {
   return apiFetch<{ count: number }>('/sessions/count', {
     signal,
-    query: { status: 'archived', source: source ?? undefined },
+    query: { status, source: source ?? undefined },
   }).then((r) => r.count);
+}
+
+export function countArchivedSessions(source: string[] | null, signal?: AbortSignal): Promise<number> {
+  return countSessions('archived', source, signal);
 }
 
 export function getSession(id: string, signal?: AbortSignal): Promise<SessionDetail> {

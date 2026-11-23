@@ -117,11 +117,10 @@
 
 .newChat {
   flex: none;
-  font-size: 12.5px;
-  font-weight: 600;
   color: var(--astra-text);
   background: transparent;
   border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
   transition: border-color 120ms ease, background-color 120ms ease;
 
   @mixin hover {
@@ -276,4 +275,166 @@
   display: flex;
   align-items: center;
   padding: 0 14px;
+}
+
+/* ── Type filter: presets + custom menu ─────────────────────────────────── */
+
+.headerMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 22px;
+
+  /* Both links sit on one line; the archived toggle keeps its own left alignment. */
+  & .archivedToggle {
+    align-self: auto;
+  }
+}
+
+.presets {
+  flex: 1;
+  min-width: 0;
+  height: var(--astra-input-h);
+  box-sizing: border-box;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--astra-graphite-5);
+  border-radius: var(--astra-radius);
+  background: var(--astra-bg-chrome);
+}
+
+.preset {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--astra-text-dim);
+  transition: color var(--astra-transition), background-color var(--astra-transition);
+
+  @mixin hover {
+    color: var(--astra-text);
+  }
+
+  &[data-active] {
+    background: var(--astra-border);
+    color: var(--astra-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--astra-primary);
+    outline-offset: -1px;
+  }
+}
+
+.iconButton {
+  flex: none;
+  width: var(--astra-input-h);
+  height: var(--astra-input-h);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--astra-border);
+  border-radius: var(--astra-radius);
+  background: transparent;
+  color: var(--astra-text-dim);
+  transition: border-color var(--astra-transition), background-color var(--astra-transition), color var(--astra-transition);
+
+  @mixin hover {
+    border-color: var(--astra-border-strong);
+  }
+
+  &[data-custom] {
+    background: var(--astra-primary-soft);
+    border-color: var(--astra-primary-border);
+    color: var(--astra-primary-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--astra-primary);
+    outline-offset: 1px;
+  }
+}
+
+.typeMenu {
+  padding: 4px;
+  background: var(--astra-surface);
+  border: 1px solid var(--astra-graphite-5);
+  border-radius: var(--astra-radius);
+  box-shadow: var(--astra-float-shadow);
+}
+
+.typeMenuLabel {
+  composes: astraLabel from global;
+  padding: 6px 10px 4px;
+}
+
+.typeMenuItem {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--astra-text-dim);
+
+  /* Mantine paints hover/keyboard focus from this var. */
+  --menu-item-hover: var(--astra-hover);
+
+  &[data-checked] {
+    color: var(--astra-text);
+  }
+}
+
+/* Mantine's own check indicator only renders when checked; the row draws a full checkbox instead. */
+.typeMenuIndicator {
+  display: none;
+}
+
+.typeMenuItemLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.typeCheck {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--astra-border-strong);
+  border-radius: var(--astra-radius-tight);
+  background: transparent;
+  color: var(--astra-primary-ink);
+
+  [data-checked] > * > & {
+    background: var(--astra-primary);
+    border-color: var(--astra-primary);
+  }
+}
+
+.typeDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.typeName {
+  flex: 1;
+  min-width: 0;
+}
+
+.typeCount {
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  color: var(--astra-text-dim);
 }

@@ -224,4 +224,92 @@ describe('SessionList', () => {
     await screen.findByText('Back to active');
     expect(String(fetchMock.mock.calls.at(-1)![0])).toContain('status=archived');
   });
+  describe('type filter', () => {
+    const listUrls = () =>
+      fetchMock.mock.calls
+        .map((c) => new URL(String(c[0]), 'http://localhost'))
+        .filter((u) => u.pathname === '/api/profiles/default/sessions');
+    const countUrls = () =>
+      fetchMock.mock.calls
+        .map((c) => new URL(String(c[0]), 'http://localhost'))
+        .filter((u) => u.pathname === '/api/profiles/default/sessions/count');
+
+    beforeEach(() => {
+      localStorage.clear();
+      fetchMock.mockImplementation(async (input) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname.endsWith('/sessions/count')) {
+          // 2 sessions per requested source, so counts are distinguishable by how many were asked for.
+          return jsonResponse({ count: 2 * url.searchParams.getAll('source').length });
+        }
+        if (url.pathname.endsWith('/chat/active')) return jsonResponse({ turns: [] });
+        return jsonResponse({ items: [makeSession(1)], next_cursor: null });
+      });
+    });
+
+    it('hides cron and oneshot by default and says how many are hidden', async () => {
+      render(<SessionList />, { route: '/chats' });
+
+      await screen.findAllByTestId('session-row');
+      expect(screen.getByRole('radio', { name: 'Chats' })).toHaveAttribute('aria-checked', 'true');
+      expect(listUrls()[0]!.searchParams.getAll('source')).toEqual(['webui', 'cli', 'tui', 'discord', 'subagent']);
+
+      expect(await screen.findByText('4 hidden by type')).toBeInTheDocument();
+      const hidden = countUrls().find((u) => u.searchParams.get('status') === 'active');
+      expect(hidden!.searchParams.getAll('source')).toEqual(['cron', 'oneshot']);
+    });
+
+    it('switches presets; All sends no source filter and hides nothing', async () => {
+      const user = userEvent.setup();
+      render(<SessionList />, { route: '/chats' });
+      await screen.findAllByTestId('session-row');
+
+      await user.click(screen.getByRole('radio', { name: 'Automated' }));
+      await waitFor(() => expect(listUrls().at(-1)!.searchParams.getAll('source')).toEqual(['cron', 'oneshot']));
+
+      await user.click(screen.getByRole('radio', { name: 'All' }));
+      await waitFor(() => expect(listUrls().at(-1)!.searchParams.has('source')).toBe(false));
+      expect(screen.queryByText(/hidden by type/)).not.toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('astra.profile.default:sessionList.sources')!)).toHaveLength(7);
+    });
+
+    it('custom menu toggles a type, clears the preset and marks the funnel active', async () => {
+      const user = userEvent.setup();
+      render(<SessionList />, { route: '/chats' });
+      await screen.findAllByTestId('session-row');
+
+      const funnel = screen.getByRole('button', { name: 'Custom type filter' });
+      expect(funnel).toHaveAttribute('aria-pressed', 'false');
+      await user.click(funnel);
+
+      const cron = await screen.findByRole('menuitemcheckbox', { name: /cron/ });
+      expect(cron).toHaveAttribute('aria-checked', 'false');
+      await user.click(cron);
+
+      await waitFor(() =>
+        expect(listUrls().at(-1)!.searchParams.getAll('source')).toEqual(['webui', 'cli', 'tui', 'discord', 'subagent', 'cron']),
+      );
+      // Menu stays open for further toggles.
+      expect(screen.getByRole('menuitemcheckbox', { name: /cron/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getAllByRole('radio').every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
+      expect(funnel).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('restores a remembered selection and ignores unknown ids', async () => {
+      localStorage.setItem('astra.profile.default:sessionList.sources', JSON.stringify(['oneshot', 'nope', 'cron']));
+      render(<SessionList />, { route: '/chats' });
+
+      await screen.findAllByTestId('session-row');
+      expect(screen.getByRole('radio', { name: 'Automated' })).toHaveAttribute('aria-checked', 'true');
+      expect(listUrls()[0]!.searchParams.getAll('source')).toEqual(['cron', 'oneshot']);
+    });
+
+    it('shows the empty state without fetching when no type is selected', async () => {
+      localStorage.setItem('astra.profile.default:sessionList.sources', '[]');
+      render(<SessionList />, { route: '/chats' });
+
+      expect(await screen.findByText('No sessions.')).toBeInTheDocument();
+      expect(listUrls()).toHaveLength(0);
+    });
+  });
 });

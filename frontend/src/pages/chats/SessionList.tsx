@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Button, Center, Group, Loader, Menu, MultiSelect, Stack, Text, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Badge, Button, Center, Group, Loader, Menu, Stack, Text, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   IconArchive,
@@ -19,13 +19,15 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { getChildSessions } from '../../api/messages';
 import { queryKeys } from '../../api/queryKeys';
-import { countArchivedSessions, createSession, deleteSession, getSession, listSessions, SESSION_PAGE_SIZE, updateSession } from '../../api/sessions';
+import { countArchivedSessions, countSessions, createSession, deleteSession, getSession, listSessions, SESSION_PAGE_SIZE, updateSession } from '../../api/sessions';
 import type { ChildSession, SessionStatus, SessionSummary } from '../../api/types';
-import { KNOWN_SOURCES, sourceColor } from '../../lib/sources';
+import { KNOWN_SOURCES, presetFor, sourceColor } from '../../lib/sources';
 import { useNow } from '../../hooks/useNow';
 import { formatCompactAge, formatCount, formatDateTime, formatGroupDate, sessionTitle } from '../../lib/format';
 import classes from './SessionList.module.css';
+import { PresetControl, TypeFilterMenu } from './SessionTypeFilter';
 import { type RunState, useActiveTurns } from './useActiveTurns';
+import { useSourceSelection } from './useSourceSelection';
 
 export const SESSION_ROW_HEIGHT = 44;
 /** Nested sub-agent row: title only, no age/type dot. */
@@ -34,8 +36,6 @@ export const SESSION_CHILD_ROW_HEIGHT = 30;
 export const SESSION_GROUP_HEADER_HEIGHT = 28;
 /** Start fetching the next page when the last rendered row is within this many rows of the end. */
 const LOAD_MORE_THRESHOLD = 10;
-
-const SOURCE_OPTIONS = KNOWN_SOURCES.map((s) => ({ value: s, label: s }));
 
 /** The row's own overflow menu: same actions as the conversation header, minus Download —
     there's no room in a 44px row for a separate download trigger, and downloading a
@@ -257,7 +257,8 @@ function rowKey(row: Row | undefined, index: number): string {
 }
 
 export function SessionList({ selectedId }: { selectedId?: string }) {
-  const [sources, setSources] = useState<string[]>([]);
+  const [sources, setSources] = useSourceSelection();
+  const [typeMenuOpened, setTypeMenuOpened] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const status: SessionStatus = showArchived ? 'archived' : 'active';
   const now = useNow();
@@ -277,15 +278,33 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     },
   });
 
-  const filters = useMemo(() => ({ source: sources.length ? sources : null, status }), [sources, status]);
+  const preset = presetFor(sources);
+  // "All" sends no source param so sessions with a source this build doesn't know still show.
+  // Every other selection (presets and custom mixes) is an explicit inclusion list.
+  const filters = useMemo(() => ({ source: preset === 'all' ? null : sources, status }), [preset, sources, status]);
+  // An empty inclusion list would read as "no filter" server-side; nothing selected means nothing to fetch.
+  const noTypes = filters.source !== null && filters.source.length === 0;
+
+  // Known types left out of the selection; their sessions are counted in the "N hidden by type" link.
+  const hiddenSources = useMemo(
+    () => (preset === 'all' ? [] : KNOWN_SOURCES.filter((s) => !sources.includes(s))),
+    [preset, sources],
+  );
+  const hiddenCountQuery = useQuery({
+    queryKey: queryKeys.sessions.countBy(status, hiddenSources),
+    queryFn: ({ signal }) => countSessions(status, hiddenSources, signal),
+    enabled: hiddenSources.length > 0,
+  });
+  const hiddenCount = hiddenSources.length > 0 ? (hiddenCountQuery.data ?? 0) : 0;
 
   // Shown as "Show N archived" above the list, and kept fresh by the same `sessions.all`
   // invalidation the list itself relies on after an archive/unarchive.
   const archivedCountQuery = useQuery({
     queryKey: queryKeys.sessions.count(filters.source),
     queryFn: ({ signal }) => countArchivedSessions(filters.source, signal),
+    enabled: !noTypes,
   });
-  const archivedCount = archivedCountQuery.data ?? 0;
+  const archivedCount = noTypes ? 0 : (archivedCountQuery.data ?? 0);
 
   const query = useInfiniteQuery({
     queryKey: queryKeys.sessions.list(filters),
@@ -293,6 +312,7 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
       listSessions({ ...filters, cursor: pageParam, limit: SESSION_PAGE_SIZE }, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: !noTypes,
   });
 
   const sessions = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
@@ -419,35 +439,57 @@ export function SessionList({ selectedId }: { selectedId?: string }) {
     <>
       <Stack gap={8} p="md" style={{ borderBottom: '1px solid var(--astra-divider)' }}>
         <Group gap={8} wrap="nowrap">
-          <MultiSelect
-            aria-label="Filter by conversation type"
-            placeholder="All types"
-            data={SOURCE_OPTIONS}
-            value={sources}
+          <PresetControl preset={preset} onSelect={setSources} />
+          <TypeFilterMenu
+            sources={sources}
             onChange={setSources}
-            clearable
-            style={{ flex: 1, minWidth: 0 }}
+            custom={preset === null}
+            status={status}
+            opened={typeMenuOpened}
+            onOpenedChange={setTypeMenuOpened}
           />
-          <Button variant="default" className={classes.newChat} leftSection={<IconPlus size={14} />} loading={create.isPending} onClick={() => create.mutate()}>
-            New chat
-          </Button>
+          <ActionIcon
+            size={34}
+            variant="default"
+            className={classes.newChat}
+            loading={create.isPending}
+            onClick={() => create.mutate()}
+            aria-label="New chat"
+            title="New chat"
+          >
+            <IconPlus size={15} stroke={2} />
+          </ActionIcon>
         </Group>
-        {showArchived ? (
-          <UnstyledButton className={classes.archivedToggle} onClick={() => setShowArchived(false)}>
-            <IconArrowLeft size={12} aria-hidden />
-            Back to active
-          </UnstyledButton>
-        ) : (
-          archivedCount > 0 && (
+        <div className={classes.headerMeta}>
+          {showArchived ? (
+            <UnstyledButton className={classes.archivedToggle} onClick={() => setShowArchived(false)}>
+              <IconArrowLeft size={12} aria-hidden />
+              Back to active
+            </UnstyledButton>
+          ) : archivedCount > 0 ? (
             <UnstyledButton className={classes.archivedToggle} onClick={() => setShowArchived(true)}>
               <IconArchive size={12} aria-hidden />
               Show {formatCount(archivedCount)} archived
             </UnstyledButton>
-          )
-        )}
+          ) : (
+            <span />
+          )}
+          {hiddenCount > 0 && (
+            // Always opens (never toggles): the menu's own outside-click close fires first on mousedown.
+            <UnstyledButton className={classes.archivedToggle} onClick={() => setTypeMenuOpened(true)}>
+              {formatCount(hiddenCount)} hidden by type
+            </UnstyledButton>
+          )}
+        </div>
       </Stack>
 
-      {query.isPending ? (
+      {noTypes ? (
+        <Center p="xl">
+          <Text size="sm" c="dimmed">
+            No sessions.
+          </Text>
+        </Center>
+      ) : query.isPending ? (
         <Center p="xl">
           <Loader size="sm" aria-label="Loading sessions" />
         </Center>
