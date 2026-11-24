@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -12,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from astra import __version__
+from astra.completions import CompletionConsumer
 from astra.config import Settings, apply_hermes_src
 from astra.db import StateDB, StateDBUnavailable
 from astra.deps import AppContext, ProfileContexts, close_context
@@ -73,6 +75,12 @@ def create_app(settings: Settings) -> FastAPI:
         except StateDBUnavailable as exc:
             # Not fatal: health reports it and queries retry lazily.
             log.error("state.db unavailable at startup: %s", exc)
+        # Hermes detaches every top-level delegation and hands the result back through a
+        # process-global completion queue. Without a consumer on this surface those results are
+        # lost silently; see astra.completions for the full story.
+        consumer_task = asyncio.create_task(
+            CompletionConsumer(ctx, contexts).run(), name="astra-completions"
+        )
         log.info(
             "astra started",
             extra={"version": __version__, "static": settings.static_dir.is_dir()},
@@ -80,6 +88,8 @@ def create_app(settings: Settings) -> FastAPI:
         try:
             yield
         finally:
+            consumer_task.cancel()
+            await asyncio.gather(consumer_task, return_exceptions=True)
             await contexts.close()
             await close_context(ctx)
 

@@ -103,6 +103,10 @@ class Turn:
     start_output_tokens: int = 0
     recent_delta_times: deque[float] = field(default_factory=lambda: deque(maxlen=64))
     operation: str = "chat"
+    # Set for a turn started by a background completion rather than the composer: the persisted
+    # user row is a notice card (``display_kind``), not a message the user typed.
+    user_display_kind: str | None = None
+    user_display_metadata: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -111,6 +115,21 @@ class CachedAgent:
     signature: str
     agent: Any
     session_db: Any
+
+
+def _profile_name(home: Path) -> str:
+    """Hermes profile name for a home directory (``""`` = the base/default profile).
+
+    ``HERMES_HOME`` is the base home for the default profile and ``<base>/profiles/<name>`` for a
+    named one (see ``astra.profiles``); the name is only used for session-context binding.
+    """
+    try:
+        parts = Path(home).resolve().parts
+    except OSError:
+        return ""
+    if len(parts) >= 2 and parts[-2] == "profiles":
+        return parts[-1]
+    return ""
 
 
 def _supported(callable_obj: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -203,6 +222,7 @@ def _webui_toolsets(config: dict[str, Any]) -> list[str] | None:
 class ChatManager:
     def __init__(self, settings: Settings, *, max_workers: int = 4, max_cached_agents: int = 16) -> None:
         self._settings = settings
+        self._profile_name = _profile_name(settings.hermes_home)
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="astra-agent")
         self._turns: dict[str, Turn] = {}
         self._subscribers: dict[str, set[asyncio.Queue[ChatEvent]]] = {}
@@ -324,6 +344,44 @@ class ChatManager:
             self._emit(turn, "started", {"running": True, "operation": "chat"})
         loop = asyncio.get_running_loop()
         loop.run_in_executor(self._executor, self._run_turn, turn)
+
+    async def start_completion_turn(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        display_kind: str | None = None,
+        display_metadata: dict[str, Any] | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+    ) -> None:
+        """Start a turn whose trigger is a background completion, not a typed message.
+
+        The persisted user row carries ``display_kind``/``display_metadata`` so the transcript
+        paints a notice card, while the model still receives the full notification text as the
+        user message (the same shape the TUI's notification poller submits).  No steering: the
+        user did not write this text.
+        """
+        if not message.strip():
+            raise ChatError("completion message must not be empty")
+        if self._closed:
+            raise ChatError("chat service is shutting down")
+        async with self._lock:
+            if session_id in self._turns:
+                raise SessionBusy("a turn is already running for this session")
+            turn = Turn(
+                session_id=session_id,
+                message=message.strip(),
+                model=model,
+                provider=provider,
+                operation="notification",
+                user_display_kind=display_kind,
+                user_display_metadata=display_metadata,
+            )
+            self._turns[session_id] = turn
+            turn.pump = asyncio.create_task(self._pump(turn), name=f"chat-pump-{session_id[:12]}")
+            self._emit(turn, "started", {"running": True, "operation": "notification"})
+        asyncio.get_running_loop().run_in_executor(self._executor, self._run_turn, turn)
 
     async def start_compaction(
         self,
@@ -565,6 +623,45 @@ class ChatManager:
         if pending:
             notify(pending)
 
+    def _bind_session_context(self, turn: Turn) -> list:
+        """Bind Hermes' per-turn session context on THIS worker thread.
+
+        Delegation routing reads these contextvars (origin capture, routable session key,
+        ``async_delivery`` capability).  The agent's ``gateway_session_key`` alone leaves the
+        completion without a routable identity, and an unbound capability defaults to "detach" —
+        which is exactly how subagent results were being lost.  Binding it here also keeps the
+        capability honest: ``async_delivery`` is True only while a completion consumer is live.
+        """
+        try:
+            from gateway.session_context import set_session_vars
+
+            from astra.completions import delivery_available
+
+            return set_session_vars(
+                platform="webui",
+                source="webui",
+                chat_id=turn.session_id,
+                session_key=turn.session_id,
+                session_id=turn.session_id,
+                ui_session_id=turn.session_id,
+                profile=self._profile_name,
+                async_delivery=delivery_available(),
+            )
+        except Exception:  # Hermes unavailable (tests/older releases): run unbound, as before.
+            log.debug("session context binding unavailable", exc_info=True)
+            return []
+
+    @staticmethod
+    def _clear_session_context(tokens: list) -> None:
+        if not tokens:
+            return
+        try:
+            from gateway.session_context import clear_session_vars
+
+            clear_session_vars(tokens)
+        except Exception:
+            log.debug("session context clear failed", exc_info=True)
+
     def _build_agent(self, turn: Turn) -> Any:
         # Hermes resolves its home from the environment; point it at this profile's before
         # anything is constructed, or a bot would inherit the previous bot's skills/cron.
@@ -648,6 +745,7 @@ class ChatManager:
         return agent
 
     def _run_turn(self, turn: Turn) -> None:
+        session_tokens = self._bind_session_context(turn)
         try:
             # Everything before Hermes's first model call is otherwise silent on the wire; these
             # coarse phases let the browser say what the turn is doing instead of just waiting.
@@ -663,7 +761,11 @@ class ChatManager:
             run_kwargs = _supported(
                 agent.run_conversation,
                 {"user_message": turn.message, "conversation_history": history, "task_id": turn.session_id,
-                 "persist_user_message": turn.message},
+                 "persist_user_message": turn.message,
+                 # A completion-triggered turn persists its trigger as a notice card; a typed turn
+                 # passes None for both and keeps the plain user row.
+                 "persist_user_display_kind": turn.user_display_kind,
+                 "persist_user_display_metadata": turn.user_display_metadata},
             )
             result = agent.run_conversation(**run_kwargs)
             with turn.lock:
@@ -705,10 +807,12 @@ class ChatManager:
             except Exception:
                 log.debug("failed to unregister approval bridge", exc_info=True)
             turn.done.set()
+            self._clear_session_context(session_tokens)
 
     def _run_compaction(self, turn: Turn) -> None:
         db: Any = None
         lock_holder: str | None = None
+        session_tokens = self._bind_session_context(turn)
         try:
             agent = self._build_agent(turn)
             with turn.lock:
@@ -791,6 +895,7 @@ class ChatManager:
             with turn.lock:
                 turn.accepting_steers = False
             turn.done.set()
+            self._clear_session_context(session_tokens)
 
     @staticmethod
     def _is_compression_exhausted(value: Any) -> bool:
