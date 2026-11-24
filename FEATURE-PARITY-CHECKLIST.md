@@ -22,6 +22,7 @@ Legend:
 - [x] Dangerous-command approval prompt: once, session, always, or deny
 - [x] Blocking clarify questions with choice and free-text answers
 - [x] Subagent activity events, transcript cards, and links to child sessions
+- [x] Deliver background subagent results as a new turn (Hermes detaches every top-level `delegate_task`; the WebUI drains its completion queue and continues the conversation instead of dropping the result)
 - [x] Server-side running turn survives navigation and supports multiple/reconnecting subscribers
 - [x] Persist and restore composer drafts in browser storage
 - [x] Reconnect banner, extended 1.5–20 second backoff ladder, canonical-history polling, replay cursors, and session-scoped local partial-response recovery
